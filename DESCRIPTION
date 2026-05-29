@@ -1,0 +1,25 @@
+Package: idlBNs
+Type: Package
+Title: Inclusion-Driven Learning of Bayesian Networks
+Version: 0.99.0
+Authors@R: person("Robert", "Castelo", email = "robert.castelo@upf.edu", role = c("aut", "cre"))
+Description: Implements inclusion-driven algorithms for learning the structure of Bayesian networks. It currently provides the hill-climber Monte Carlo (HCMC) algorithm for observational Gaussian data, and the interventional HCMC (iHCMC) for interventional Gaussian data.
+License: GPL-2 | GPL-3
+Encoding: UTF-8
+Depends:
+    R (>= 4.5)
+Imports: 
+    methods,
+    cli,
+    graph,
+    RBGL
+Suggests:
+    knitr,
+    rmarkdown,
+    RUnit,
+    pcalg
+VignetteBuilder: knitr
+Roxygen: list(markdown=TRUE)
+URL: https://github.com/rcastelo/idlBNs
+BugReports: https://github.com/rcastelo/idlBNs/issues
+Config/roxygen2/version: 8.0.0
