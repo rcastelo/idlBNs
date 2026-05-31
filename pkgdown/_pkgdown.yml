@@ -1,0 +1,30 @@
+url: https://rcastelo.github.io/idlBNs
+
+title: idlBNs
+
+template:
+  bootstrap: 5
+  theme: breeze-light
+
+authors:
+  Robert Castelo:
+    href: https://github.com/rcastelo
+
+articles:
+  - title: Articles
+    navbar: ~
+    contents:
+      - idlBNs: "The idlBNs package"
+
+reference:
+  - title: "Scoring functions"
+    desc: "Goodness-of-fit scoring functions for Bayesian networks"
+    contents:
+      - iBIC
+      - iBGe
+  - title: "Search algorithms"
+    desc: "Search algorithms for learning the structure of Bayesian networks"
+    contents:
+      - hillclimbing
+      - hcmc
+

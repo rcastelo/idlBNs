@@ -16,6 +16,7 @@ Imports:
 Suggests:
     knitr,
     rmarkdown,
+    pkgdown,
     RUnit,
     pcalg
 VignetteBuilder: knitr

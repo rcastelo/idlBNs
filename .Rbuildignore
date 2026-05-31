@@ -1,0 +1,11 @@
+^.*\.Rproj$
+^\.Rproj\.user$
+^\.Rhistory$
+^\.github$
+^\.DS_store$
+^doc$
+^Meta$
+^vignettes/IEOprojectAnalysis_cache$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
