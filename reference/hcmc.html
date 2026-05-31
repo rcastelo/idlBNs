@@ -157,7 +157,7 @@ J.  Vreeken (eds.). LNCS 16067, Festschrift, Springer, 2026.</p>
 <span class="r-in"><span><span class="co">## run the HCMC algorithm assuming all data were observational</span></span></span>
 <span class="r-in"><span><span class="va">dhat.hcmc</span> <span class="op">&lt;-</span> <span class="fu">hcmc</span><span class="op">(</span><span class="va">dat</span><span class="op">)</span></span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> ⠙ Score -87.004214222737 Escapes 0 Trials 0</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BB00;">✔</span> Score -83.2933160642061 Escapes 0 Trials 0 <span style="color: #B2B2B2;">[401ms]</span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BB00;">✔</span> Score -83.2933160642061 Escapes 0 Trials 0 <span style="color: #B2B2B2;">[399ms]</span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-in"><span><span class="va">dhat.hcmc</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $dag</span>
@@ -179,8 +179,7 @@ J.  Vreeken (eds.). LNCS 16067, Festschrift, Springer, 2026.</p>
 <span class="r-in"><span><span class="co">## function).</span></span></span>
 <span class="r-in"><span><span class="va">dhat.ihcmc</span> <span class="op">&lt;-</span> <span class="fu">hcmc</span><span class="op">(</span><span class="va">dat</span>, targets<span class="op">=</span><span class="va">I</span>, target.index<span class="op">=</span><span class="va">tindex</span><span class="op">)</span></span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> ⠙ Score -59.3908043567074 Escapes 0 Trials 0</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> ⠹ Score -50.0166049861733 Escapes 0 Trials 0</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BB00;">✔</span> Score -50.0166049861733 Escapes 0 Trials 0 <span style="color: #B2B2B2;">[478ms]</span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BB00;">✔</span> Score -50.0166049861733 Escapes 0 Trials 0 <span style="color: #B2B2B2;">[474ms]</span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-in"><span><span class="va">dhat.ihcmc</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $dag</span>
@@ -202,7 +201,7 @@ J.  Vreeken (eds.). LNCS 16067, Festschrift, Springer, 2026.</p>
 <span class="r-in"><span><span class="co">## iBGe() function), which provides an estimate closer to the generative DAG</span></span></span>
 <span class="r-in"><span><span class="va">dhat.ihcmc2</span> <span class="op">&lt;-</span> <span class="fu">hcmc</span><span class="op">(</span><span class="va">dat</span>, targets<span class="op">=</span><span class="va">I</span>, target.index<span class="op">=</span><span class="va">tindex</span>, scorefun<span class="op">=</span><span class="va">iBGe</span><span class="op">)</span></span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> ⠙ Score -189.956899563879 Escapes 0 Trials 0</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BB00;">✔</span> Score -181.640790427507 Escapes 0 Trials 0 <span style="color: #B2B2B2;">[524ms]</span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BB00;">✔</span> Score -181.640790427507 Escapes 0 Trials 0 <span style="color: #B2B2B2;">[525ms]</span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/pkg/pcalg/man/shd.html" class="external-link">shd</a></span><span class="op">(</span><span class="va">e</span>, <span class="fu"><a href="https://rdrr.io/pkg/pcalg/man/dag2essgraph.html" class="external-link">dag2essgraph</a></span><span class="op">(</span><span class="va">dhat.ihcmc2</span><span class="op">$</span><span class="va">dag</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] 2</span>
