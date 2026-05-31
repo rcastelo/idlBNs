@@ -209,17 +209,14 @@ intervention target for each row of the data.</p>
 <p>Run the iHCMC algorithm informing the presence of interventional
 data. By default, the iBIC score is used in the search algorithm.</p>
 <div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a>Dhat.ihcmc <span class="ot">&lt;-</span> <span class="fu">hcmc</span>(dat, <span class="at">targets=</span>I, <span class="at">target.index=</span>tindex)</span>
-<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>⠙ Score <span class="sc">-</span><span class="fl">59.3908043567074</span> Escapes <span class="dv">0</span> Trials <span class="dv">0</span></span>
-<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a> [<span class="dv">32</span>m✔ [<span class="dv">39</span>m Score <span class="sc">-</span><span class="fl">50.0166049861733</span> Escapes <span class="dv">1</span> Trials <span class="dv">3</span>  [<span class="dv">38</span>;<span class="dv">5</span>;<span class="dv">249</span>m[<span class="dv">421</span>ms] [<span class="dv">39</span>m</span>
-<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a></span>
-<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a>Dhat.ihcmc</span>
-<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a><span class="sc">$</span>dag</span>
-<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a>A graphNEL graph with directed edges</span>
-<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a>Number of Nodes <span class="ot">=</span> <span class="dv">5</span> </span>
-<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a>Number of Edges <span class="ot">=</span> <span class="dv">4</span> </span>
-<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a></span>
-<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a><span class="sc">$</span>sco</span>
-<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a>[<span class="dv">1</span>] <span class="sc">-</span><span class="fl">50.0166</span></span></code></pre></div>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>Dhat.ihcmc</span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a><span class="sc">$</span>dag</span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a>A graphNEL graph with directed edges</span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a>Number of Nodes <span class="ot">=</span> <span class="dv">5</span> </span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a>Number of Edges <span class="ot">=</span> <span class="dv">4</span> </span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a></span>
+<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a><span class="sc">$</span>sco</span>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a>[<span class="dv">1</span>] <span class="sc">-</span><span class="fl">50.0166</span></span></code></pre></div>
 <p>Calculate the structural Hamming distance (SHD) to the essential
 graph of the generative DAG structure
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>G</mi><annotation encoding="application/x-tex">G</annotation></semantics></math>.</p>
@@ -227,25 +224,20 @@ graph of the generative DAG structure
 <span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a>[<span class="dv">1</span>] <span class="dv">3</span></span></code></pre></div>
 <p>Repeat the search using the iBGe score instead of the iBIC score.</p>
 <div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a>Dhat.ihcmc.ibge <span class="ot">&lt;-</span> <span class="fu">hcmc</span>(dat, <span class="at">targets=</span>I, <span class="at">target.index=</span>tindex, <span class="at">scorefun=</span>iBGe)</span>
-<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a>⠙ Score <span class="sc">-</span><span class="fl">189.956899563879</span> Escapes <span class="dv">0</span> Trials <span class="dv">0</span></span>
-<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a> [<span class="dv">32</span>m✔ [<span class="dv">39</span>m Score <span class="sc">-</span><span class="fl">181.640790427507</span> Escapes <span class="dv">0</span> Trials <span class="dv">0</span>  [<span class="dv">38</span>;<span class="dv">5</span>;<span class="dv">249</span>m[<span class="dv">485</span>ms] [<span class="dv">39</span>m</span>
-<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a></span>
-<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a><span class="fu">shd</span>(<span class="fu">dag2essgraph</span>(Dhat.ihcmc.ibge<span class="sc">$</span>dag), E)</span>
-<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a>[<span class="dv">1</span>] <span class="dv">2</span></span></code></pre></div>
-<p>Now use the HCMC algorithm without informing the presence of
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a><span class="fu">shd</span>(<span class="fu">dag2essgraph</span>(Dhat.ihcmc.ibge<span class="sc">$</span>dag), E)</span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a>[<span class="dv">1</span>] <span class="dv">2</span></span></code></pre></div>
+<p>We can see that the iBGe score leads to an estimate of the DAG
+structure that is close to the generative DAG structure, in terms of the
+SHD. Now use the HCMC algorithm without informing the presence of
 interventional data, i.e., assuming that all data are observational.</p>
 <div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a>Dhat.hcmc <span class="ot">&lt;-</span> <span class="fu">hcmc</span>(dat)</span>
-<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a>⠙ Score <span class="sc">-</span><span class="fl">87.004214222737</span> Escapes <span class="dv">0</span> Trials <span class="dv">0</span></span>
-<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a> [<span class="dv">32</span>m✔ [<span class="dv">39</span>m Score <span class="sc">-</span><span class="fl">83.2933160642061</span> Escapes <span class="dv">0</span> Trials <span class="dv">0</span>  [<span class="dv">38</span>;<span class="dv">5</span>;<span class="dv">249</span>m[<span class="dv">280</span>ms] [<span class="dv">39</span>m</span>
-<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a></span>
-<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a><span class="fu">shd</span>(<span class="fu">dag2essgraph</span>(Dhat.hcmc<span class="sc">$</span>dag), E)</span>
-<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a>[<span class="dv">1</span>] <span class="dv">5</span></span>
-<span id="cb9-7"><a href="#cb9-7" tabindex="-1"></a>Dhat.hcmc.ibge <span class="ot">&lt;-</span> <span class="fu">hcmc</span>(dat, <span class="at">scorefun=</span>iBGe)</span>
-<span id="cb9-8"><a href="#cb9-8" tabindex="-1"></a>⠙ Score <span class="sc">-</span><span class="fl">238.755035771616</span> Escapes <span class="dv">0</span> Trials <span class="dv">0</span></span>
-<span id="cb9-9"><a href="#cb9-9" tabindex="-1"></a> [<span class="dv">32</span>m✔ [<span class="dv">39</span>m Score <span class="sc">-</span><span class="fl">235.836298304545</span> Escapes <span class="dv">0</span> Trials <span class="dv">0</span>  [<span class="dv">38</span>;<span class="dv">5</span>;<span class="dv">249</span>m[<span class="dv">315</span>ms] [<span class="dv">39</span>m</span>
-<span id="cb9-10"><a href="#cb9-10" tabindex="-1"></a></span>
-<span id="cb9-11"><a href="#cb9-11" tabindex="-1"></a><span class="fu">shd</span>(<span class="fu">dag2essgraph</span>(Dhat.hcmc.ibge<span class="sc">$</span>dag), E)</span>
-<span id="cb9-12"><a href="#cb9-12" tabindex="-1"></a>[<span class="dv">1</span>] <span class="dv">4</span></span></code></pre></div>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a><span class="fu">shd</span>(<span class="fu">dag2essgraph</span>(Dhat.hcmc<span class="sc">$</span>dag), E)</span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a>[<span class="dv">1</span>] <span class="dv">5</span></span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a>Dhat.hcmc.ibge <span class="ot">&lt;-</span> <span class="fu">hcmc</span>(dat, <span class="at">scorefun=</span>iBGe)</span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a><span class="fu">shd</span>(<span class="fu">dag2essgraph</span>(Dhat.hcmc.ibge<span class="sc">$</span>dag), E)</span>
+<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a>[<span class="dv">1</span>] <span class="dv">4</span></span></code></pre></div>
+<p>In this setting, using either the BIC or the BGe score leads to worse
+estimates of the DAG structure.</p>
 </div>
 <div class="section level2">
 <h2 id="session-information">Session information<a class="anchor" aria-label="anchor" href="#session-information"></a>

@@ -1,6 +1,6 @@
 # idlBNs: inclusion-driven learning of Bayesian Networks
 
-[![R-CMD-check](https://github.com/rcastelo/idlBNs/workflows/R-CMD-check/badge.svg)](https://github.com/rcastelo/idlBNs/actions?query=workflow%3AR-CMD-check)
+[![R-CMD-check](../../actions/workflows/check-standard.yaml/badge.svg)](https://rcastelo.github.io/actions?query=workflow%3AR-CMD-check)
 [![codecov.io](https://codecov.io/github/rcastelo/idlBNs/coverage.svg?branch=devel)](https://app.codecov.io/github/rcastelo/idlBNs?branch=devel)
 
 The `idlBNs` package implements inclusion-driven algorithms for learning

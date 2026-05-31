@@ -121,8 +121,7 @@ tindex <- rep(1:length(nbytgts), nbytgts)
 ## run the HCMC algorithm assuming all data were observational
 dhat.hcmc <- hcmc(dat)
 #> ⠙ Score -87.004214222737 Escapes 0 Trials 0
-#> ⠹ Score -83.4661597551045 Escapes 0 Trials 0
-#> ✔ Score -83.2933160642061 Escapes 0 Trials 0 [384ms]
+#> ✔ Score -83.2933160642061 Escapes 0 Trials 0 [373ms]
 #> 
 dhat.hcmc
 #> $dag
@@ -144,7 +143,8 @@ shd(e, dag2essgraph(dhat.hcmc$dag))
 ## function).
 dhat.ihcmc <- hcmc(dat, targets=I, target.index=tindex)
 #> ⠙ Score -59.3908043567074 Escapes 0 Trials 0
-#> ✔ Score -50.0166049861733 Escapes 0 Trials 0 [495ms]
+#> ⠹ Score -50.0166049861733 Escapes 0 Trials 0
+#> ✔ Score -50.0166049861733 Escapes 0 Trials 0 [455ms]
 #> 
 dhat.ihcmc
 #> $dag
@@ -166,7 +166,7 @@ shd(e, dag2essgraph(dhat.ihcmc$dag))
 ## iBGe() function), which provides an estimate closer to the generative DAG
 dhat.ihcmc2 <- hcmc(dat, targets=I, target.index=tindex, scorefun=iBGe)
 #> ⠙ Score -189.956899563879 Escapes 0 Trials 0
-#> ✔ Score -181.640790427507 Escapes 0 Trials 0 [472ms]
+#> ✔ Score -181.640790427507 Escapes 0 Trials 0 [485ms]
 #> 
 shd(e, dag2essgraph(dhat.ihcmc2$dag))
 #> [1] 2

@@ -153,9 +153,6 @@ By default, the iBIC score is used in the search algorithm.
 
 ``` r
 Dhat.ihcmc <- hcmc(dat, targets=I, target.index=tindex)
-⠙ Score -59.3908043567074 Escapes 0 Trials 0
- [32m✔ [39m Score -50.0166049861733 Escapes 1 Trials 3  [38;5;249m[421ms] [39m
-
 Dhat.ihcmc
 $dag
 A graphNEL graph with directed edges
@@ -178,30 +175,26 @@ Repeat the search using the iBGe score instead of the iBIC score.
 
 ``` r
 Dhat.ihcmc.ibge <- hcmc(dat, targets=I, target.index=tindex, scorefun=iBGe)
-⠙ Score -189.956899563879 Escapes 0 Trials 0
- [32m✔ [39m Score -181.640790427507 Escapes 0 Trials 0  [38;5;249m[485ms] [39m
-
 shd(dag2essgraph(Dhat.ihcmc.ibge$dag), E)
 [1] 2
 ```
 
-Now use the HCMC algorithm without informing the presence of
-interventional data, i.e., assuming that all data are observational.
+We can see that the iBGe score leads to an estimate of the DAG structure
+that is close to the generative DAG structure, in terms of the SHD. Now
+use the HCMC algorithm without informing the presence of interventional
+data, i.e., assuming that all data are observational.
 
 ``` r
 Dhat.hcmc <- hcmc(dat)
-⠙ Score -87.004214222737 Escapes 0 Trials 0
- [32m✔ [39m Score -83.2933160642061 Escapes 0 Trials 0  [38;5;249m[280ms] [39m
-
 shd(dag2essgraph(Dhat.hcmc$dag), E)
 [1] 5
 Dhat.hcmc.ibge <- hcmc(dat, scorefun=iBGe)
-⠙ Score -238.755035771616 Escapes 0 Trials 0
- [32m✔ [39m Score -235.836298304545 Escapes 0 Trials 0  [38;5;249m[315ms] [39m
-
 shd(dag2essgraph(Dhat.hcmc.ibge$dag), E)
 [1] 4
 ```
+
+In this setting, using either the BIC or the BGe score leads to worse
+estimates of the DAG structure.
 
 ## Session information
 
