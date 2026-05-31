@@ -15,7 +15,10 @@ interventional HCMC (iHCMC) for interventional Gaussian data.
 The main functions are:
 
 \itemize{
-\item \code{\link{hcmc}()} - the HCMC and iHCMC algorithms.
+\item \code{\link{iBIC}()} - the interventional BIC score for Gaussian data.
+\item \code{\link{iBGe}()} - the interventional BGe score for Gaussian data.
+\item \code{\link{hillclimbing}()} - a straightforward hill-climbing algorithm for learning the structure of Bayesian networks.
+\item \code{\link{hcmc}()} - the HCMC and iHCMC algorithms for learning the structure of Bayesian networks from observational and interventional data, respectively.
 }
 
 For detailed information on usage, see the package vignette, by typing
@@ -30,7 +33,7 @@ idlBNs GitHub repo at \url{https://github.com/rcastelo/idlBNs/issues}.
 \seealso{
 Useful links:
 \itemize{
-  \item \url{https://github.com/rcastelo/idlBNs}
+  \item \url{https://rcastelo.github.io/idlBNs}
   \item Report bugs at \url{https://github.com/rcastelo/idlBNs/issues}
 }
 

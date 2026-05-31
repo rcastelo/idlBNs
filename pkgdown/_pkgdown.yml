@@ -14,9 +14,14 @@ articles:
   - title: Articles
     navbar: ~
     contents:
-      - idlBNs: "The idlBNs package"
+      - idlBNs
 
 reference:
+  - title: "The idlBNs package"
+    desc: "Overview of the idlBNs package"
+    contents:
+      - idlBNs-package
+      - idlBNs
   - title: "Scoring functions"
     desc: "Goodness-of-fit scoring functions for Bayesian networks"
     contents:

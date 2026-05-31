@@ -8,7 +8,10 @@
 #' The main functions are:
 #'
 #' \itemize{
-#'     \item \code{\link{hcmc}()} - the HCMC and iHCMC algorithms.
+#'     \item \code{\link{iBIC}()} - the interventional BIC score for Gaussian data.
+#'     \item \code{\link{iBGe}()} - the interventional BGe score for Gaussian data.
+#'     \item \code{\link{hillclimbing}()} - a straightforward hill-climbing algorithm for learning the structure of Bayesian networks.
+#'     \item \code{\link{hcmc}()} - the HCMC and iHCMC algorithms for learning the structure of Bayesian networks from observational and interventional data, respectively.
 #' }
 #' 
 #' For detailed information on usage, see the package vignette, by typing

@@ -21,6 +21,6 @@ Suggests:
     pcalg
 VignetteBuilder: knitr
 Roxygen: list(markdown=TRUE)
-URL: https://github.com/rcastelo/idlBNs
+URL: https://rcastelo.github.io/idlBNs
 BugReports: https://github.com/rcastelo/idlBNs/issues
 Config/roxygen2/version: 8.0.0
