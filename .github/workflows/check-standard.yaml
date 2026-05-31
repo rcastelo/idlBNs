@@ -45,6 +45,11 @@ jobs:
           upload-snapshots: true
           build_args: 'c("--no-manual","--compact-vignettes=gs+qpdf")'
 
+      - name: Install remotes
+        run: |
+          install.packages("remotes")
+        shell: Rscript {0}
+
       - name: Install covr
         run: |
           remotes::install_cran("covr")
