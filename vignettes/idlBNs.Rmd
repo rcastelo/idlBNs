@@ -141,7 +141,7 @@ tindex <- rep(1:length(nbytgts), nbytgts)
 Run the iHCMC algorithm informing the presence of interventional data. By default,
 the iBIC score is used in the search algorithm.
 
-```{r}
+```{r, message=FALSE}
 Dhat.ihcmc <- hcmc(dat, targets=I, target.index=tindex)
 Dhat.ihcmc
 ```
@@ -153,19 +153,23 @@ shd(dag2essgraph(Dhat.ihcmc$dag), E)
 ```
 Repeat the search using the iBGe score instead of the iBIC score.
 
-```{r}
+```{r, message=FALSE}
 Dhat.ihcmc.ibge <- hcmc(dat, targets=I, target.index=tindex, scorefun=iBGe)
 shd(dag2essgraph(Dhat.ihcmc.ibge$dag), E)
 ```
-Now use the HCMC algorithm without informing the presence of interventional
-data, i.e., assuming that all data are observational.
+We can see that the iBGe score leads to an estimate of the DAG structure that is
+close to the generative DAG structure, in terms of the SHD. Now use the HCMC
+algorithm without informing the presence of interventional data, i.e., assuming
+that all data are observational.
 
-```{r}
+```{r, message=FALSE}
 Dhat.hcmc <- hcmc(dat)
 shd(dag2essgraph(Dhat.hcmc$dag), E)
 Dhat.hcmc.ibge <- hcmc(dat, scorefun=iBGe)
 shd(dag2essgraph(Dhat.hcmc.ibge$dag), E)
 ```
+In this setting, using either the BIC or the BGe score leads to worse estimates of
+the DAG structure.
 
 # Session information
 
