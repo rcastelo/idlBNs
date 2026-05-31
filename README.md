@@ -1,7 +1,7 @@
 # idlBNs: inclusion-driven learning of Bayesian Networks
 
 <!-- badges: start -->
-[![R-CMD-check](../../actions/workflows/check-standard.yaml/badge.svg)](../../actions?query=workflow%3AR-CMD-check)
+[![R-CMD-check](https://github.com/rcastelo/idlBNs/workflows/R-CMD-check/badge.svg)](https://github.com/rcastelo/GSVA/actions?query=workflow%3AR-CMD-check)
 [![codecov](https://codecov.io/gh/rcastelo/idlBNs/graph/badge.svg?token=A6CWOGOR1I)](https://codecov.io/gh/rcastelo/idlBNs)
 <!-- badges: end -->
 
@@ -21,7 +21,8 @@ library(remotes)
 install_github("rcastelo/idlBNs")
 ```
 
-The vignette contains an example on how to use it.
+The [vignette](https://rcastelo.github.io/idlBNs/articles/idlBNs.html) contains
+an example on how to use it.
 
 ## Questions, bug reports and issues
 
