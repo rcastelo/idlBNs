@@ -2,7 +2,6 @@
 
 <!-- badges: start -->
 [![R-CMD-check](../../actions/workflows/check-standard.yaml/badge.svg)](../../actions?query=workflow%3AR-CMD-check)
-[![codecov.io](https://codecov.io/github/rcastelo/idlBNs/coverage.svg?branch=main)](https://app.codecov.io/github/rcastelo/idlBNs?branch=main)
 [![codecov](https://codecov.io/gh/rcastelo/idlBNs/graph/badge.svg?token=A6CWOGOR1I)](https://codecov.io/gh/rcastelo/idlBNs)
 <!-- badges: end -->
 
