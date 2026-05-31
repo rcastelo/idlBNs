@@ -16,7 +16,8 @@ follows:
 
     install_github("rcastelo/idlBNs")
 
-The vignette contains an example on how to use it.
+The [vignette](https://rcastelo.github.io/idlBNs/articles/idlBNs.html)
+contains an example on how to use it.
 
 ## Questions, bug reports and issues
 
