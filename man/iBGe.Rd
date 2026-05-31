@@ -28,7 +28,7 @@ Bayesian network given an interventional data set of continuous values,
 where observations are assumed to be independent but not identically
 distributed (not iid) multivariate Gaussian. This GoF score corresponds to
 the interventional Bayesian Gaussian equivalent (iBGe) score defined by
-Kuipers and Moffa (2022). By default, the arguments \code{targets} and
+Kuipers and Moffa (2025). By default, the arguments \code{targets} and
 \code{target.index} are set so that the calculated BIC score assumes there are
 no interventions in the data.
 }
