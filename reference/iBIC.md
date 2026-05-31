@@ -1,0 +1,115 @@
+# BIC score for observational and interventional Gaussian data
+
+Score the goodness-of-fit (GoF) of a given structure of a Bayesian
+network given an interventional data set of continuous values, where
+observations are assumed to be independent but not identically
+distributed (not iid) multivariate Gaussian. This GoF score corresponds
+to the Bayesian information criterion (BIC) as implemented in the
+`GaussL0penIntScore` class from the `pcalg` package (Kalisch et al.,
+2012). By default, the arguments `targets` and `target.index` are set so
+that the calculated BIC score assumes there are no interventions in the
+data.
+
+## Usage
+
+``` r
+iBIC(g, dat, targets = list(0L), target.index = rep(1L, nrow(dat)))
+```
+
+## Arguments
+
+- g:
+
+  An acyclic directed graph (DAG) structure of the Bayesian network for
+  which we want to calculate the score.
+
+- dat:
+
+  A `data.frame` object with data records in the rows.
+
+- targets:
+
+  A `list` object with a family of targets.
+
+- target.index:
+
+  A vector of integer values in one-to-one correspondence with the rows
+  in `dat`, indicating what set of targets has generated each row in
+  `dat`.
+
+## Value
+
+A single numeric value corresponding to the interventional BIC score of
+the given structure of the Bayesian network for the given data set.
+
+## References
+
+Hauser, A. and Buehlmann, P. Jointly interventional and observational
+data: estimation of interventional Markov equivalence classes of
+directed acyclic graphs. *Journal of the Royal Statistical Society
+Series B: Statistical Methodology*, 77:291-318, 2015.
+
+Kalisch, M., Maechler, M., Colombo, D., Maathuis M.H. and Buehlmann, P.
+Causal inference using graphical models with the R package pcalg.
+*Journal of Statistical Software*, 47:1-26, 2012.
+
+## Examples
+
+``` r
+
+library(graph)
+
+p <- 3
+nobs <- 100
+nint <- 100
+n <- nobs + nint
+
+## define a DAG structure of a Bayesian network with three vertices
+## forming a Markov chain X1 -> X2 -> X3
+g <- new("graphNEL", nodes=c("X1", "X2", "X3"), edgemode="directed")
+g <- addEdge("X1", "X2", g)
+g <- addEdge("X2", "X3", g)
+
+## simulate observational data for the previous DAG X1 -> X2 -> X3
+set.seed(123)
+X1 <- rnorm(nobs, mean=0, sd=1)
+X2 <- 0.5 * X1 + rnorm(nobs, mean=0, sd=1)
+X3 <- 0.5 * X2 + rnorm(nobs, mean=0, sd=1)
+obsdat <- data.frame(X1=X1, X2=X2, X3=X3)
+
+## simulate interventional data for the same DAG, where X2 is intervened
+X1 <- rnorm(nint, mean=0, sd=1)
+X2 <- rnorm(nint, mean=0, sd=1) + 1.0
+X3 <- 0.5 * X2 + rnorm(nint, mean=0, sd=1)
+intdat <- data.frame(X1=X1, X2=X2, X3=X3)
+
+## combine observational and interventional data
+dat <- rbind(obsdat, intdat)
+
+## define the targets and target indices for the interventional data
+targets <- list(0L, 2L)
+target.index <- c(rep(1L, nobs), rep(2L, nint))
+
+## calculate the interventional BIC score for the DAG and data set
+iBIC(g, dat, targets, target.index)
+#> [1] -242.3883
+
+## create another Markov equivalent DAG by reversing the arc X1 -> X2
+## to obtain X1 <- X2 -> X3
+g2 <- g
+g2 <- removeEdge("X1", "X2", g2)
+g2 <- addEdge("X2", "X1", g2)
+
+## calculate the interventional BIC score for the new DAG on the
+## same data, notice that the score is different despite being a
+## Markov equivalent DAG
+iBIC(g2, dat, targets, target.index)
+#> [1] -249.149
+
+## this is not the case if we do not indicate the presence of interventions
+## in the data
+iBIC(g, dat)
+#> [1] -326.3833
+iBIC(g2, dat)
+#> [1] -326.3833
+```
