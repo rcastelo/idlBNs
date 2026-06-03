@@ -5,7 +5,7 @@
 ^\.DS_store$
 ^doc$
 ^Meta$
-^vignettes/IEOprojectAnalysis_cache$
 ^_pkgdown\.yml$
 ^docs$
 ^pkgdown$
+^\.codecov\.yml$
