@@ -19,18 +19,20 @@ follows:
 The [vignette](https://rcastelo.github.io/idlBNs/articles/idlBNs.html)
 contains an example on how to use it.
 
-## Questions, bug reports and issues
+## Citation
 
-For bug reports and issues regarding this **development** version of
-**idlBNs** please use the GitHub issues
-[tab](https://github.com/rcastelo/idlBNs/issues) at the top-left of this
-page.
+If you use `idlBNs` in your research, please cite the following paper:
+
+> R. Castelo. Interventional idlBNs in DAG-Space. In Challenges and
+> Algorithms for Knowledge Discovery from Data, M. van Leeuwen and J.
+> Vreeken, Eds., pp. 161-177. Springer Nature, ISBN 978-3-032-03028-3,
+> 2025 (<https://doi.org/10.1007/978-3-032-03028-3_10>).
 
 ## Questions, bug reports and feature requests
 
 For questions, bug reports and feature requests please use the GitHub
-issues [tab](https://github.com/rcastelo/GSVA/issues) at the top-left of
-this page.
+issues [tab](https://github.com/rcastelo/idlBNs/issues) at the top-left
+of this page.
 
 ## Contributing
 

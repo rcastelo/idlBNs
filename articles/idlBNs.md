@@ -221,7 +221,7 @@ attached base packages:
 [1] stats     graphics  grDevices utils     datasets  methods   base     
 
 other attached packages:
-[1] idlBNs_0.99.0       pcalg_2.7-12        graph_1.90.0       
+[1] idlBNs_1.0.0        pcalg_2.7-12        graph_1.90.0       
 [4] BiocGenerics_0.58.1 generics_0.1.4      knitr_1.51         
 
 loaded via a namespace (and not attached):
@@ -232,7 +232,7 @@ loaded via a namespace (and not attached):
 [13] igraph_2.3.2        RBGL_1.88.0         robustbase_0.99-7  
 [16] bdsmatrix_1.3-7     desc_1.4.3          sfsmisc_1.1-24     
 [19] bslib_0.11.0        rlang_1.2.0         cachem_1.1.0       
-[22] xfun_0.57           fs_2.1.0            sass_0.4.10        
+[22] xfun_0.58           fs_2.1.0            sass_0.4.10        
 [25] cli_3.6.6           pkgdown_2.2.0       magrittr_2.0.5     
 [28] digest_0.6.39       lifecycle_1.0.5     clue_0.3-68        
 [31] DEoptimR_1.1-4      evaluate_1.0.5      ggm_2.5.2          

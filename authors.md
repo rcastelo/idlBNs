@@ -7,16 +7,21 @@
 ## Citation
 
 Source:
-[`DESCRIPTION`](https://github.com/rcastelo/idlBNs/blob/main/DESCRIPTION)
+[`inst/CITATION`](https://github.com/rcastelo/idlBNs/blob/main/inst/CITATION)
 
-Castelo R (2026). *idlBNs: Inclusion-Driven Learning of Bayesian
-Networks*. R package version 0.99.0,
-<https://rcastelo.github.io/idlBNs>.
+Castelo, R. Interventional idlBNs in DAG-Space. In Challenges and
+Algorithms for Knowledge Discovery from Data. M. van Leeuwen and J.
+Vreeken, Eds., pp. 161-177. Springer Nature, ISBN 978-3-032-03028-3,
+2026.
 
-    @Manual{,
-      title = {idlBNs: Inclusion-Driven Learning of Bayesian Networks},
+    @InBook{,
+      title = {Interventional idl{BN}s in {DAG-Space}},
       author = {Robert Castelo},
+      booktitle = {Challenges and Algorithms for Knowledge Discovery from Data},
+      editor = {Matthijs {van Leeuwen} and Jilles Vreeken},
+      publisher = {Springer Nature},
       year = {2026},
-      note = {R package version 0.99.0},
-      url = {https://rcastelo.github.io/idlBNs},
+      chapter = {10},
+      pages = {161-177},
+      doi = {10.1007/978-3-032-03028-3_10},
     }
