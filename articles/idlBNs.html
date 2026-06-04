@@ -95,8 +95,7 @@ algorithms that attempt following an inclusion path in the search space
 of DAGs <span class="citation">(Kočka et al. 2001)</span>. Following an
 inclusion path confers makes the algorithm consistent under the
 faithfulness assumption, that is, it converges to the generative
-structure as the sample size grows large <span class="citation">Castelo
-and Kočka (2003)</span>.</p>
+structure as the sample size grows large <span class="citation">(Chickering 2002; Castelo and Kočka 2003)</span>.</p>
 <p>Inclusion-driven learning of Bayesian networks, or <em>idlBNs</em>
 for short<a class="footnote-ref" tabindex="0" data-bs-toggle="popover" data-bs-content="&lt;p&gt;Pronounced &lt;em&gt;ideal BNs&lt;/em&gt;&lt;/p&gt;"><sup>1</sup></a>, can be implemented either in the space of
 the canonical elements of the Markov equivalence classes of DAGs, also
@@ -180,7 +179,7 @@ is a randomly selected vertex from the DAG structure
 <span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a></span>
 <span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a>[[<span class="dv">3</span>]]</span>
 <span id="cb3-11"><a href="#cb3-11" tabindex="-1"></a>[<span class="dv">1</span>] <span class="dv">3</span></span></code></pre></div>
-<p>Consider simulating
+<p>Consider simulating a sample size of
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>100</mn></mrow><annotation encoding="application/x-tex">n=100</annotation></semantics></math>
 multivariate observations, with a similar number of them for each
 intervention target.</p>
@@ -219,7 +218,9 @@ data. By default, the iBIC score is used in the search algorithm.</p>
 <span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a>[<span class="dv">1</span>] <span class="sc">-</span><span class="fl">50.0166</span></span></code></pre></div>
 <p>Calculate the structural Hamming distance (SHD) to the essential
 graph of the generative DAG structure
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>G</mi><annotation encoding="application/x-tex">G</annotation></semantics></math>.</p>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>G</mi><annotation encoding="application/x-tex">G</annotation></semantics></math>
+using the function <code><a href="https://rdrr.io/pkg/pcalg/man/shd.html" class="external-link">shd()</a></code> from the <code>pcalg</code>
+package.</p>
 <div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="fu">shd</span>(<span class="fu">dag2essgraph</span>(Dhat.ihcmc<span class="sc">$</span>dag), E)</span>
 <span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a>[<span class="dv">1</span>] <span class="dv">3</span></span></code></pre></div>
 <p>Repeat the search using the iBGe score instead of the iBIC score.</p>
@@ -227,8 +228,8 @@ graph of the generative DAG structure
 <span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a><span class="fu">shd</span>(<span class="fu">dag2essgraph</span>(Dhat.ihcmc.ibge<span class="sc">$</span>dag), E)</span>
 <span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a>[<span class="dv">1</span>] <span class="dv">2</span></span></code></pre></div>
 <p>We can see that the iBGe score leads to an estimate of the DAG
-structure that is close to the generative DAG structure, in terms of the
-SHD. Now use the HCMC algorithm without informing the presence of
+structure that is closer to the generative DAG structure, in terms of
+the SHD. Now use the HCMC algorithm without informing the presence of
 interventional data, i.e., assuming that all data are observational.</p>
 <div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a>Dhat.hcmc <span class="ot">&lt;-</span> <span class="fu">hcmc</span>(dat)</span>
 <span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a><span class="fu">shd</span>(<span class="fu">dag2essgraph</span>(Dhat.hcmc<span class="sc">$</span>dag), E)</span>
@@ -304,16 +305,16 @@ Research</em> 3 (Nov): 507–54.
 </div>
 <div id="ref-HauBuh12" class="csl-entry">
 Hauser, Alain, and Peter Bühlmann. 2012. <span>“Characterization and
-Greedy Learning of Interventional Markov Equivalence Classes of Directed
-Acyclic Graphs.”</span> <em>Journal of Machine Learning Research</em> 13
-(1): 2409–64.
+Greedy Learning of Interventional <span>M</span>arkov Equivalence
+Classes of Directed Acyclic Graphs.”</span> <em>Journal of Machine
+Learning Research</em> 13 (1): 2409–64.
 </div>
 <div id="ref-HauBuh15" class="csl-entry">
 Hauser, Alain, and Peter Bühlmann. 2015. <span>“Jointly Interventional
-and Observational Data: Estimation of Interventional Markov Equivalence
-Classes of Directed Acyclic Graphs.”</span> <em>Journal of the Royal
-Statistical Society Series B: Statistical Methodology</em> 77 (1):
-291–318.
+and Observational Data: Estimation of Interventional <span>M</span>arkov
+Equivalence Classes of Directed Acyclic Graphs.”</span> <em>Journal of
+the Royal Statistical Society Series B: Statistical Methodology</em> 77
+(1): 291–318.
 </div>
 <div id="ref-KalBuh07" class="csl-entry">
 Kalisch, Markus, and Peter Bühlman. 2007. <span>“Estimating

@@ -25,8 +25,8 @@ algorithms. The `idlBNs` package implements score-based algorithms that
 attempt following an inclusion path in the search space of DAGs (Kočka
 et al. 2001). Following an inclusion path confers makes the algorithm
 consistent under the faithfulness assumption, that is, it converges to
-the generative structure as the sample size grows large Castelo and
-Kočka (2003).
+the generative structure as the sample size grows large (Chickering
+2002; Castelo and Kočka 2003).
 
 Inclusion-driven learning of Bayesian networks, or *idlBNs* for
 short[^1], can be implemented either in the space of the canonical
@@ -118,8 +118,9 @@ integer(0)
 [1] 3
 ```
 
-Consider simulating $`n=100`$ multivariate observations, with a similar
-number of them for each intervention target.
+Consider simulating a sample size of $`n=100`$ multivariate
+observations, with a similar number of them for each intervention
+target.
 
 ``` r
 n <- 30
@@ -164,7 +165,9 @@ $sco
 ```
 
 Calculate the structural Hamming distance (SHD) to the essential graph
-of the generative DAG structure $`G`$.
+of the generative DAG structure $`G`$ using the function
+[`shd()`](https://rdrr.io/pkg/pcalg/man/shd.html) from the `pcalg`
+package.
 
 ``` r
 shd(dag2essgraph(Dhat.ihcmc$dag), E)
@@ -180,7 +183,7 @@ shd(dag2essgraph(Dhat.ihcmc.ibge$dag), E)
 ```
 
 We can see that the iBGe score leads to an estimate of the DAG structure
-that is close to the generative DAG structure, in terms of the SHD. Now
+that is closer to the generative DAG structure, in terms of the SHD. Now
 use the HCMC algorithm without informing the presence of interventional
 data, i.e., assuming that all data are observational.
 
