@@ -47,7 +47,7 @@ main categories: constraint-based, score-based, and hybrid algorithms. The
 inclusion path in the search space of DAGs [@KocBou2k1]. Following an inclusion
 path confers makes the algorithm consistent under the faithfulness assumption,
 that is, it converges to the generative structure as the sample size grows large
-[@Chi02,@CasKoc2k3].
+[@Chi02; @CasKoc2k3].
 
 Inclusion-driven learning of Bayesian networks, or *idlBNs* for
 short^[Pronounced *ideal BNs*], can be implemented either in the space of the
@@ -114,8 +114,8 @@ k <- 2
 I <- c(list(integer(0)), sample(p, size=k, replace=FALSE))
 I
 ```
-Consider simulating $n=100$ multivariate observations, with a similar number
-of them for each intervention target.
+Consider simulating a sample size of $n=100$ multivariate observations, with a
+similar number of them for each intervention target.
 
 ```{r}
 n <- 30
@@ -146,7 +146,8 @@ Dhat.ihcmc <- hcmc(dat, targets=I, target.index=tindex)
 Dhat.ihcmc
 ```
 Calculate the structural Hamming distance (SHD) to the essential graph of the
-generative DAG structure $G$.
+generative DAG structure $G$ using the function `shd()` from the `pcalg`
+package.
 
 ```{r}
 shd(dag2essgraph(Dhat.ihcmc$dag), E)
@@ -157,10 +158,10 @@ Repeat the search using the iBGe score instead of the iBIC score.
 Dhat.ihcmc.ibge <- hcmc(dat, targets=I, target.index=tindex, scorefun=iBGe)
 shd(dag2essgraph(Dhat.ihcmc.ibge$dag), E)
 ```
-We can see that the iBGe score leads to an estimate of the DAG structure that is
-close to the generative DAG structure, in terms of the SHD. Now use the HCMC
-algorithm without informing the presence of interventional data, i.e., assuming
-that all data are observational.
+We can see that the iBGe score leads to an estimate of the DAG structure that
+is closer to the generative DAG structure, in terms of the SHD. Now use the
+HCMC algorithm without informing the presence of interventional data, i.e.,
+assuming that all data are observational.
 
 ```{r, message=FALSE}
 Dhat.hcmc <- hcmc(dat)
