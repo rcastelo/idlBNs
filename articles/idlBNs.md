@@ -203,7 +203,7 @@ estimates of the DAG structure.
 
 ``` r
 sessionInfo()
-R version 4.6.0 (2026-04-24)
+R version 4.6.1 (2026-06-24)
 Platform: x86_64-pc-linux-gnu
 Running under: Ubuntu 24.04.4 LTS
 
@@ -224,24 +224,24 @@ attached base packages:
 [1] stats     graphics  grDevices utils     datasets  methods   base     
 
 other attached packages:
-[1] idlBNs_1.0.0        pcalg_2.7-12        graph_1.90.0       
+[1] idlBNs_1.0.1        pcalg_2.7-12        graph_1.90.0       
 [4] BiocGenerics_0.58.1 generics_0.1.4      knitr_1.51         
 
 loaded via a namespace (and not attached):
- [1] jsonlite_2.0.0      compiler_4.6.0      BiocManager_1.30.27
- [4] Rcpp_1.1.1-1.1      fastICA_1.2-7       cluster_2.1.8.2    
+ [1] jsonlite_2.0.0      compiler_4.6.1      BiocManager_1.30.27
+ [4] Rcpp_1.1.2          fastICA_1.2-7       cluster_2.1.8.2    
  [7] jquerylib_0.1.4     systemfonts_1.3.2   textshaping_1.0.5  
 [10] yaml_2.3.12         fastmap_1.2.0       R6_2.6.1           
-[13] igraph_2.3.2        RBGL_1.88.0         robustbase_0.99-7  
-[16] bdsmatrix_1.3-7     desc_1.4.3          sfsmisc_1.1-24     
-[19] bslib_0.11.0        rlang_1.2.0         cachem_1.1.0       
-[22] xfun_0.58           fs_2.1.0            sass_0.4.10        
-[25] cli_3.6.6           pkgdown_2.2.0       magrittr_2.0.5     
-[28] digest_0.6.39       lifecycle_1.0.5     clue_0.3-68        
-[31] DEoptimR_1.1-4      evaluate_1.0.5      ggm_2.5.2          
-[34] corpcor_1.6.10      ragg_1.5.2          abind_1.4-8        
-[37] stats4_4.6.0        rmarkdown_2.31      tools_4.6.0        
-[40] pkgconfig_2.0.3     htmltools_0.5.9    
+[13] igraph_2.3.3        RBGL_1.88.0         robustbase_0.99-7  
+[16] bdsmatrix_1.3-7     desc_1.4.3          sfsmisc_1.1-25     
+[19] bslib_0.12.0        rlang_1.3.0         cachem_1.1.0       
+[22] xfun_0.60           fs_2.1.0            sass_0.4.10        
+[25] otel_0.2.0          cli_3.6.6           pkgdown_2.2.1      
+[28] magrittr_2.0.5      digest_0.6.39       clue_0.3-68        
+[31] lifecycle_1.0.5     DEoptimR_1.2-0      evaluate_1.0.5     
+[34] ggm_2.5.2           corpcor_1.6.10      ragg_1.5.2         
+[37] abind_1.4-8         stats4_4.6.1        rmarkdown_2.31     
+[40] tools_4.6.1         pkgconfig_2.0.3     htmltools_0.5.9    
 ```
 
 ## References
