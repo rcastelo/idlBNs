@@ -15,7 +15,8 @@ nr.nh <- function(dag) {
     a <- v[e[[i]]$edges]
     na <- setdiff(v, a)
     for (j in seq_along(na)) { ## go through non-adjacent vertices
-      if (is.infinite(dag.sp(dag, na[j])$distance[names(e)[i]])) {
+      d <- dag.sp(dag, na[j])$distance[names(e)[i]]
+      if (is.nan(d) || is.infinite(d)) {
         tmp.g <- addEdge(names(e)[i], na[j], dag)
         nr.i <- nr.i + 1
         nr[[nr.i]] <- tmp.g
@@ -43,7 +44,8 @@ ar.nh <- function(dag) {
     a <- v[e[[i]]$edges]
     for (j in seq_along(a)) { ## go through adjacent vertices
       tmp.g <- removeEdge(names(e)[i], a[j], dag)
-      if (is.infinite(dag.sp(tmp.g, names(e)[i])$distance[a[j]])) {
+      d <- dag.sp(tmp.g, names(e)[i])$distance[a[j]]
+      if (is.nan(d) || is.infinite(d)) {
         tmp.g <- addEdge(a[j], names(e)[i], tmp.g)
         ar.i <- ar.i + 1
         ar[[ar.i]] <- tmp.g
@@ -70,7 +72,8 @@ ncr.nh <- function(dag, utargets=integer(0)) {
       ced <- identical(sort(pasets[[names(e)[i]]]), sort(setdiff(pasets[[a[j]]], names(e)[i])))
       if (!ced || any(c(e[[i]]$edges[j], i) %in% utargets)) { ## NCR including not interventionally covered
         tmp.g <- removeEdge(names(e)[i], a[j], dag)
-        if (is.infinite(dag.sp(tmp.g, names(e)[i])$distance[a[j]])) {
+        d <- dag.sp(tmp.g, names(e)[i])$distance[a[j]]
+        if (is.nan(d) || is.infinite(d)) {
           tmp.g <- addEdge(a[j], names(e)[i], tmp.g)
           ncr.i <- ncr.i + 1
           ncr[[ncr.i]] <- tmp.g
