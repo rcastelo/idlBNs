@@ -8,7 +8,7 @@ hill-climber Monte Carlo (HCMC) algorithm for observational Gaussian
 data, and the interventional HCMC (iHCMC) for interventional Gaussian
 data.
 
-## Introduction
+## 1 Introduction
 
 Bayesian networks are multivariate models that assume that their joint
 probability distribution factorizes according to an acyclic directed
@@ -17,49 +17,52 @@ from data, and this is the so-called problem of *structure learning*.
 The `idlBNs` package implements algorithms for learning the structure of
 Bayesian networks from observational and interventional Gaussian data.
 
-## Inclusion-driven structure learning
+## 2 Inclusion-driven structure learning
 
 Structure learning algorithm for Bayesian networks can be classified
 into three main categories: constraint-based, score-based, and hybrid
 algorithms. The `idlBNs` package implements score-based algorithms that
-attempt following an inclusion path in the search space of DAGs (Kočka
-et al. 2001). Following an inclusion path confers makes the algorithm
-consistent under the faithfulness assumption, that is, it converges to
-the generative structure as the sample size grows large (Chickering
-2002; Castelo and Kočka 2003).
+attempt following an inclusion path in the search space of DAGs ([Kočka
+et al. 2001](#ref-KocBou2k1)). Following an inclusion path confers makes
+the algorithm consistent under the faithfulness assumption, that is, it
+converges to the generative structure as the sample size grows large
+([Chickering 2002](#ref-Chi02); [Castelo and Kočka
+2003](#ref-CasKoc2k3)).
 
 Inclusion-driven learning of Bayesian networks, or *idlBNs* for
 short[^1], can be implemented either in the space of the canonical
 elements of the Markov equivalence classes of DAGs, also known as
 *essential graphs*, as in the Greedy Equivalence Search (GES) algorithm
-(Chickering 2002), or in the space of DAGs, as in the Hill-Climber Monte
-Carlo (HCMC) algorithm (Kočka and Castelo 2001; Castelo and Kočka 2003).
-The GES algorithm was adapted to interventional data in the Greedy
-Interventional Equivalence Search (GIES) algorithm (Hauser and Bühlmann
-2012), and an efficient implementation of both is available in the
-[pcalg](https://cran.r-project.org/package=pcalg) package (Kalisch and
-Bühlman 2007), through the functions
-[`ges()`](https://rdrr.io/pkg/pcalg/man/ges.html) and
+([Chickering 2002](#ref-Chi02)), or in the space of DAGs, as in the
+Hill-Climber Monte Carlo (HCMC) algorithm ([Kočka and Castelo
+2001](#ref-KocCas2k1); [Castelo and Kočka 2003](#ref-CasKoc2k3)). The
+GES algorithm was adapted to interventional data in the Greedy
+Interventional Equivalence Search (GIES) algorithm ([Hauser and Bühlmann
+2012](#ref-HauBuh12)), and an efficient implementation of both is
+available in the [pcalg](https://cran.r-project.org/package=pcalg)
+package ([Kalisch and Bühlman 2007](#ref-KalBuh07)), through the
+functions [`ges()`](https://rdrr.io/pkg/pcalg/man/ges.html) and
 [`gies()`](https://rdrr.io/pkg/pcalg/man/gies.html), respectively.
 
 The `idlBNs` provides an implementation in R of the HCMC algorithm for
 observational Gaussian data, and of the interventional HCMC (iHCMC)
 algorithm for a mixture of observational and interventional Gaussian
-data (Castelo 2026) through the function
+data ([Castelo 2026](#ref-Cas26)) through the function
 [`hcmc()`](https://rcastelo.github.io/idlBNs/reference/hcmc.md).
 
-## Scoring functions for observational and interventional Gaussian data
+## 3 Scoring functions for observational and interventional Gaussian data
 
 The `idlBNs` package implements two different functions for scoring a
 DAG structure from observational and interventional Gaussian data. The
 [`iBIC()`](https://rcastelo.github.io/idlBNs/reference/iBIC.md)
 function, which implements the interventional Bayesian Information
-Criterion (iBIC) score (Hauser and Bühlmann 2012, 2015), and the
+Criterion (iBIC) score ([Hauser and Bühlmann 2012](#ref-HauBuh12),
+[2015](#ref-HauBuh15)), and the
 [`iBGe()`](https://rcastelo.github.io/idlBNs/reference/iBGe.md)
 function, which implements the interventional Bayesian Gaussian
-equivalent (iBGe) score (Kuipers and Moffa 2025).
+equivalent (iBGe) score ([Kuipers and Moffa 2025](#ref-KuiMof25)).
 
-## How to use the idlBNs package
+## 4 How to use the idlBNs package
 
 Here we illustrate how to use the idlBNs package with multivariate
 Gaussian data, simulated using the procedures of the
@@ -95,14 +98,14 @@ E <- dag2essgraph(as(G, "graphNEL"))
 ```
 
 Assume we want to consider two different singleton intervention targets
-($`k=2`$), i.e., we select two vertices from the DAG structure uniformly
+(\\k=2\\), i.e., we select two vertices from the DAG structure uniformly
 at random to intervene in their associated random variables, but we
 intervene only in one random variable at a time in a given multivariate
-observation. Following the terminology of Hauser and Bühlmann (2012), we
-define a family of *intervention targets*
-$`\mathcal{I} = \{I_1, I_2, I_3\}`$, where $`I_1=\{\emptyset\}`$ and
-$`I_i\{v_i\}`$ with $`i=\{2, 3\}`$ and $`v_i\in V`$ is a randomly
-selected vertex from the DAG structure $`G=(V, E)`$.
+observation. Following the terminology of Hauser and Bühlmann
+([2012](#ref-HauBuh12)), we define a family of *intervention targets*
+\\\mathcal{I} = \\I_1, I_2, I_3\\\\, where \\I_1=\\\emptyset\\\\ and
+\\I_i\\v_i\\\\ with \\i=\\2, 3\\\\ and \\v_i\in V\\ is a randomly
+selected vertex from the DAG structure \\G=(V, E)\\.
 
 ``` r
 k <- 2
@@ -118,7 +121,7 @@ integer(0)
 [1] 3
 ```
 
-Consider simulating a sample size of $`n=100`$ multivariate
+Consider simulating a sample size of \\n=100\\ multivariate
 observations, with a similar number of them for each intervention
 target.
 
@@ -131,8 +134,8 @@ nbytgts
 ```
 
 Simulate mixed observational and interventional multivariate Gaussian
-data from the DAG structure $`G`$ and the family of intervention targets
-$`\mathcal{I}`$ using the function
+data from the DAG structure \\G\\ and the family of intervention targets
+\\\mathcal{I}\\ using the function
 [`rmvnorm.ivent()`](https://rdrr.io/pkg/pcalg/man/rmvnorm.ivent.html)
 from the `pcalg` package, storing the index to the corresponding
 intervention target for each row of the data.
@@ -165,7 +168,7 @@ $sco
 ```
 
 Calculate the structural Hamming distance (SHD) to the essential graph
-of the generative DAG structure $`G`$ using the function
+of the generative DAG structure \\G\\ using the function
 [`shd()`](https://rdrr.io/pkg/pcalg/man/shd.html) from the `pcalg`
 package.
 
@@ -199,19 +202,19 @@ shd(dag2essgraph(Dhat.hcmc.ibge$dag), E)
 In this setting, using either the BIC or the BGe score leads to worse
 estimates of the DAG structure.
 
-## Computational performance benchmark
+## 5 Computational performance benchmark
 
 Currently, the iBIC and iBGe scores, as well as the iHCMC algorithm, are
 implemented using only the R language without any kind of optimization.
 In practice, this means the iHCMC algorithm can only be applied to a
 handful of vertices and this implementation is currently only useful for
 research prototyping and educational purposes. Using the CRAN package
-[bench](https://cran.r-project.org/package=bench) (Hester and Vaughan
-2025), here we benchmark the computational performance of the iHCMC
-algorithm for two different numbers of vertices, a given sample size and
-two randomly selected intervention targets, to keep track of how its
-performance improves as we optimize its implementation through the next
-versions of the `idlBNs` package.
+[bench](https://cran.r-project.org/package=bench) ([Hester and Vaughan
+2025](#ref-HesVau25)), here we benchmark the computational performance
+of the iHCMC algorithm for two different numbers of vertices, a given
+sample size and two randomly selected intervention targets, to keep
+track of how its performance improves as we optimize its implementation
+through the next versions of the `idlBNs` package.
 
 ``` r
 
@@ -245,7 +248,7 @@ bmdat <- bmdat |> add_column(p=rep(p, each=length(p)), .before="score_function")
 bmdat <- bmdat |> add_column(version=packageVersion("idlBNs"), .before="p")
 ```
 
-Table @ref(tab:benchmark-results) below shows the benchmarking results
+Table [5.1](#tab:benchmark-results) below shows the benchmarking results
 of this version of the `idlBNs` package, jointly with the results of
 previous versions, if available, for comparison purposes. Actually, if
 you want to run the benchmark when building the vignette, you should set
@@ -262,7 +265,7 @@ where the results will be saved in a CSV file named
 | 1.0.2   |       20 | iBIC           |      11.46s |             7.38GB |
 | 1.0.2   |       20 | iBGe           |      23.25s |            16.03GB |
 
-Benchmark of computational performance of the iHCMC algorithm
+Table 5.1: Benchmark of computational performance of the iHCMC algorithm
 implemented in
 [`hcmc()`](https://rcastelo.github.io/idlBNs/reference/hcmc.md) for
 p={10, 20} vertices, and the score functions
@@ -271,7 +274,7 @@ p={10, 20} vertices, and the score functions
 .table .table-striped .table-hover .table-condensed
 style="width: auto !important; margin-left: auto; margin-right: auto;"}
 
-## Session information
+## 6 Session information
 
 ``` r
 sessionInfo()
@@ -312,15 +315,13 @@ loaded via a namespace (and not attached):
 [22] cachem_1.1.0        yaml_2.3.12         otel_0.2.0         
 [25] tools_4.6.1         bdsmatrix_1.3-7     corpcor_1.6.10     
 [28] vctrs_0.7.3         R6_2.6.1            stats4_4.6.1       
-[31] lifecycle_1.0.5     stringr_1.6.0       fs_2.1.0           
-[34] RBGL_1.88.0         clue_0.3-68         ragg_1.5.2         
-[37] cluster_2.1.8.2     pkgconfig_2.0.3     desc_1.4.3         
-[40] pkgdown_2.2.1       bslib_0.12.0        pillar_1.11.1      
-[43] glue_1.8.1          Rcpp_1.1.2          systemfonts_1.3.2  
-[46] DEoptimR_1.2-0      xfun_0.60           tidyselect_1.2.1   
-[49] rstudioapi_0.19.0   farver_2.1.2        htmltools_0.5.9    
-[52] igraph_2.3.3        svglite_2.2.2       rmarkdown_2.31     
-[55] compiler_4.6.1     
+[31] lifecycle_1.0.5     stringr_1.6.0       RBGL_1.88.0        
+[34] clue_0.3-68         cluster_2.1.8.2     pkgconfig_2.0.3    
+[37] bslib_0.12.0        pillar_1.11.1       glue_1.8.1         
+[40] Rcpp_1.1.2          systemfonts_1.3.2   DEoptimR_1.2-0     
+[43] xfun_0.60           tidyselect_1.2.1    rstudioapi_0.19.0  
+[46] farver_2.1.2        htmltools_0.5.9     igraph_2.3.3       
+[49] svglite_2.2.2       rmarkdown_2.31      compiler_4.6.1     
 ```
 
 ## References
