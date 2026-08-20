@@ -1,4 +1,4 @@
-# The idlBNs package
+# The idlBNs Package
 
 Abstract
 
@@ -199,6 +199,78 @@ shd(dag2essgraph(Dhat.hcmc.ibge$dag), E)
 In this setting, using either the BIC or the BGe score leads to worse
 estimates of the DAG structure.
 
+## Computational performance benchmark
+
+Currently, the iBIC and iBGe scores, as well as the iHCMC algorithm, are
+implemented using only the R language without any kind of optimization.
+In practice, this means the iHCMC algorithm can only be applied to a
+handful of vertices and this implementation is currently only useful for
+research prototyping and educational purposes. Using the CRAN package
+[bench](https://cran.r-project.org/package=bench) (Hester and Vaughan
+2025), here we benchmark the computational performance of the iHCMC
+algorithm for two different numbers of vertices, a given sample size and
+two randomly selected intervention targets, to keep track of how its
+performance improves as we optimize its implementation through the next
+versions of the `idlBNs` package.
+
+``` r
+
+library(dplyr)
+library(tibble)
+library(bench)
+
+bmdat <- list()
+p <- c(10, 20)
+n <- 100
+for (i in seq_along(p)) {
+    D <- r.gauss.pardag(p[i], 0.2, top.sort=TRUE, normalize=TRUE)
+    I <- list(integer(0), sample(p[i], size=2, replace=FALSE))
+    nbytgts <- c(n/2, n/2)    
+    dat <- rbind(rmvnorm.ivent(nbytgts[1], D, target=I[[1]],
+                               target.value=rep(2, length(I[[1]]))),
+                 rmvnorm.ivent(nbytgts[2], D, target=I[[2]],
+                               target.value=rep(2, length(I[[2]]))))
+    tindex <- rep(1:length(nbytgts), nbytgts)
+    bmdat[[i]] <- bench::mark(iBIC=hcmc(dat, targets=I, target.index=tindex,
+                                        scorefun=iBIC, verbose=FALSE),
+                              iBGe=hcmc(dat, targets=I, target.index=tindex,
+                                        scorefun=iBGe, verbose=FALSE),
+                              iterations=3, check=FALSE)
+}
+
+bmdat <- do.call("rbind", lapply(bmdat, function(x) x[, c("expression", "median", "mem_alloc")]))
+bmdat <- rename(bmdat, score_function=expression)
+bmdat$score_function <- attr(bmdat$score_function, "description")
+bmdat <- bmdat |> add_column(p=rep(p, each=length(p)), .before="score_function")
+bmdat <- bmdat |> add_column(version=packageVersion("idlBNs"), .before="p")
+```
+
+Table @ref(tab:benchmark-results) below shows the benchmarking results
+of this version of the `idlBNs` package, jointly with the results of
+previous versions, if available, for comparison purposes. Actually, if
+you want to run the benchmark when building the vignette, you should set
+the environment variable `IDLBNS_BENCHMARK=TRUE` before building it, and
+if you want to save the results of the benchmark, you should set the
+environment variable `IDLBNS_BENCHMARK_RESULTS_PATH` to a valid path
+where the results will be saved in a CSV file named
+`benchmark_results.csv`.
+
+| Version | Vertices | Score Function | Median Time | Memory Consumption |
+|:--------|---------:|:---------------|------------:|-------------------:|
+| 1.0.2   |       10 | iBIC           |    665.38ms |           283.93MB |
+| 1.0.2   |       10 | iBGe           |       1.15s |           367.96MB |
+| 1.0.2   |       20 | iBIC           |      11.46s |             7.38GB |
+| 1.0.2   |       20 | iBGe           |      23.25s |            16.03GB |
+
+Benchmark of computational performance of the iHCMC algorithm
+implemented in
+[`hcmc()`](https://rcastelo.github.io/idlBNs/reference/hcmc.md) for
+p={10, 20} vertices, and the score functions
+[`iBIC()`](https://rcastelo.github.io/idlBNs/reference/iBIC.md) and
+[`iBGe()`](https://rcastelo.github.io/idlBNs/reference/iBGe.md). {.table
+.table .table-striped .table-hover .table-condensed
+style="width: auto !important; margin-left: auto; margin-right: auto;"}
+
 ## Session information
 
 ``` r
@@ -224,24 +296,31 @@ attached base packages:
 [1] stats     graphics  grDevices utils     datasets  methods   base     
 
 other attached packages:
-[1] idlBNs_1.0.1        pcalg_2.7-12        graph_1.90.0       
-[4] BiocGenerics_0.58.1 generics_0.1.4      knitr_1.51         
+ [1] kableExtra_1.4.1    cli_3.6.6           bench_1.1.4        
+ [4] tibble_3.3.1        dplyr_1.2.1         idlBNs_1.0.2       
+ [7] pcalg_2.7-12        graph_1.90.0        BiocGenerics_0.58.1
+[10] generics_0.1.4      knitr_1.51         
 
 loaded via a namespace (and not attached):
- [1] jsonlite_2.0.0      compiler_4.6.1      BiocManager_1.30.27
- [4] Rcpp_1.1.2          fastICA_1.2-7       cluster_2.1.8.2    
- [7] jquerylib_0.1.4     systemfonts_1.3.2   textshaping_1.0.5  
-[10] yaml_2.3.12         fastmap_1.2.0       R6_2.6.1           
-[13] igraph_2.3.3        RBGL_1.88.0         robustbase_0.99-7  
-[16] bdsmatrix_1.3-7     desc_1.4.3          sfsmisc_1.1-25     
-[19] bslib_0.12.0        rlang_1.3.0         cachem_1.1.0       
-[22] xfun_0.60           fs_2.1.0            sass_0.4.10        
-[25] otel_0.2.0          cli_3.6.6           pkgdown_2.2.1      
-[28] magrittr_2.0.5      digest_0.6.39       clue_0.3-68        
-[31] lifecycle_1.0.5     DEoptimR_1.2-0      evaluate_1.0.5     
-[34] ggm_2.5.2           corpcor_1.6.10      ragg_1.5.2         
-[37] abind_1.4-8         stats4_4.6.1        rmarkdown_2.31     
-[40] tools_4.6.1         pkgconfig_2.0.3     htmltools_0.5.9    
+ [1] sass_0.4.10         xml2_1.6.0          robustbase_0.99-7  
+ [4] stringi_1.8.9       digest_0.6.39       magrittr_2.0.5     
+ [7] RColorBrewer_1.1-3  evaluate_1.0.5      bookdown_0.47      
+[10] fastmap_1.2.0       sfsmisc_1.1-25      jsonlite_2.0.0     
+[13] BiocManager_1.30.27 viridisLite_0.4.3   scales_1.4.0       
+[16] textshaping_1.0.5   jquerylib_0.1.4     abind_1.4-8        
+[19] rlang_1.3.0         ggm_2.5.4           fastICA_1.2-8      
+[22] cachem_1.1.0        yaml_2.3.12         otel_0.2.0         
+[25] tools_4.6.1         bdsmatrix_1.3-7     corpcor_1.6.10     
+[28] vctrs_0.7.3         R6_2.6.1            stats4_4.6.1       
+[31] lifecycle_1.0.5     stringr_1.6.0       fs_2.1.0           
+[34] RBGL_1.88.0         clue_0.3-68         ragg_1.5.2         
+[37] cluster_2.1.8.2     pkgconfig_2.0.3     desc_1.4.3         
+[40] pkgdown_2.2.1       bslib_0.12.0        pillar_1.11.1      
+[43] glue_1.8.1          Rcpp_1.1.2          systemfonts_1.3.2  
+[46] DEoptimR_1.2-0      xfun_0.60           tidyselect_1.2.1   
+[49] rstudioapi_0.19.0   farver_2.1.2        htmltools_0.5.9    
+[52] igraph_2.3.3        svglite_2.2.2       rmarkdown_2.31     
+[55] compiler_4.6.1     
 ```
 
 ## References
@@ -265,6 +344,9 @@ Hauser, Alain, and Peter Bühlmann. 2015. “Jointly Interventional and
 Observational Data: Estimation of Interventional Markov Equivalence
 Classes of Directed Acyclic Graphs.” *Journal of the Royal Statistical
 Society Series B: Statistical Methodology* 77 (1): 291–318.
+
+Hester, Jim, and Davis Vaughan. 2025. *Bench: High Precision Timing of R
+Expressions*. <https://doi.org/10.32614/CRAN.package.bench>.
 
 Kalisch, Markus, and Peter Bühlman. 2007. “Estimating High-Dimensional
 Directed Acyclic Graphs with the PC-Algorithm.” *Journal of Machine

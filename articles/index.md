@@ -3,4 +3,4 @@
 ### Articles
 
 - [The idlBNs
-  package](https://rcastelo.github.io/idlBNs/articles/idlBNs.md):
+  Package](https://rcastelo.github.io/idlBNs/articles/idlBNs.md):

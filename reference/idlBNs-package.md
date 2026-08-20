@@ -37,7 +37,7 @@ idlBNs GitHub repo at <https://github.com/rcastelo/idlBNs/issues>.
 
 Useful links:
 
-- <https://rcastelo.github.io/idlBNs>
+- <https://rcastelo.github.io/idlBNs/>
 
 - Report bugs at <https://github.com/rcastelo/idlBNs/issues>
 

@@ -1,6 +1,6 @@
 # Package index
 
-## The idlBNs package
+## The idlBNs Package
 
 Overview of the idlBNs package
 
@@ -8,7 +8,7 @@ Overview of the idlBNs package
   [`idlBNs`](https://rcastelo.github.io/idlBNs/reference/idlBNs-package.md)
   : idlBNs: Inclusion-driven learning of Bayesian networks
 
-## Scoring functions
+## Scoring Functions
 
 Goodness-of-fit scoring functions for Bayesian networks
 
@@ -17,7 +17,7 @@ Goodness-of-fit scoring functions for Bayesian networks
 - [`iBGe()`](https://rcastelo.github.io/idlBNs/reference/iBGe.md) : BGe
   score for interventional Gaussian data
 
-## Search algorithms
+## Search Algorithms
 
 Search algorithms for learning the structure of Bayesian networks
 
