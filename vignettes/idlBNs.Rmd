@@ -17,8 +17,11 @@ output:
     toc: true
     toc_float: true
     number_sections: true
-    fig_captions: yes
+    fig_caption: yes
+pkgdown:
+    as_is: true
 bibliography: bibliography.bib
+link-citations: yes
 ---
 
 ```{r setup, echo=FALSE}
