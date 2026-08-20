@@ -2,7 +2,7 @@
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/rcastelo/idlBNs/workflows/R-CMD-check/badge.svg)](https://github.com/rcastelo/GSVA/actions?query=workflow%3AR-CMD-check)
-[![codecov](https://codecov.io/gh/rcastelo/idlBNs/graph/badge.svg?token=A6CWOGOR1I)](https://codecov.io/gh/rcastelo/idlBNs)
+[![codecov.io](https://codecov.io/gh/rcastelo/idlBNs/graph/badge.svg?token=A6CWOGOR1I)](https://app.codecov.io/gh/rcastelo/idlBNs)
 <!-- badges: end -->
 
 The `idlBNs` package implements inclusion-driven algorithms for learning the

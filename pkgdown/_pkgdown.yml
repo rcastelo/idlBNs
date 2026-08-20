@@ -17,17 +17,17 @@ articles:
       - idlBNs
 
 reference:
-  - title: "The idlBNs package"
+  - title: "The idlBNs Package"
     desc: "Overview of the idlBNs package"
     contents:
       - idlBNs-package
       - idlBNs
-  - title: "Scoring functions"
+  - title: "Scoring Functions"
     desc: "Goodness-of-fit scoring functions for Bayesian networks"
     contents:
       - iBIC
       - iBGe
-  - title: "Search algorithms"
+  - title: "Search Algorithms"
     desc: "Search algorithms for learning the structure of Bayesian networks"
     contents:
       - hillclimbing

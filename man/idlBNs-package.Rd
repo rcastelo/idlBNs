@@ -33,7 +33,7 @@ idlBNs GitHub repo at \url{https://github.com/rcastelo/idlBNs/issues}.
 \seealso{
 Useful links:
 \itemize{
-  \item \url{https://rcastelo.github.io/idlBNs}
+  \item \url{https://rcastelo.github.io/idlBNs/}
   \item Report bugs at \url{https://github.com/rcastelo/idlBNs/issues}
 }
 

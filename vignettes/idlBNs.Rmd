@@ -1,5 +1,5 @@
 ---
-title: "The idlBNs package"
+title: "The idlBNs Package"
 author:
 - name: Robert Castelo
   affiliation:
@@ -9,14 +9,15 @@ package: "`r packageDescription('idlBNs')$Version`"
 abstract: >
   The `idlBNs` package implements inclusion-driven algorithms for learning the structure of Bayesian networks. It currently provides the hill-climber Monte Carlo (HCMC) algorithm for observational Gaussian data, and the interventional HCMC (iHCMC) for interventional Gaussian data.
 vignette: >
-  %\VignetteIndexEntry{The idlBNs package}
+  %\VignetteIndexEntry{The idlBNs Package}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 output:
-  rmarkdown::html_document:
+  bookdown::html_document2:
     toc: true
     toc_float: true
     number_sections: true
+    fig_captions: yes
 bibliography: bibliography.bib
 ---
 
@@ -171,6 +172,135 @@ shd(dag2essgraph(Dhat.hcmc.ibge$dag), E)
 ```
 In this setting, using either the BIC or the BGe score leads to worse estimates of
 the DAG structure.
+
+# Computational performance benchmark
+
+Currently, the iBIC and iBGe scores, as well as the iHCMC algorithm, are
+implemented using only the R language without any kind of optimization. In
+practice, this means the iHCMC algorithm can only be applied to a handful of
+vertices and this implementation is currently only useful for research
+prototyping and educational purposes. Using the CRAN package
+[bench](https://cran.r-project.org/package=bench) [@HesVau25], here we
+benchmark the computational performance of the iHCMC algorithm for two
+different numbers of vertices, a given sample size and two randomly selected
+intervention targets, to keep track of how its performance improves as we
+optimize its implementation through the next versions of the `idlBNs` package.
+
+```{r, message=FALSE, warning=FALSE, echo=FALSE, results='hide'}
+library(dplyr)
+library(tibble)
+library(bench)
+library(cli)
+
+if (Sys.getenv("IDLBNS_BENCHMARK") == "TRUE") {
+    if (Sys.getenv("IDLBNS_BENCHMARK_RESULTS_PATH") != "")
+        if (!dir.exists(Sys.getenv("IDLBNS_BENCHMARK_RESULTS_PATH"))) {
+            msg <- "The path in IDLBNS_BENCHMARK_RESULTS_PATH does not exist."
+            cli_abort(c("x"=msg))
+        }
+
+    bmdat <- list()
+    p <- c(10, 20)
+    n <- 100
+    for (i in seq_along(p)) {
+        D <- r.gauss.pardag(p[i], 0.2, top.sort=TRUE, normalize=TRUE)
+        I <- list(integer(0), sample(p[i], size=2, replace=FALSE))
+        nbytgts <- c(n/2, n/2)    
+        dat <- rbind(rmvnorm.ivent(nbytgts[1], D, target=I[[1]],
+                                   target.value=rep(2, length(I[[1]]))),
+                     rmvnorm.ivent(nbytgts[2], D, target=I[[2]],
+                                   target.value=rep(2, length(I[[2]]))))
+        tindex <- rep(1:length(nbytgts), nbytgts)
+        bmdat[[i]] <- bench::mark(iBIC=hcmc(dat, targets=I, target.index=tindex,
+                                            scorefun=iBIC, verbose=FALSE),
+                                  iBGe=hcmc(dat, targets=I, target.index=tindex,
+                                            scorefun=iBGe, verbose=FALSE),
+                                  iterations=3, check=FALSE)
+    }
+
+    bmdat <- do.call("rbind", lapply(bmdat,
+                                     function(x) x[, c("expression", "median",
+                                                       "mem_alloc")]))
+    bmdat <- rename(bmdat, score_function=expression)
+    bmdat$score_function <- attr(bmdat$score_function, "description")
+    bmdat <- bmdat |> add_column(p=rep(p, each=length(p)), .before="score_function")
+    bmdat <- bmdat |> add_column(version=packageVersion("idlBNs"), .before="p")
+    if (Sys.getenv("IDLBNS_BENCHMARK_RESULTS_PATH") != "") {
+        fname <- file.path(Sys.getenv("IDLBNS_BENCHMARK_RESULTS_PATH"),
+                           "benchmark_results.csv")
+        bmdat2 <- bmdat
+        bmdat2$version <- as.character(bmdat2$version)
+        bmdat2$median <- as.numeric(bmdat2$median)
+        bmdat2$mem_alloc <- as.numeric(bmdat2$mem_alloc)
+        write.csv(bmdat2, file=fname, row.names=FALSE)
+    }
+}
+```
+```{r, eval=FALSE}
+library(dplyr)
+library(tibble)
+library(bench)
+
+bmdat <- list()
+p <- c(10, 20)
+n <- 100
+for (i in seq_along(p)) {
+    D <- r.gauss.pardag(p[i], 0.2, top.sort=TRUE, normalize=TRUE)
+    I <- list(integer(0), sample(p[i], size=2, replace=FALSE))
+    nbytgts <- c(n/2, n/2)    
+    dat <- rbind(rmvnorm.ivent(nbytgts[1], D, target=I[[1]],
+                               target.value=rep(2, length(I[[1]]))),
+                 rmvnorm.ivent(nbytgts[2], D, target=I[[2]],
+                               target.value=rep(2, length(I[[2]]))))
+    tindex <- rep(1:length(nbytgts), nbytgts)
+    bmdat[[i]] <- bench::mark(iBIC=hcmc(dat, targets=I, target.index=tindex,
+                                        scorefun=iBIC, verbose=FALSE),
+                              iBGe=hcmc(dat, targets=I, target.index=tindex,
+                                        scorefun=iBGe, verbose=FALSE),
+                              iterations=3, check=FALSE)
+}
+
+bmdat <- do.call("rbind", lapply(bmdat, function(x) x[, c("expression", "median", "mem_alloc")]))
+bmdat <- rename(bmdat, score_function=expression)
+bmdat$score_function <- attr(bmdat$score_function, "description")
+bmdat <- bmdat |> add_column(p=rep(p, each=length(p)), .before="score_function")
+bmdat <- bmdat |> add_column(version=packageVersion("idlBNs"), .before="p")
+```
+Table \@ref(tab:benchmark-results) below shows the benchmarking results of this
+version of the `idlBNs` package, jointly with the results of previous versions,
+if available, for comparison purposes. Actually, if you want to run the benchmark
+when building the vignette, you should set the environment variable
+`IDLBNS_BENCHMARK=TRUE` before building it, and if you want to save the results
+of the benchmark, you should set the environment variable
+`IDLBNS_BENCHMARK_RESULTS_PATH` to a valid path where the results will be saved
+in a CSV file named `benchmark_results.csv`.
+
+```{r benchmark-results, message=FALSE, echo=FALSE, results='asis'}
+library(kableExtra)
+
+fname <- system.file("extdata", "benchmark_results.csv", package="idlBNs")
+if (file.exists(fname)) {
+    prevbmdat <- read.csv(fname)
+    prevbmdat$version <- package_version(prevbmdat$version)
+    prevbmdat$median <- as_bench_time(prevbmdat$median)
+    prevbmdat$mem_alloc <- as_bench_bytes(prevbmdat$mem_alloc)
+    if (Sys.getenv("IDLBNS_BENCHMARK") == "TRUE") {
+      if (!bmdat$version[1] %in% prevbmdat$version)
+          bmdat <- rbind(prevbmdat, bmdat)
+    } else
+      bmdat <- prevbmdat
+}
+
+kable(bmdat, format="html",
+      col.names=c("Version", "Vertices", "Score Function", "Median Time",
+                  "Memory Consumption"),
+      caption="Benchmark of computational performance of the iHCMC algorithm implemented in `hcmc()` for p={10, 20} vertices, and the score functions `iBIC()` and `iBGe()`.") |>
+      kable_styling(bootstrap_options=c("striped", "hover", "condensed"),
+                  full_width=FALSE, position="center")
+```
+
+
+
 
 # Session information
 
