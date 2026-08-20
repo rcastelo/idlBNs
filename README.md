@@ -39,7 +39,7 @@ For questions, bug reports and feature requests please use the GitHub issues
 
 Contributions are welcome as long as contributors abide to the
 terms of the
-[Contributor Convenent Code of Conduct](https://www.contributor-covenant.org/version/3/0/code_of_conduct).
+[Contributor Covenant Code of Conduct](https://www.contributor-covenant.org/version/3/0/code_of_conduct).
 If you want to contribute to the development of idlBNs please open an
 [issue](https://github.com/rcastelo/idlBNs/issues) to start discussing your
 suggestion or, in case of a bugfix or a straightforward feature, directly a
