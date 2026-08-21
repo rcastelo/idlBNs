@@ -98,14 +98,14 @@ E <- dag2essgraph(as(G, "graphNEL"))
 ```
 
 Assume we want to consider two different singleton intervention targets
-(\\k=2\\), i.e., we select two vertices from the DAG structure uniformly
+($`k=2`$), i.e., we select two vertices from the DAG structure uniformly
 at random to intervene in their associated random variables, but we
 intervene only in one random variable at a time in a given multivariate
 observation. Following the terminology of Hauser and Bühlmann
 ([2012](#ref-HauBuh12)), we define a family of *intervention targets*
-\\\mathcal{I} = \\I_1, I_2, I_3\\\\, where \\I_1=\\\emptyset\\\\ and
-\\I_i\\v_i\\\\ with \\i=\\2, 3\\\\ and \\v_i\in V\\ is a randomly
-selected vertex from the DAG structure \\G=(V, E)\\.
+$`\mathcal{I} = \{I_1, I_2, I_3\}`$, where $`I_1=\{\emptyset\}`$ and
+$`I_i\{v_i\}`$ with $`i=\{2, 3\}`$ and $`v_i\in V`$ is a randomly
+selected vertex from the DAG structure $`G=(V, E)`$.
 
 ``` r
 k <- 2
@@ -121,7 +121,7 @@ integer(0)
 [1] 3
 ```
 
-Consider simulating a sample size of \\n=100\\ multivariate
+Consider simulating a sample size of $`n=100`$ multivariate
 observations, with a similar number of them for each intervention
 target.
 
@@ -134,8 +134,8 @@ nbytgts
 ```
 
 Simulate mixed observational and interventional multivariate Gaussian
-data from the DAG structure \\G\\ and the family of intervention targets
-\\\mathcal{I}\\ using the function
+data from the DAG structure $`G`$ and the family of intervention targets
+$`\mathcal{I}`$ using the function
 [`rmvnorm.ivent()`](https://rdrr.io/pkg/pcalg/man/rmvnorm.ivent.html)
 from the `pcalg` package, storing the index to the corresponding
 intervention target for each row of the data.
@@ -168,7 +168,7 @@ $sco
 ```
 
 Calculate the structural Hamming distance (SHD) to the essential graph
-of the generative DAG structure \\G\\ using the function
+of the generative DAG structure $`G`$ using the function
 [`shd()`](https://rdrr.io/pkg/pcalg/man/shd.html) from the `pcalg`
 package.
 
@@ -318,7 +318,7 @@ loaded via a namespace (and not attached):
 [31] lifecycle_1.0.5     stringr_1.6.0       RBGL_1.88.0        
 [34] clue_0.3-68         cluster_2.1.8.2     pkgconfig_2.0.3    
 [37] bslib_0.12.0        pillar_1.11.1       glue_1.8.1         
-[40] Rcpp_1.1.2          systemfonts_1.3.2   DEoptimR_1.2-0     
+[40] Rcpp_1.1.2          systemfonts_1.3.2   DEoptimR_1.2-1     
 [43] xfun_0.60           tidyselect_1.2.1    rstudioapi_0.19.0  
 [46] farver_2.1.2        htmltools_0.5.9     igraph_2.3.3       
 [49] svglite_2.2.2       rmarkdown_2.31      compiler_4.6.1     

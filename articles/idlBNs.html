@@ -137,14 +137,14 @@ the function <code><a href="https://rdrr.io/pkg/pcalg/man/dag2essgraph.html" cla
 <span><span class="va">M_G</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/pcalg/man/r.gauss.pardag.html" class="external-link">r.gauss.pardag</a></span><span class="op">(</span><span class="va">p</span>, <span class="va">d</span>, top.sort<span class="op">=</span><span class="cn">TRUE</span>, normalize<span class="op">=</span><span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="va">G</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/methods/as.html" class="external-link">as</a></span><span class="op">(</span><span class="va">M_G</span>, <span class="st">"graphNEL"</span><span class="op">)</span></span>
 <span><span class="va">E</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/pcalg/man/dag2essgraph.html" class="external-link">dag2essgraph</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/methods/as.html" class="external-link">as</a></span><span class="op">(</span><span class="va">G</span>, <span class="st">"graphNEL"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
-<p>Assume we want to consider two different singleton intervention targets (<span class="math inline">\(k=2\)</span>),
+<p>Assume we want to consider two different singleton intervention targets (<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi><mo>=</mo><mn>2</mn></mrow><annotation encoding="application/x-tex">k=2</annotation></semantics></math>),
 i.e., we select two vertices from the DAG structure uniformly at random to
 intervene in their associated random variables, but we intervene only in one
 random variable at a time in a given multivariate observation. Following the
 terminology of <span class="citation">Hauser and Bühlmann (<a href="#ref-HauBuh12">2012</a>)</span>, we define a family of <em>intervention targets</em>
-<span class="math inline">\(\mathcal{I} = \{I_1, I_2, I_3\}\)</span>, where <span class="math inline">\(I_1=\{\emptyset\}\)</span> and <span class="math inline">\(I_i\{v_i\}\)</span>
-with <span class="math inline">\(i=\{2, 3\}\)</span> and <span class="math inline">\(v_i\in V\)</span> is a randomly selected vertex from the DAG
-structure <span class="math inline">\(G=(V, E)\)</span>.</p>
+<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ℐ</mi><mo>=</mo><mo stretchy="false" form="prefix">{</mo><msub><mi>I</mi><mn>1</mn></msub><mo>,</mo><msub><mi>I</mi><mn>2</mn></msub><mo>,</mo><msub><mi>I</mi><mn>3</mn></msub><mo stretchy="false" form="postfix">}</mo></mrow><annotation encoding="application/x-tex">\mathcal{I} = \{I_1, I_2, I_3\}</annotation></semantics></math>, where <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>I</mi><mn>1</mn></msub><mo>=</mo><mo stretchy="false" form="prefix">{</mo><mi>∅</mi><mo stretchy="false" form="postfix">}</mo></mrow><annotation encoding="application/x-tex">I_1=\{\emptyset\}</annotation></semantics></math> and <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>I</mi><mi>i</mi></msub><mo stretchy="false" form="prefix">{</mo><msub><mi>v</mi><mi>i</mi></msub><mo stretchy="false" form="postfix">}</mo></mrow><annotation encoding="application/x-tex">I_i\{v_i\}</annotation></semantics></math>
+with <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi><mo>=</mo><mo stretchy="false" form="prefix">{</mo><mn>2</mn><mo>,</mo><mn>3</mn><mo stretchy="false" form="postfix">}</mo></mrow><annotation encoding="application/x-tex">i=\{2, 3\}</annotation></semantics></math> and <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>v</mi><mi>i</mi></msub><mo>∈</mo><mi>V</mi></mrow><annotation encoding="application/x-tex">v_i\in V</annotation></semantics></math> is a randomly selected vertex from the DAG
+structure <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>G</mi><mo>=</mo><mo stretchy="false" form="prefix">(</mo><mi>V</mi><mo>,</mo><mi>E</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">G=(V, E)</annotation></semantics></math>.</p>
 <div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a>k <span class="ot">&lt;-</span> <span class="dv">2</span></span>
 <span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>I <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="fu">list</span>(<span class="fu">integer</span>(<span class="dv">0</span>)), <span class="fu">sample</span>(p, <span class="at">size=</span>k, <span class="at">replace=</span><span class="cn">FALSE</span>))</span>
 <span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a>I</span>
@@ -156,7 +156,7 @@ structure <span class="math inline">\(G=(V, E)\)</span>.</p>
 <span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a></span>
 <span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a>[[<span class="dv">3</span>]]</span>
 <span id="cb3-11"><a href="#cb3-11" tabindex="-1"></a>[<span class="dv">1</span>] <span class="dv">3</span></span></code></pre></div>
-<p>Consider simulating a sample size of <span class="math inline">\(n=100\)</span> multivariate observations, with a
+<p>Consider simulating a sample size of <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>100</mn></mrow><annotation encoding="application/x-tex">n=100</annotation></semantics></math> multivariate observations, with a
 similar number of them for each intervention target.</p>
 <div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>n <span class="ot">&lt;-</span> <span class="dv">30</span></span>
 <span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>nbytgts <span class="ot">&lt;-</span> <span class="fu">rep</span>(<span class="fu">floor</span>(n <span class="sc">/</span> (k <span class="sc">+</span> <span class="dv">1</span>)), k)</span>
@@ -164,7 +164,7 @@ similar number of them for each intervention target.</p>
 <span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>nbytgts</span>
 <span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a>[<span class="dv">1</span>] <span class="dv">10</span> <span class="dv">10</span> <span class="dv">10</span></span></code></pre></div>
 <p>Simulate mixed observational and interventional multivariate Gaussian data from
-the DAG structure <span class="math inline">\(G\)</span> and the family of intervention targets <span class="math inline">\(\mathcal{I}\)</span> using
+the DAG structure <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>G</mi><annotation encoding="application/x-tex">G</annotation></semantics></math> and the family of intervention targets <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>ℐ</mi><annotation encoding="application/x-tex">\mathcal{I}</annotation></semantics></math> using
 the function <code><a href="https://rdrr.io/pkg/pcalg/man/rmvnorm.ivent.html" class="external-link">rmvnorm.ivent()</a></code> from the <code>pcalg</code> package, storing the index to
 the corresponding intervention target for each row of the data.</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
@@ -188,7 +188,7 @@ the iBIC score is used in the search algorithm.</p>
 <span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a><span class="sc">$</span>sco</span>
 <span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a>[<span class="dv">1</span>] <span class="sc">-</span><span class="fl">50.0166</span></span></code></pre></div>
 <p>Calculate the structural Hamming distance (SHD) to the essential graph of the
-generative DAG structure <span class="math inline">\(G\)</span> using the function <code><a href="https://rdrr.io/pkg/pcalg/man/shd.html" class="external-link">shd()</a></code> from the <code>pcalg</code>
+generative DAG structure <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>G</mi><annotation encoding="application/x-tex">G</annotation></semantics></math> using the function <code><a href="https://rdrr.io/pkg/pcalg/man/shd.html" class="external-link">shd()</a></code> from the <code>pcalg</code>
 package.</p>
 <div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="fu">shd</span>(<span class="fu">dag2essgraph</span>(Dhat.ihcmc<span class="sc">$</span>dag), E)</span>
 <span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a>[<span class="dv">1</span>] <span class="dv">3</span></span></code></pre></div>
@@ -398,7 +398,7 @@ iBGe
 <span id="cb11-39"><a href="#cb11-39" tabindex="-1"></a>[<span class="dv">31</span>] lifecycle_1.<span class="fl">0.5</span>     stringr_1.<span class="fl">6.0</span>       RBGL_1.<span class="fl">88.0</span>        </span>
 <span id="cb11-40"><a href="#cb11-40" tabindex="-1"></a>[<span class="dv">34</span>] clue_0<span class="fl">.3</span><span class="dv">-68</span>         cluster_2.<span class="dv">1</span>.<span class="fl">8.2</span>     pkgconfig_2.<span class="fl">0.3</span>    </span>
 <span id="cb11-41"><a href="#cb11-41" tabindex="-1"></a>[<span class="dv">37</span>] bslib_0.<span class="fl">12.0</span>        pillar_1.<span class="fl">11.1</span>       glue_1.<span class="fl">8.1</span>         </span>
-<span id="cb11-42"><a href="#cb11-42" tabindex="-1"></a>[<span class="dv">40</span>] Rcpp_1.<span class="fl">1.2</span>          systemfonts_1.<span class="fl">3.2</span>   DEoptimR_1<span class="fl">.2</span><span class="dv">-0</span>     </span>
+<span id="cb11-42"><a href="#cb11-42" tabindex="-1"></a>[<span class="dv">40</span>] Rcpp_1.<span class="fl">1.2</span>          systemfonts_1.<span class="fl">3.2</span>   DEoptimR_1<span class="fl">.2</span><span class="dv">-1</span>     </span>
 <span id="cb11-43"><a href="#cb11-43" tabindex="-1"></a>[<span class="dv">43</span>] xfun_0<span class="fl">.60</span>           tidyselect_1.<span class="fl">2.1</span>    rstudioapi_0.<span class="fl">19.0</span>  </span>
 <span id="cb11-44"><a href="#cb11-44" tabindex="-1"></a>[<span class="dv">46</span>] farver_2.<span class="fl">1.2</span>        htmltools_0.<span class="fl">5.9</span>     igraph_2.<span class="fl">3.3</span>       </span>
 <span id="cb11-45"><a href="#cb11-45" tabindex="-1"></a>[<span class="dv">49</span>] svglite_2.<span class="fl">2.2</span>       rmarkdown_2<span class="fl">.31</span>      compiler_4.<span class="fl">6.1</span>     </span></code></pre></div>
