@@ -18,6 +18,7 @@ output:
     toc_float: true
     number_sections: true
     fig_caption: yes
+    math_method: mathml
 pkgdown:
     as_is: true
 bibliography: bibliography.bib

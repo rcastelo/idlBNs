@@ -5,6 +5,7 @@ title: idlBNs
 template:
   bootstrap: 5
   theme: breeze-light
+  math-render: katex
 
 authors:
   Robert Castelo:
