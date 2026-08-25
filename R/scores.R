@@ -20,6 +20,14 @@
 #' with the rows in `dat`, indicating what set of targets has generated each
 #' row in `dat`.
 #'
+#' @param cached.scores An environment object containing cached scores per
+#' parent set for each vertex in `g`. If `NULL` (default), no cached scores are
+#' used. Using this argument can speed up the calculation of the score when the
+#' same parent sets are scored multiple times. To use this argument, first
+#' create an empty environment object with
+#' `csco <- new.env(hash=TRUE, parent=emptyenv())`, and then pass it to this
+#' `cached.scores` parameter, i.e., `cached.scores=csco`.
+#'
 #' @return A single numeric value corresponding to the interventional BIC score
 #' of the given structure of the Bayesian network for the given data set.
 #'
@@ -89,7 +97,8 @@
 #' @importFrom graph numNodes edgeMatrix
 #' @export
 iBIC <- function(g, dat, targets=list(0L),
-                 target.index=rep(1L, nrow(dat))) {
+                 target.index=rep(1L, nrow(dat)),
+                 cached.scores=NULL) {
   v <- nodes(g)
   p <- numNodes(g)
   n <- nrow(dat)
@@ -107,21 +116,34 @@ iBIC <- function(g, dat, targets=list(0L),
   }
   sco <- numeric(length(v))
   for (i in seq_along(pasets)) {
-    if (onlyobsdata) {
-      Y <- dat[, v[i]]
-      Z <- cbind(1, dat[, pasets[[i]], drop=FALSE])
-    } else {
-      Y <- dat[non.int[[i]], v[i]]
-      Z <- cbind(1, dat[non.int[[i]], pasets[[i]], drop=FALSE])
+    s <- NULL
+    if (!is.null(cached.scores)) {
+        k <- paste(sort.int(pasets[[i]]), collapse="_")
+        if (nchar(k) == 0)
+            k <- "_"
+        s <- cached.scores[[i]][[k]]
     }
-    sigma2 <- sum(Y^2)
+    if (is.null(s)) {
+        if (onlyobsdata) {
+          Y <- dat[, v[i]]
+          Z <- cbind(1, dat[, pasets[[i]], drop=FALSE])
+        } else {
+          Y <- dat[non.int[[i]], v[i]]
+          Z <- cbind(1, dat[non.int[[i]], pasets[[i]], drop=FALSE])
+        }
+        sigma2 <- sum(Y^2)
 
-    ## scaled error covariance using QR decomposition
-    Q <- qr.Q(qr(Z))
-    sigma2 <- sigma2 - sum((Y %*% Q)^2)
-    lambda <- 0.5 * log(n)
-    sco[i] <- -0.5 * data.count[i] * (1 + log(sigma2 / data.count[i])) -
-                                      lambda * (1 + length(pasets[[i]]))
+        ## scaled error covariance using QR decomposition
+        Q <- qr.Q(qr(Z))
+        sigma2 <- sigma2 - sum((Y %*% Q)^2)
+        lambda <- 0.5 * log(n)
+        sco[i] <- -0.5 * data.count[i] * (1 + log(sigma2 / data.count[i])) -
+                                          lambda * (1 + length(pasets[[i]]))
+        if (!is.null(cached.scores)) {
+            cached.scores[[i]][[k]] <- sco[i]
+        }
+    } else
+        sco[i] <- s
   }
   sum(sco)
 }
@@ -158,6 +180,14 @@ iBIC <- function(g, dat, targets=list(0L),
 #' @param target.index A vector of integer values in one-to-one correspondence
 #' with the rows in `dat`, indicating what set of targets has generated each
 #' row in `dat`.
+#'
+#' @param cached.scores An environment object containing cached scores per
+#' parent set for each vertex in `g`. If `NULL` (default), no cached scores are
+#' used. Using this argument can speed up the calculation of the score when the
+#' same parent sets are scored multiple times. To use this argument, first
+#' create an empty environment object with
+#' `csco <- new.env(hash=TRUE, parent=emptyenv())`, and then pass it to this
+#' `cached.scores` parameter, i.e., `cached.scores=csco`.
 #'
 #' @return A single numeric value corresponding to the interventional BGe score
 #' of the given structure of the Bayesian network for the given data set.
@@ -224,7 +254,8 @@ iBIC <- function(g, dat, targets=list(0L),
 #' @importFrom methods as
 #' @importFrom graph numNodes edgeMatrix
 #' @export
-iBGe <- function(g, dat, targets=list(0L), target.index=rep(1L, nrow(dat))) {
+iBGe <- function(g, dat, targets=list(0L), target.index=rep(1L, nrow(dat)),
+                 cached.scores=NULL) {
   v <- nodes(g)
   p <- numNodes(g)
   n <- nrow(dat)

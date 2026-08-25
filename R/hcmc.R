@@ -113,10 +113,14 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
   stopifnot(is.list(targets)) ## QC
   scorefun <- match.fun(scorefun)
 
+  cached.scores <- list()
+  for (i in seq_len(ncol(dat)))
+      cached.scores[[i]] <- new.env(hash=TRUE, parent=emptyenv())
+
   utargets <- sort(unique(unlist(targets)))
   dag <- graphNEL(colnames(dat), edgemode="directed")
   s0 <- -Inf
-  s1 <- scorefun(dag, dat, targets, target.index)
+  s1 <- scorefun(dag, dat, targets, target.index, cached.scores=cached.scores)
   was_in_local_maximum <- local_maximum <- s1 < s0
   trials <- escapes <- avg_trials_per_escape <- 0
 
@@ -129,9 +133,9 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
     s0 <- s1
     dag <- rcar(dag, r, utargets)
     ne <- ncr.nh(dag, utargets)
-    s1 <- sapply(ne, function(g, d, tgts, tgts.idx)
-                       scorefun(g, d, tgts, tgts.idx),
-                 dat, targets, target.index)
+    s1 <- sapply(ne, function(g, d, tgts, tgts.idx, chd.sco)
+                       scorefun(g, d, tgts, tgts.idx, chd.sco), dat, targets,
+                                target.index, cached.scores)
     dag1 <- ne[[which.max(s1)]]
     s1 <- max(s1)
     local_maximum <- s1 <= s0

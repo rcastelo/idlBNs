@@ -4,7 +4,13 @@
 \alias{iBIC}
 \title{BIC score for observational and interventional Gaussian data}
 \usage{
-iBIC(g, dat, targets = list(0L), target.index = rep(1L, nrow(dat)))
+iBIC(
+  g,
+  dat,
+  targets = list(0L),
+  target.index = rep(1L, nrow(dat)),
+  cached.scores = NULL
+)
 }
 \arguments{
 \item{g}{An acyclic directed graph (DAG) structure of the Bayesian network
@@ -17,6 +23,14 @@ for which we want to calculate the score.}
 \item{target.index}{A vector of integer values in one-to-one correspondence
 with the rows in \code{dat}, indicating what set of targets has generated each
 row in \code{dat}.}
+
+\item{cached.scores}{An environment object containing cached scores per
+parent set for each vertex in \code{g}. If \code{NULL} (default), no cached scores are
+used. Using this argument can speed up the calculation of the score when the
+same parent sets are scored multiple times. To use this argument, first
+create an empty environment object with
+\code{csco <- new.env(hash=TRUE, parent=emptyenv())}, and then pass it to this
+\code{cached.scores} parameter, i.e., \code{cached.scores=csco}.}
 }
 \value{
 A single numeric value corresponding to the interventional BIC score

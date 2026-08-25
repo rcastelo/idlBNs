@@ -165,6 +165,10 @@ hillclimbing <- function(dat, scorefun=iBIC, verbose=TRUE) {
   scorefun <- match.fun(scorefun)
 
   dag <- graphNEL(colnames(dat), edgemode="directed")
+  cached.scores <- list()
+  for (i in seq_len(ncol(dat)))
+      cached.scores[[i]] <- new.env(hash=TRUE, parent=emptyenv())
+
   s0 <- -Inf
   s1 <- scorefun(dag, dat)
 
@@ -174,7 +178,9 @@ hillclimbing <- function(dat, scorefun=iBIC, verbose=TRUE) {
   while (s1 > s0) {
     s0 <- s1
     ne <- ar.nh(dag)
-    s1 <- sapply(ne, function(g, d) scorefun(g, d), dat)
+    s1 <- sapply(ne, function(g, d, c)
+                       scorefun(g, d, list(0L), rep(1L, nrow(d)), c), dat,
+                                cached.scores)
     dag <- ne[[which.max(s1)]]
     s1 <- max(s1)
 
