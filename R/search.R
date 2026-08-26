@@ -141,10 +141,19 @@ rcar <- function(dag, r, utargets) {
 #' @title Straightforward (classical) hill-climbing algorithm
 #'
 #' @description Learn the structure of a Bayesian network from observational
-#' data using a straightforward (classical) hill-climbing algorithm that at
-#' each step during the search adds, removes and reverses all possible arcs.
+#' and interventional data using a straightforward (classical) hill-climbing
+#' algorithm that at each step during the search adds, removes and reverses all
+#' possible arcs.
 #'
 #' @param dat A `data.frame` object with data records in the rows.
+#'
+#' @param targets (Default a list with an empty integer vector) Family of
+#' intervention targets provided as a list of integer vectors. The default value
+#' implies that there are no interventions and the data is purely observational.
+#'
+#' @param target.index (Default an empty integer vector) A vector of integers
+#' in one-to-one correspondence with the rows in `dat`, indicating which rows
+#' in the input data are intervened by which targets.
 #'
 #' @param scorefun (Default is [`iBIC`]) A function to calculate the goodness
 #' of fit (GoF) score of a DAG on a given data set.
@@ -160,7 +169,9 @@ rcar <- function(dag, r, utargets) {
 #' @importClassesFrom graph graphNEL
 #' @importFrom cli cli_progress_step cli_progress_update
 #' @export
-hillclimbing <- function(dat, scorefun=iBIC, verbose=TRUE) {
+hillclimbing <- function(dat, targets=list(integer(0)),
+                         target.index=rep(1L, nrow(dat)),  scorefun=iBIC,
+                         verbose=TRUE) {
 
   scorefun <- match.fun(scorefun)
 
@@ -178,9 +189,10 @@ hillclimbing <- function(dat, scorefun=iBIC, verbose=TRUE) {
   while (s1 > s0) {
     s0 <- s1
     ne <- ar.nh(dag)
-    s1 <- sapply(ne, function(g, d, c)
-                       scorefun(g, d, list(0L), rep(1L, nrow(d)), c), dat,
-                                cached.scores)
+    s1 <- sapply(ne, function(g, d, tgts, tgt.idx, chd.sco)
+                       scorefun(g=g, dat=d, targets=tgts, target.index=tgt.idx,
+                                cached.scores=chd.sco), dat, targets,
+                                target.index, cached.scores)
     dag <- ne[[which.max(s1)]]
     s1 <- max(s1)
 

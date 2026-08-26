@@ -4,10 +4,24 @@
 \alias{hillclimbing}
 \title{Straightforward (classical) hill-climbing algorithm}
 \usage{
-hillclimbing(dat, scorefun = iBIC, verbose = TRUE)
+hillclimbing(
+  dat,
+  targets = list(integer(0)),
+  target.index = rep(1L, nrow(dat)),
+  scorefun = iBIC,
+  verbose = TRUE
+)
 }
 \arguments{
 \item{dat}{A \code{data.frame} object with data records in the rows.}
+
+\item{targets}{(Default a list with an empty integer vector) Family of
+intervention targets provided as a list of integer vectors. The default value
+implies that there are no interventions and the data is purely observational.}
+
+\item{target.index}{(Default an empty integer vector) A vector of integers
+in one-to-one correspondence with the rows in \code{dat}, indicating which rows
+in the input data are intervened by which targets.}
 
 \item{scorefun}{(Default is \code{\link{iBIC}}) A function to calculate the goodness
 of fit (GoF) score of a DAG on a given data set.}
@@ -20,8 +34,9 @@ the structure of the learned DAG, and its corresponding score.
 }
 \description{
 Learn the structure of a Bayesian network from observational
-data using a straightforward (classical) hill-climbing algorithm that at
-each step during the search adds, removes and reverses all possible arcs.
+and interventional data using a straightforward (classical) hill-climbing
+algorithm that at each step during the search adds, removes and reverses all
+possible arcs.
 }
 \seealso{
 \code{\link[=iBIC]{iBIC()}}, \code{\link[=iBGe]{iBGe()}}

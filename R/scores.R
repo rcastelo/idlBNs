@@ -20,13 +20,14 @@
 #' with the rows in `dat`, indicating what set of targets has generated each
 #' row in `dat`.
 #'
-#' @param cached.scores An environment object containing cached scores per
-#' parent set for each vertex in `g`. If `NULL` (default), no cached scores are
-#' used. Using this argument can speed up the calculation of the score when the
-#' same parent sets are scored multiple times. To use this argument, first
-#' create an empty environment object with
-#' `csco <- new.env(hash=TRUE, parent=emptyenv())`, and then pass it to this
-#' `cached.scores` parameter, i.e., `cached.scores=csco`.
+#' @param cached.scores An optional list of environment objects, containing
+#' cached scores per parent set for each vertex in `g`. If `NULL` (default),
+#' no cached scores are used. Using this argument can speed up the calculation
+#' of the score when the same parent sets are scored multiple times. To use
+#' this argument, first create an empty environment object with
+#' `csco <- replicate(numNodes(g), new.env(hash=TRUE, parent=emptyenv()), simplify=FALSE)`
+#' and then pass it to this `cached.scores` parameter, i.e.,
+#' `cached.scores=csco`.
 #'
 #' @return A single numeric value corresponding to the interventional BIC score
 #' of the given structure of the Bayesian network for the given data set.
@@ -103,7 +104,7 @@ iBIC <- function(g, dat, targets=list(0L),
   p <- numNodes(g)
   n <- nrow(dat)
   em <- edgeMatrix(g)
-  pasets <- split(v[em["from", ]], factor(v[em["to", ]], levels=v))
+  pasets <- split(em["from", ], factor(v[em["to", ]], levels=v))
   stopifnot(identical(names(pasets), v))
 
   onlyobsdata <- identical(targets, list(0L))
@@ -118,9 +119,9 @@ iBIC <- function(g, dat, targets=list(0L),
   for (i in seq_along(pasets)) {
     s <- NULL
     if (!is.null(cached.scores)) {
-        k <- paste(sort.int(pasets[[i]]), collapse="_")
+        k <- paste(sort.int(pasets[[i]]), collapse=":")
         if (nchar(k) == 0)
-            k <- "_"
+            k <- ":"
         s <- cached.scores[[i]][[k]]
     }
     if (is.null(s)) {
@@ -181,13 +182,16 @@ iBIC <- function(g, dat, targets=list(0L),
 #' with the rows in `dat`, indicating what set of targets has generated each
 #' row in `dat`.
 #'
-#' @param cached.scores An environment object containing cached scores per
-#' parent set for each vertex in `g`. If `NULL` (default), no cached scores are
-#' used. Using this argument can speed up the calculation of the score when the
-#' same parent sets are scored multiple times. To use this argument, first
-#' create an empty environment object with
-#' `csco <- new.env(hash=TRUE, parent=emptyenv())`, and then pass it to this
-#' `cached.scores` parameter, i.e., `cached.scores=csco`.
+#' @param cached.scores An optional list of environment objects, containing
+#' cached scores per parent set for each vertex in `g`. If `NULL` (default),
+#' no cached scores are used. Using this argument can speed up the calculation
+#' of the score when the same parent sets are scored multiple times. To use
+#' this argument, first create an empty environment object with
+#' `csco <- replicate(numNodes(g), new.env(hash=TRUE, parent=emptyenv()), simplify=FALSE)`
+#' and then pass it to this `cached.scores` parameter, i.e.,
+#' `cached.scores=csco`. This is currently not implemented for the iBGe score,
+#' but it is included as an API placeholder for future versions of the package
+#' that will enable this feature for the iBGe score.
 #'
 #' @return A single numeric value corresponding to the interventional BGe score
 #' of the given structure of the Bayesian network for the given data set.
