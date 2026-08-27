@@ -105,12 +105,15 @@
 iBIC <- function(g, dat, targets=list(integer(0)),
                  target.index=rep(1L, nrow(dat)),
                  cached.scores=NULL) {
-  v <- nodes(g)
+
+  .check_g_dat_consistency(g, dat)
+  v <- match(nodes(g), colnames(dat))
   p <- numNodes(g)
   n <- nrow(dat)
   em <- edgeMatrix(g)
   pasets <- split(em["from", ], factor(v[em["to", ]], levels=v))
-  stopifnot(identical(names(pasets), v))
+  stopifnot(identical(names(pasets), as.character(v)))
+  .check_cached_scores(g, cached.scores)
 
   onlyobsdata <- identical(targets, list(integer(0)))
   data.count <- rep(n, p)
@@ -163,6 +166,32 @@ iBIC <- function(g, dat, targets=list(integer(0)),
   cidx <- unlist(targets[target.index])
   res[cbind(ridx, cidx)] <- TRUE
   res
+}
+
+#' @importFrom graph numNodes
+#' @importFrom cli cli_abort
+.check_cached_scores <- function(g, cached.scores) {
+  if (!is.null(cached.scores)) {
+    if (!is.list(cached.scores) || length(cached.scores) != numNodes(g)) {
+      msg <- paste("cached.scores must be a list of length equal to the number",
+                   "of nodes in g (", numNodes(g), ")")
+      cli_abort(c("x"=msg))
+    }
+    if (!all(sapply(cached.scores, is.environment)))
+      cli_abort(c("x"="Each element of cached.scores must be an environment"))
+  }
+}
+
+#' @importFrom cli cli_abort
+.check_g_dat_consistency <- function(g, dat) {
+  if (ncol(dat) != numNodes(g))
+      cli_abort(c("x"="The number of columns in dat must equal the number of nodes in g"))
+  if (is.null(colnames(dat)))
+      cli_abort(c("x"="Input data in dat must have column names corresponding to the node names in g"))
+  if (!all(nodes(g) %in% colnames(dat)))
+      cli_abort(c("x"="All nodes in g must be present as column names in dat"))
+  else if (!all(nodes(g) == colnames(dat)))
+      cli_abort(c("x"="The order of nodes in g must match the order of column names in dat"))
 }
 
 #' @title BGe score for interventional Gaussian data
@@ -270,12 +299,14 @@ iBIC <- function(g, dat, targets=list(integer(0)),
 #' @export
 iBGe <- function(g, dat, targets=list(integer(0)),
                  target.index=rep(1L, nrow(dat)), cached.scores=NULL) {
+
+  .check_g_dat_consistency(g, dat)
   v <- nodes(g)
   p <- numNodes(g)
   n <- nrow(dat)
   em <- edgeMatrix(g)
   pasets <- split(v[em["from", ]], factor(v[em["to", ]], levels=v))
-  stopifnot(identical(names(pasets), v))
+  stopifnot(identical(names(pasets), as.character(v)))
 
   ## create intervention matrix for BiDAG
   A <- .targets2mat(p, targets, target.index)
