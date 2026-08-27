@@ -14,11 +14,25 @@
 #'
 #' @param dat A `data.frame` object with data records in the rows.
 #'
-#' @param targets A `list` object with a family of targets.
+#' @param targets (Default `list(integer(0))`) A `list` object with a family of
+#' targets provided as a list of integer vectors. Its default value indicates
+#' that there are no interventions in the data, i.e., the data is purely
+#' observational.
 #'
-#' @param target.index A vector of integer values in one-to-one correspondence
-#' with the rows in `dat`, indicating what set of targets has generated each
-#' row in `dat`.
+#' @param target.index (Default a unit vector) A vector of integers in
+#' one-to-one correspondence with the rows in `dat`, indicating which rows in
+#' the input data are intervened by which targets. Its default value indicates
+#' that there are no interventions in the data, i.e., the data is purely
+#' observational.
+#'
+#' @param cached.scores An optional list of environment objects, containing
+#' cached scores per parent set for each vertex in `g`. If `NULL` (default),
+#' no cached scores are used. Using this argument can speed up the calculation
+#' of the score when the same parent sets are scored multiple times. To use
+#' this argument, first create an empty environment object with
+#' `csco <- replicate(numNodes(g), new.env(hash=TRUE, parent=emptyenv()), simplify=FALSE)`
+#' and then pass it to this `cached.scores` parameter, i.e.,
+#' `cached.scores=csco`.
 #'
 #' @return A single numeric value corresponding to the interventional BIC score
 #' of the given structure of the Bayesian network for the given data set.
@@ -64,7 +78,7 @@
 #' dat <- rbind(obsdat, intdat)
 #'
 #' ## define the targets and target indices for the interventional data
-#' targets <- list(0L, 2L)
+#' targets <- list(integer(0), 2L)
 #' target.index <- c(rep(1L, nobs), rep(2L, nint))
 #'
 #' ## calculate the interventional BIC score for the DAG and data set
@@ -88,16 +102,20 @@
 #'
 #' @importFrom graph numNodes edgeMatrix
 #' @export
-iBIC <- function(g, dat, targets=list(0L),
-                 target.index=rep(1L, nrow(dat))) {
-  v <- nodes(g)
+iBIC <- function(g, dat, targets=list(integer(0)),
+                 target.index=rep(1L, nrow(dat)),
+                 cached.scores=NULL) {
+
+  .check_g_dat_consistency(g, dat)
+  v <- match(nodes(g), colnames(dat))
   p <- numNodes(g)
   n <- nrow(dat)
   em <- edgeMatrix(g)
-  pasets <- split(v[em["from", ]], factor(v[em["to", ]], levels=v))
-  stopifnot(identical(names(pasets), v))
+  pasets <- split(em["from", ], factor(v[em["to", ]], levels=v))
+  stopifnot(identical(names(pasets), as.character(v)))
+  .check_cached_scores(g, cached.scores)
 
-  onlyobsdata <- identical(targets, list(0L))
+  onlyobsdata <- identical(targets, list(integer(0)))
   data.count <- rep(n, p)
   if (!onlyobsdata) {
     ## index of the data points that have not been intervened per vertex
@@ -107,21 +125,34 @@ iBIC <- function(g, dat, targets=list(0L),
   }
   sco <- numeric(length(v))
   for (i in seq_along(pasets)) {
-    if (onlyobsdata) {
-      Y <- dat[, v[i]]
-      Z <- cbind(1, dat[, pasets[[i]], drop=FALSE])
-    } else {
-      Y <- dat[non.int[[i]], v[i]]
-      Z <- cbind(1, dat[non.int[[i]], pasets[[i]], drop=FALSE])
+    s <- NULL
+    if (!is.null(cached.scores)) {
+        k <- paste(sort.int(pasets[[i]]), collapse=":")
+        if (nchar(k) == 0)
+            k <- ":"
+        s <- cached.scores[[i]][[k]]
     }
-    sigma2 <- sum(Y^2)
+    if (is.null(s)) {
+        if (onlyobsdata) {
+          Y <- dat[, v[i]]
+          Z <- cbind(1, dat[, pasets[[i]], drop=FALSE])
+        } else {
+          Y <- dat[non.int[[i]], v[i]]
+          Z <- cbind(1, dat[non.int[[i]], pasets[[i]], drop=FALSE])
+        }
+        sigma2 <- sum(Y^2)
 
-    ## scaled error covariance using QR decomposition
-    Q <- qr.Q(qr(Z))
-    sigma2 <- sigma2 - sum((Y %*% Q)^2)
-    lambda <- 0.5 * log(n)
-    sco[i] <- -0.5 * data.count[i] * (1 + log(sigma2 / data.count[i])) -
-                                      lambda * (1 + length(pasets[[i]]))
+        ## scaled error covariance using QR decomposition
+        Q <- qr.Q(qr(Z))
+        sigma2 <- sigma2 - sum((Y %*% Q)^2)
+        lambda <- 0.5 * log(n)
+        sco[i] <- -0.5 * data.count[i] * (1 + log(sigma2 / data.count[i])) -
+                                          lambda * (1 + length(pasets[[i]]))
+        if (!is.null(cached.scores)) {
+            cached.scores[[i]][[k]] <- sco[i]
+        }
+    } else
+        sco[i] <- s
   }
   sum(sco)
 }
@@ -135,6 +166,32 @@ iBIC <- function(g, dat, targets=list(0L),
   cidx <- unlist(targets[target.index])
   res[cbind(ridx, cidx)] <- TRUE
   res
+}
+
+#' @importFrom graph numNodes
+#' @importFrom cli cli_abort
+.check_cached_scores <- function(g, cached.scores) {
+  if (!is.null(cached.scores)) {
+    if (!is.list(cached.scores) || length(cached.scores) != numNodes(g)) {
+      msg <- paste("cached.scores must be a list of length equal to the number",
+                   "of nodes in g (", numNodes(g), ")")
+      cli_abort(c("x"=msg))
+    }
+    if (!all(sapply(cached.scores, is.environment)))
+      cli_abort(c("x"="Each element of cached.scores must be an environment"))
+  }
+}
+
+#' @importFrom cli cli_abort
+.check_g_dat_consistency <- function(g, dat) {
+  if (ncol(dat) != numNodes(g))
+      cli_abort(c("x"="The number of columns in dat must equal the number of nodes in g"))
+  if (is.null(colnames(dat)))
+      cli_abort(c("x"="Input data in dat must have column names corresponding to the node names in g"))
+  if (!all(nodes(g) %in% colnames(dat)))
+      cli_abort(c("x"="All nodes in g must be present as column names in dat"))
+  else if (!all(nodes(g) == colnames(dat)))
+      cli_abort(c("x"="The order of nodes in g must match the order of column names in dat"))
 }
 
 #' @title BGe score for interventional Gaussian data
@@ -153,11 +210,27 @@ iBIC <- function(g, dat, targets=list(0L),
 #'
 #' @param dat A `data.frame` object with data records in the rows.
 #'
-#' @param targets A `list` object with a family of targets.
+#' @param targets (Default `list(integer(0))`) A `list` object with a family of
+#' targets provided as a list of integer vectors. Its default value indicates
+#' that there are no interventions in the data, i.e., the data is purely
+#' observational.
 #'
-#' @param target.index A vector of integer values in one-to-one correspondence
-#' with the rows in `dat`, indicating what set of targets has generated each
-#' row in `dat`.
+#' @param target.index (Default a unit vector) A vector of integers in
+#' one-to-one correspondence with the rows in `dat`, indicating which rows in
+#' the input data are intervened by which targets. Its default value indicates
+#' that there are no interventions in the data, i.e., the data is purely
+#' observational.
+#'
+#' @param cached.scores An optional list of environment objects, containing
+#' cached scores per parent set for each vertex in `g`. If `NULL` (default),
+#' no cached scores are used. Using this argument can speed up the calculation
+#' of the score when the same parent sets are scored multiple times. To use
+#' this argument, first create an empty environment object with
+#' `csco <- replicate(numNodes(g), new.env(hash=TRUE, parent=emptyenv()), simplify=FALSE)`
+#' and then pass it to this `cached.scores` parameter, i.e.,
+#' `cached.scores=csco`. This is currently not implemented for the iBGe score,
+#' but it is included as an API placeholder for future versions of the package
+#' that will enable this feature for the iBGe score.
 #'
 #' @return A single numeric value corresponding to the interventional BGe score
 #' of the given structure of the Bayesian network for the given data set.
@@ -199,7 +272,7 @@ iBIC <- function(g, dat, targets=list(0L),
 #' dat <- rbind(obsdat, intdat)
 #'
 #' ## define the targets and target indices for the interventional data
-#' targets <- list(0L, 2L)
+#' targets <- list(integer(0), 2L)
 #' target.index <- c(rep(1L, nobs), rep(2L, nint))
 #'
 #' ## calculate the interventional BGe score for the DAG and data set
@@ -224,13 +297,16 @@ iBIC <- function(g, dat, targets=list(0L),
 #' @importFrom methods as
 #' @importFrom graph numNodes edgeMatrix
 #' @export
-iBGe <- function(g, dat, targets=list(0L), target.index=rep(1L, nrow(dat))) {
+iBGe <- function(g, dat, targets=list(integer(0)),
+                 target.index=rep(1L, nrow(dat)), cached.scores=NULL) {
+
+  .check_g_dat_consistency(g, dat)
   v <- nodes(g)
   p <- numNodes(g)
   n <- nrow(dat)
   em <- edgeMatrix(g)
   pasets <- split(v[em["from", ]], factor(v[em["to", ]], levels=v))
-  stopifnot(identical(names(pasets), v))
+  stopifnot(identical(names(pasets), as.character(v)))
 
   ## create intervention matrix for BiDAG
   A <- .targets2mat(p, targets, target.index)
