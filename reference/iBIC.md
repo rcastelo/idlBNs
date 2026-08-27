@@ -13,7 +13,13 @@ data.
 ## Usage
 
 ``` r
-iBIC(g, dat, targets = list(0L), target.index = rep(1L, nrow(dat)))
+iBIC(
+  g,
+  dat,
+  targets = list(integer(0)),
+  target.index = rep(1L, nrow(dat)),
+  cached.scores = NULL
+)
 ```
 
 ## Arguments
@@ -29,13 +35,29 @@ iBIC(g, dat, targets = list(0L), target.index = rep(1L, nrow(dat)))
 
 - targets:
 
-  A `list` object with a family of targets.
+  (Default `list(integer(0))`) A `list` object with a family of targets
+  provided as a list of integer vectors. Its default value indicates
+  that there are no interventions in the data, i.e., the data is purely
+  observational.
 
 - target.index:
 
-  A vector of integer values in one-to-one correspondence with the rows
-  in `dat`, indicating what set of targets has generated each row in
-  `dat`.
+  (Default a unit vector) A vector of integers in one-to-one
+  correspondence with the rows in `dat`, indicating which rows in the
+  input data are intervened by which targets. Its default value
+  indicates that there are no interventions in the data, i.e., the data
+  is purely observational.
+
+- cached.scores:
+
+  An optional list of environment objects, containing cached scores per
+  parent set for each vertex in `g`. If `NULL` (default), no cached
+  scores are used. Using this argument can speed up the calculation of
+  the score when the same parent sets are scored multiple times. To use
+  this argument, first create an empty environment object with
+  `csco <- replicate(numNodes(g), new.env(hash=TRUE, parent=emptyenv()), simplify=FALSE)`
+  and then pass it to this `cached.scores` parameter, i.e.,
+  `cached.scores=csco`.
 
 ## Value
 
@@ -87,7 +109,7 @@ intdat <- data.frame(X1=X1, X2=X2, X3=X3)
 dat <- rbind(obsdat, intdat)
 
 ## define the targets and target indices for the interventional data
-targets <- list(0L, 2L)
+targets <- list(integer(0), 2L)
 target.index <- c(rep(1L, nobs), rep(2L, nint))
 
 ## calculate the interventional BIC score for the DAG and data set

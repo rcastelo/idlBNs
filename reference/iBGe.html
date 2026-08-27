@@ -21,7 +21,7 @@ no interventions in the data."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">idlBNs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -60,7 +60,13 @@ no interventions in the data.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">iBGe</span><span class="op">(</span><span class="va">g</span>, <span class="va">dat</span>, targets <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fl">0L</span><span class="op">)</span>, target.index <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1L</span>, <span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">dat</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">iBGe</span><span class="op">(</span></span>
+<span>  <span class="va">g</span>,</span>
+<span>  <span class="va">dat</span>,</span>
+<span>  targets <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">integer</a></span><span class="op">(</span><span class="fl">0</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>  target.index <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1L</span>, <span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">dat</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>  cached.scores <span class="op">=</span> <span class="cn">NULL</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -77,13 +83,31 @@ for which we want to calculate the score.</p></dd>
 
 
 <dt id="arg-targets">targets<a class="anchor" aria-label="anchor" href="#arg-targets"></a></dt>
-<dd><p>A <code>list</code> object with a family of targets.</p></dd>
+<dd><p>(Default <code>list(integer(0))</code>) A <code>list</code> object with a family of
+targets provided as a list of integer vectors. Its default value indicates
+that there are no interventions in the data, i.e., the data is purely
+observational.</p></dd>
 
 
 <dt id="arg-target-index">target.index<a class="anchor" aria-label="anchor" href="#arg-target-index"></a></dt>
-<dd><p>A vector of integer values in one-to-one correspondence
-with the rows in <code>dat</code>, indicating what set of targets has generated each
-row in <code>dat</code>.</p></dd>
+<dd><p>(Default a unit vector) A vector of integers in
+one-to-one correspondence with the rows in <code>dat</code>, indicating which rows in
+the input data are intervened by which targets. Its default value indicates
+that there are no interventions in the data, i.e., the data is purely
+observational.</p></dd>
+
+
+<dt id="arg-cached-scores">cached.scores<a class="anchor" aria-label="anchor" href="#arg-cached-scores"></a></dt>
+<dd><p>An optional list of environment objects, containing
+cached scores per parent set for each vertex in <code>g</code>. If <code>NULL</code> (default),
+no cached scores are used. Using this argument can speed up the calculation
+of the score when the same parent sets are scored multiple times. To use
+this argument, first create an empty environment object with
+<code>csco &lt;- replicate(numNodes(g), new.env(hash=TRUE, parent=emptyenv()), simplify=FALSE)</code>
+and then pass it to this <code>cached.scores</code> parameter, i.e.,
+<code>cached.scores=csco</code>. This is currently not implemented for the iBGe score,
+but it is included as an API placeholder for future versions of the package
+that will enable this feature for the iBGe score.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -132,7 +156,7 @@ Reasoning (PMLR)</em>, 275:772-791, 2025.</p>
 <span class="r-in"><span><span class="va">dat</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/cbind.html" class="external-link">rbind</a></span><span class="op">(</span><span class="va">obsdat</span>, <span class="va">intdat</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co">## define the targets and target indices for the interventional data</span></span></span>
-<span class="r-in"><span><span class="va">targets</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fl">0L</span>, <span class="fl">2L</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">targets</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">integer</a></span><span class="op">(</span><span class="fl">0</span><span class="op">)</span>, <span class="fl">2L</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">target.index</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1L</span>, <span class="va">nobs</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">2L</span>, <span class="va">nint</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co">## calculate the interventional BGe score for the DAG and data set</span></span></span>

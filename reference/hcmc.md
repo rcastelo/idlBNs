@@ -33,16 +33,18 @@ hcmc(
 
 - targets:
 
-  (Default a list with an empty integer vector) Family of intervention
-  targets provided as a list of integer vectors. The default value
-  implies that there are no interventions and the data is purely
+  (Default `list(integer(0))`) A `list` object with a family of targets
+  provided as a list of integer vectors. Its default value indicates
+  that there are no interventions in the data, i.e., the data is purely
   observational.
 
 - target.index:
 
-  (Default an empty integer vector) A vector of integers in one-to-one
+  (Default a unit vector) A vector of integers in one-to-one
   correspondence with the rows in `dat`, indicating which rows in the
-  input data are intervened by which targets.
+  input data are intervened by which targets. Its default value
+  indicates that there are no interventions in the data, i.e., the data
+  is purely observational.
 
 - scorefun:
 
@@ -121,7 +123,7 @@ tindex <- rep(1:length(nbytgts), nbytgts)
 ## run the HCMC algorithm assuming all data were observational
 dhat.hcmc <- hcmc(dat)
 #> ⠙ Score -87.004214222737 Escapes 0 Trials 0
-#> ✔ Score -83.2933160642061 Escapes 0 Trials 0 [335ms]
+#> ✔ Score -83.2933160642061 Escapes 0 Trials 0 [302ms]
 #> 
 dhat.hcmc
 #> $dag
@@ -143,7 +145,7 @@ shd(e, dag2essgraph(dhat.hcmc$dag))
 ## function).
 dhat.ihcmc <- hcmc(dat, targets=I, target.index=tindex)
 #> ⠙ Score -59.3908043567074 Escapes 0 Trials 0
-#> ✔ Score -50.0166049861733 Escapes 0 Trials 0 [287ms]
+#> ✔ Score -50.0166049861733 Escapes 0 Trials 0 [257ms]
 #> 
 dhat.ihcmc
 #> $dag
@@ -165,7 +167,8 @@ shd(e, dag2essgraph(dhat.ihcmc$dag))
 ## iBGe() function), which provides an estimate closer to the generative DAG
 dhat.ihcmc2 <- hcmc(dat, targets=I, target.index=tindex, scorefun=iBGe)
 #> ⠙ Score -189.956899563879 Escapes 0 Trials 0
-#> ✔ Score -181.640790427507 Escapes 0 Trials 0 [541ms]
+#> ⠹ Score -181.640790427507 Escapes 0 Trials 0
+#> ✔ Score -181.640790427507 Escapes 0 Trials 0 [525ms]
 #> 
 shd(e, dag2essgraph(dhat.ihcmc2$dag))
 #> [1] 2
