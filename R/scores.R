@@ -14,11 +14,16 @@
 #'
 #' @param dat A `data.frame` object with data records in the rows.
 #'
-#' @param targets A `list` object with a family of targets.
+#' @param targets (Default `list(integer(0))`) A `list` object with a family of
+#' targets provided as a list of integer vectors. Its default value indicates
+#' that there are no interventions in the data, i.e., the data is purely
+#' observational.
 #'
-#' @param target.index A vector of integer values in one-to-one correspondence
-#' with the rows in `dat`, indicating what set of targets has generated each
-#' row in `dat`.
+#' @param target.index (Default a unit vector) A vector of integers in
+#' one-to-one correspondence with the rows in `dat`, indicating which rows in
+#' the input data are intervened by which targets. Its default value indicates
+#' that there are no interventions in the data, i.e., the data is purely
+#' observational.
 #'
 #' @param cached.scores An optional list of environment objects, containing
 #' cached scores per parent set for each vertex in `g`. If `NULL` (default),
@@ -73,7 +78,7 @@
 #' dat <- rbind(obsdat, intdat)
 #'
 #' ## define the targets and target indices for the interventional data
-#' targets <- list(0L, 2L)
+#' targets <- list(integer(0), 2L)
 #' target.index <- c(rep(1L, nobs), rep(2L, nint))
 #'
 #' ## calculate the interventional BIC score for the DAG and data set
@@ -97,7 +102,7 @@
 #'
 #' @importFrom graph numNodes edgeMatrix
 #' @export
-iBIC <- function(g, dat, targets=list(0L),
+iBIC <- function(g, dat, targets=list(integer(0)),
                  target.index=rep(1L, nrow(dat)),
                  cached.scores=NULL) {
   v <- nodes(g)
@@ -107,7 +112,7 @@ iBIC <- function(g, dat, targets=list(0L),
   pasets <- split(em["from", ], factor(v[em["to", ]], levels=v))
   stopifnot(identical(names(pasets), v))
 
-  onlyobsdata <- identical(targets, list(0L))
+  onlyobsdata <- identical(targets, list(integer(0)))
   data.count <- rep(n, p)
   if (!onlyobsdata) {
     ## index of the data points that have not been intervened per vertex
@@ -176,11 +181,16 @@ iBIC <- function(g, dat, targets=list(0L),
 #'
 #' @param dat A `data.frame` object with data records in the rows.
 #'
-#' @param targets A `list` object with a family of targets.
+#' @param targets (Default `list(integer(0))`) A `list` object with a family of
+#' targets provided as a list of integer vectors. Its default value indicates
+#' that there are no interventions in the data, i.e., the data is purely
+#' observational.
 #'
-#' @param target.index A vector of integer values in one-to-one correspondence
-#' with the rows in `dat`, indicating what set of targets has generated each
-#' row in `dat`.
+#' @param target.index (Default a unit vector) A vector of integers in
+#' one-to-one correspondence with the rows in `dat`, indicating which rows in
+#' the input data are intervened by which targets. Its default value indicates
+#' that there are no interventions in the data, i.e., the data is purely
+#' observational.
 #'
 #' @param cached.scores An optional list of environment objects, containing
 #' cached scores per parent set for each vertex in `g`. If `NULL` (default),
@@ -233,7 +243,7 @@ iBIC <- function(g, dat, targets=list(0L),
 #' dat <- rbind(obsdat, intdat)
 #'
 #' ## define the targets and target indices for the interventional data
-#' targets <- list(0L, 2L)
+#' targets <- list(integer(0), 2L)
 #' target.index <- c(rep(1L, nobs), rep(2L, nint))
 #'
 #' ## calculate the interventional BGe score for the DAG and data set
@@ -258,8 +268,8 @@ iBIC <- function(g, dat, targets=list(0L),
 #' @importFrom methods as
 #' @importFrom graph numNodes edgeMatrix
 #' @export
-iBGe <- function(g, dat, targets=list(0L), target.index=rep(1L, nrow(dat)),
-                 cached.scores=NULL) {
+iBGe <- function(g, dat, targets=list(integer(0)),
+                 target.index=rep(1L, nrow(dat)), cached.scores=NULL) {
   v <- nodes(g)
   p <- numNodes(g)
   n <- nrow(dat)

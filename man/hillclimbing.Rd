@@ -15,13 +15,16 @@ hillclimbing(
 \arguments{
 \item{dat}{A \code{data.frame} object with data records in the rows.}
 
-\item{targets}{(Default a list with an empty integer vector) Family of
-intervention targets provided as a list of integer vectors. The default value
-implies that there are no interventions and the data is purely observational.}
+\item{targets}{(Default \code{list(integer(0))}) A \code{list} object with a family of
+targets provided as a list of integer vectors. Its default value indicates
+that there are no interventions in the data, i.e., the data is purely
+observational.}
 
-\item{target.index}{(Default an empty integer vector) A vector of integers
-in one-to-one correspondence with the rows in \code{dat}, indicating which rows
-in the input data are intervened by which targets.}
+\item{target.index}{(Default a unit vector) A vector of integers in
+one-to-one correspondence with the rows in \code{dat}, indicating which rows in
+the input data are intervened by which targets. Its default value indicates
+that there are no interventions in the data, i.e., the data is purely
+observational.}
 
 \item{scorefun}{(Default is \code{\link{iBIC}}) A function to calculate the goodness
 of fit (GoF) score of a DAG on a given data set.}

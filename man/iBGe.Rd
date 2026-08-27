@@ -7,7 +7,7 @@
 iBGe(
   g,
   dat,
-  targets = list(0L),
+  targets = list(integer(0)),
   target.index = rep(1L, nrow(dat)),
   cached.scores = NULL
 )
@@ -18,11 +18,16 @@ for which we want to calculate the score.}
 
 \item{dat}{A \code{data.frame} object with data records in the rows.}
 
-\item{targets}{A \code{list} object with a family of targets.}
+\item{targets}{(Default \code{list(integer(0))}) A \code{list} object with a family of
+targets provided as a list of integer vectors. Its default value indicates
+that there are no interventions in the data, i.e., the data is purely
+observational.}
 
-\item{target.index}{A vector of integer values in one-to-one correspondence
-with the rows in \code{dat}, indicating what set of targets has generated each
-row in \code{dat}.}
+\item{target.index}{(Default a unit vector) A vector of integers in
+one-to-one correspondence with the rows in \code{dat}, indicating which rows in
+the input data are intervened by which targets. Its default value indicates
+that there are no interventions in the data, i.e., the data is purely
+observational.}
 
 \item{cached.scores}{An optional list of environment objects, containing
 cached scores per parent set for each vertex in \code{g}. If \code{NULL} (default),
@@ -81,7 +86,7 @@ intdat <- data.frame(X1=X1, X2=X2, X3=X3)
 dat <- rbind(obsdat, intdat)
 
 ## define the targets and target indices for the interventional data
-targets <- list(0L, 2L)
+targets <- list(integer(0), 2L)
 target.index <- c(rep(1L, nobs), rep(2L, nint))
 
 ## calculate the interventional BGe score for the DAG and data set

@@ -34,6 +34,16 @@ test_scores <- function() {
  
   ## calculate the interventional BIC score for the DAG and data set
   ibic <- iBIC(g, dat, targets, target.index)
+
+  ## verify that the iBIC() function returns the same score when
+  ## using the caching mechanism
+  cached.scores <- list()
+  for (i in seq_len(ncol(dat)))
+      cached.scores[[i]] <- new.env(hash=TRUE, parent=emptyenv())
+  ibic2 <- iBIC(g, dat, targets, target.index, cached.scores=cached.scores)
+  checkTrue(ibic == ibic2)
+  ibic3 <- iBIC(g, dat, targets, target.index, cached.scores=cached.scores)
+  checkTrue(ibic == ibic3)
  
   ## create another Markov equivalent DAG by reversing the arc X1 -> X2
   ## to obtain X1 <- X2 -> X3

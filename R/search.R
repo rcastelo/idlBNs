@@ -147,13 +147,16 @@ rcar <- function(dag, r, utargets) {
 #'
 #' @param dat A `data.frame` object with data records in the rows.
 #'
-#' @param targets (Default a list with an empty integer vector) Family of
-#' intervention targets provided as a list of integer vectors. The default value
-#' implies that there are no interventions and the data is purely observational.
+#' @param targets (Default `list(integer(0))`) A `list` object with a family of
+#' targets provided as a list of integer vectors. Its default value indicates
+#' that there are no interventions in the data, i.e., the data is purely
+#' observational.
 #'
-#' @param target.index (Default an empty integer vector) A vector of integers
-#' in one-to-one correspondence with the rows in `dat`, indicating which rows
-#' in the input data are intervened by which targets.
+#' @param target.index (Default a unit vector) A vector of integers in
+#' one-to-one correspondence with the rows in `dat`, indicating which rows in
+#' the input data are intervened by which targets. Its default value indicates
+#' that there are no interventions in the data, i.e., the data is purely
+#' observational.
 #'
 #' @param scorefun (Default is [`iBIC`]) A function to calculate the goodness
 #' of fit (GoF) score of a DAG on a given data set.
@@ -181,7 +184,8 @@ hillclimbing <- function(dat, targets=list(integer(0)),
       cached.scores[[i]] <- new.env(hash=TRUE, parent=emptyenv())
 
   s0 <- -Inf
-  s1 <- scorefun(dag, dat)
+  s1 <- scorefun(g=dag, dat=dat, targets=targets, target.index=target.index,
+                 cached.scores=cached.scores)
 
   if (verbose)
     cli_progress_step("Score {s1}")

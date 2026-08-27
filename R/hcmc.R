@@ -10,13 +10,16 @@
 #'
 #' @param r (Default 20) Maximum number of (\emph{I}-)covered arc reversals.
 #'
-#' @param targets (Default a list with an empty integer vector) Family of
-#' intervention targets provided as a list of integer vectors. The default value
-#' implies that there are no interventions and the data is purely observational.
+#' @param targets (Default `list(integer(0))`) A `list` object with a family of
+#' targets provided as a list of integer vectors. Its default value indicates
+#' that there are no interventions in the data, i.e., the data is purely
+#' observational.
 #'
-#' @param target.index (Default an empty integer vector) A vector of integers
-#' in one-to-one correspondence with the rows in `dat`, indicating which rows
-#' in the input data are intervened by which targets.
+#' @param target.index (Default a unit vector) A vector of integers in
+#' one-to-one correspondence with the rows in `dat`, indicating which rows in
+#' the input data are intervened by which targets. Its default value indicates
+#' that there are no interventions in the data, i.e., the data is purely
+#' observational.
 #'
 #' @param MAXTRIALS (Default 5) Maximum number of trials to escape from local
 #' maxima.
