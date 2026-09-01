@@ -130,9 +130,7 @@ iBIC <- function(g, dat, targets=list(integer(0)),
   for (i in seq_along(pasets)) {
     s <- NULL
     if (!is.null(cached.scores)) {
-        k <- paste(sort.int(pasets[[i]]), collapse=":")
-        if (nchar(k) == 0)
-            k <- ":"
+        k <- .cached_scores_key(pasets[[i]])
         s <- cached.scores[[i]][[k]]
     }
     if (is.null(s)) {
@@ -171,6 +169,18 @@ iBIC <- function(g, dat, targets=list(integer(0)),
   cidx <- unlist(targets[target.index])
   res[cbind(ridx, cidx)] <- TRUE
   res
+}
+
+## cached scores key for a given parent set, computed as sorted parent indices
+## glued together with a colon, e.g., '1:2:3'. this type of parent set key is
+## used by both, the iBIC() and iBGe() score functions, to store and retrieve
+## cached scores for a given parent set in the corresponding per-node
+## environment.
+.cached_scores_key <- function(paset) {
+  k <- paste(sort.int(paset), collapse=":")
+  if (nchar(k) == 0L)
+    k <- ":"
+  k
 }
 
 ## calculate global sufficient statistics for the iBIC score, which do not
