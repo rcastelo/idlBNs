@@ -9,7 +9,8 @@ iBIC(
   dat,
   targets = list(integer(0)),
   target.index = rep(1L, nrow(dat)),
-  cached.scores = NULL
+  cached.scores = NULL,
+  global.sufstats = NULL
 )
 }
 \arguments{
@@ -29,14 +30,21 @@ the input data are intervened by which targets. Its default value indicates
 that there are no interventions in the data, i.e., the data is purely
 observational.}
 
-\item{cached.scores}{An optional list of environment objects, containing
-cached scores per parent set for each vertex in \code{g}. If \code{NULL} (default),
-no cached scores are used. Using this argument can speed up the calculation
-of the score when the same parent sets are scored multiple times. To use
-this argument, first create an empty environment object with
+\item{cached.scores}{(Default \code{NULL}) An optional list of environment
+objects, containing cached scores per parent set for each vertex in \code{g}. If
+\code{NULL} (default), no cached scores are used. Using this argument can speed
+up the calculation of the score when the same parent sets are scored multiple
+times. To use this argument, first create an empty environment object with
 \code{csco <- replicate(numNodes(g), new.env(hash=TRUE, parent=emptyenv()), simplify=FALSE)}
 and then pass it to this \code{cached.scores} parameter, i.e.,
 \code{cached.scores=csco}.}
+
+\item{global.sufstats}{(Default \code{NULL}) An optional list of global sufficient
+statistics for the iBIC score, as returned by the \code{.iBIC.global.sufstats()}
+function, which do not depend on the structure of a specific DAG, but only
+on the input data (\code{dat}), the target vertices (\code{targets}) and the target
+indices (\code{target.index}) of the interventions. If \code{NULL} (default), the
+\code{.iBIC.global.sufstats()} function is internally called.}
 }
 \value{
 A single numeric value corresponding to the interventional BIC score

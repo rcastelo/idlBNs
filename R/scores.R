@@ -25,14 +25,21 @@
 #' that there are no interventions in the data, i.e., the data is purely
 #' observational.
 #'
-#' @param cached.scores An optional list of environment objects, containing
-#' cached scores per parent set for each vertex in `g`. If `NULL` (default),
-#' no cached scores are used. Using this argument can speed up the calculation
-#' of the score when the same parent sets are scored multiple times. To use
-#' this argument, first create an empty environment object with
+#' @param cached.scores (Default `NULL`) An optional list of environment
+#' objects, containing cached scores per parent set for each vertex in `g`. If
+#' `NULL` (default), no cached scores are used. Using this argument can speed
+#' up the calculation of the score when the same parent sets are scored multiple
+#' times. To use this argument, first create an empty environment object with
 #' `csco <- replicate(numNodes(g), new.env(hash=TRUE, parent=emptyenv()), simplify=FALSE)`
 #' and then pass it to this `cached.scores` parameter, i.e.,
 #' `cached.scores=csco`.
+#'
+#' @param global.sufstats (Default `NULL`) An optional list of global sufficient
+#' statistics for the iBIC score, as returned by the `.iBIC.global.sufstats()`
+#' function, which do not depend on the structure of a specific DAG, but only
+#' on the input data (`dat`), the target vertices (`targets`) and the target
+#' indices (`target.index`) of the interventions. If `NULL` (default), the
+#' `.iBIC.global.sufstats()` function is internally called.
 #'
 #' @return A single numeric value corresponding to the interventional BIC score
 #' of the given structure of the Bayesian network for the given data set.
@@ -104,7 +111,7 @@
 #' @export
 iBIC <- function(g, dat, targets=list(integer(0)),
                  target.index=rep(1L, nrow(dat)),
-                 cached.scores=NULL) {
+                 cached.scores=NULL, global.sufstats=NULL) {
 
   .check_g_dat_consistency(g, dat)
   v <- match(nodes(g), colnames(dat))
@@ -115,14 +122,10 @@ iBIC <- function(g, dat, targets=list(integer(0)),
   stopifnot(identical(names(pasets), as.character(v)))
   .check_cached_scores(g, cached.scores)
 
+  if (is.null(global.sufstats))
+    global.sufstats <- .iBIC.global.sufstats(dat, targets, target.index)
   onlyobsdata <- identical(targets, list(integer(0)))
-  data.count <- rep(n, p)
-  if (!onlyobsdata) {
-    ## index of the data points that have not been intervened per vertex
-    A <- !.targets2mat(p, targets, target.index)
-    non.int <- lapply(seq_len(ncol(A)), function(i) which(A[, i]))
-    data.count <- colSums(A)
-  }
+
   sco <- numeric(length(v))
   for (i in seq_along(pasets)) {
     s <- NULL
@@ -137,8 +140,9 @@ iBIC <- function(g, dat, targets=list(integer(0)),
           Y <- dat[, v[i]]
           Z <- cbind(1, dat[, pasets[[i]], drop=FALSE])
         } else {
-          Y <- dat[non.int[[i]], v[i]]
-          Z <- cbind(1, dat[non.int[[i]], pasets[[i]], drop=FALSE])
+          Y <- dat[global.sufstats$non.int[[i]], v[i]]
+          Z <- cbind(1, dat[global.sufstats$non.int[[i]], pasets[[i]],
+                     drop=FALSE])
         }
         sigma2 <- sum(Y^2)
 
@@ -146,8 +150,9 @@ iBIC <- function(g, dat, targets=list(integer(0)),
         Q <- qr.Q(qr(Z))
         sigma2 <- sigma2 - sum((Y %*% Q)^2)
         lambda <- 0.5 * log(n)
-        sco[i] <- -0.5 * data.count[i] * (1 + log(sigma2 / data.count[i])) -
-                                          lambda * (1 + length(pasets[[i]]))
+        sco[i] <- -0.5 * global.sufstats$data.count[i] *
+                  (1 + log(sigma2 / global.sufstats$data.count[i])) -
+                  lambda * (1 + length(pasets[[i]]))
         if (!is.null(cached.scores)) {
             cached.scores[[i]][[k]] <- sco[i]
         }
@@ -168,6 +173,31 @@ iBIC <- function(g, dat, targets=list(integer(0)),
   res
 }
 
+## calculate global sufficient statistics for the iBIC score, which do not
+## depend on the structure of a specific DAG, but only on the input data,
+## the target vertices and the target indices of the interventions
+.iBIC.global.sufstats <- function(dat, targets=list(integer(0)),
+                                  target.index=rep(1L, nrow(dat))) {
+    p <- ncol(dat)
+    n <- nrow(dat)
+    non.int <- NULL
+    data.count <- rep(n, p)
+    onlyobsdata <- identical(targets, list(integer(0)))
+    if (!onlyobsdata) {
+        ## index and tally the data points that have not been intervened
+        A <- !.targets2mat(p, targets, target.index)
+        non.int <- lapply(seq_len(ncol(A)), function(i) which(A[, i]))
+        data.count <- colSums(A)
+    }
+    list(non.int=non.int, data.count=data.count, n=n)
+}
+
+## assign the iBIC global sufficient statistics function as an attribute to the
+## iBIC() scoring function, so that any search algorithm taking iBIC() as an
+## input argument, e.g. scorefun=iBIC, can precompute the corresponding global
+## sufficient statistics before iteratively calling iBIC() during search
+attr(iBIC, "global.sufstats.fun") <- .iBIC.global.sufstats
+
 #' @importFrom graph numNodes
 #' @importFrom cli cli_abort
 .check_cached_scores <- function(g, cached.scores) {
@@ -177,7 +207,7 @@ iBIC <- function(g, dat, targets=list(integer(0)),
                    "of nodes in g (", numNodes(g), ")")
       cli_abort(c("x"=msg))
     }
-    if (!all(sapply(cached.scores, is.environment)))
+    if (any(vapply(cached.scores, function(x) !is.environment(x), logical(1))))
       cli_abort(c("x"="Each element of cached.scores must be an environment"))
   }
 }
@@ -231,6 +261,16 @@ iBIC <- function(g, dat, targets=list(integer(0)),
 #' `cached.scores=csco`. This is currently not implemented for the iBGe score,
 #' but it is included as an API placeholder for future versions of the package
 #' that will enable this feature for the iBGe score.
+#'
+#' @param global.sufstats (Default `NULL`) An optional list of global sufficient
+#' statistics for the iBGe score, as returned by the `.iBGe.global.sufstats()`
+#' function, which do not depend on the structure of a specific DAG, but only
+#' on the input data (`dat`), the target vertices (`targets`) and the target
+#' indices (`target.index`) of the interventions. If `NULL` (default), the
+#' `.iBGe.global.sufstats()` function is internally called. This is currently
+#' not implemented for the iBGe score, but it is included as an API placeholder
+#' for future versions of the package that will enable this feature for the
+#' iBGe score.
 #'
 #' @return A single numeric value corresponding to the interventional BGe score
 #' of the given structure of the Bayesian network for the given data set.
@@ -298,7 +338,8 @@ iBIC <- function(g, dat, targets=list(integer(0)),
 #' @importFrom graph numNodes edgeMatrix
 #' @export
 iBGe <- function(g, dat, targets=list(integer(0)),
-                 target.index=rep(1L, nrow(dat)), cached.scores=NULL) {
+                 target.index=rep(1L, nrow(dat)),
+                 cached.scores=NULL, global.sufstats=NULL) {
 
   .check_g_dat_consistency(g, dat)
   v <- nodes(g)

@@ -9,7 +9,8 @@ iBGe(
   dat,
   targets = list(integer(0)),
   target.index = rep(1L, nrow(dat)),
-  cached.scores = NULL
+  cached.scores = NULL,
+  global.sufstats = NULL
 )
 }
 \arguments{
@@ -39,6 +40,16 @@ and then pass it to this \code{cached.scores} parameter, i.e.,
 \code{cached.scores=csco}. This is currently not implemented for the iBGe score,
 but it is included as an API placeholder for future versions of the package
 that will enable this feature for the iBGe score.}
+
+\item{global.sufstats}{(Default \code{NULL}) An optional list of global sufficient
+statistics for the iBGe score, as returned by the \code{.iBGe.global.sufstats()}
+function, which do not depend on the structure of a specific DAG, but only
+on the input data (\code{dat}), the target vertices (\code{targets}) and the target
+indices (\code{target.index}) of the interventions. If \code{NULL} (default), the
+\code{.iBGe.global.sufstats()} function is internally called. This is currently
+not implemented for the iBGe score, but it is included as an API placeholder
+for future versions of the package that will enable this feature for the
+iBGe score.}
 }
 \value{
 A single numeric value corresponding to the interventional BGe score

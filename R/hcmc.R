@@ -120,15 +120,25 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
   for (i in seq_len(ncol(dat)))
       cached.scores[[i]] <- new.env(hash=TRUE, parent=emptyenv())
 
+  global.sufstats <- NULL
+  global.sufstats.fun <- attr(scorefun, "global.sufstats.fun")
+  if (!is.null(global.sufstats.fun)) {
+    if (verbose)
+      cli_alert_info("Calculating global sufficient statistics")
+    global.sufstats <- global.sufstats.fun(dat, targets, target.index)
+  }
+
   utargets <- sort(unique(unlist(targets)))
   dag <- graphNEL(colnames(dat), edgemode="directed")
   s0 <- -Inf
   s1 <- scorefun(g=dag, dat=dat, targets=targets, target.index=target.index,
-                 cached.scores=cached.scores)
+                 cached.scores=cached.scores, global.sufstats=global.sufstats)
   was_in_local_maximum <- local_maximum <- s1 < s0
   trials <- escapes <- avg_trials_per_escape <- 0
 
   if (verbose) {
+    algname <- if (identical(targets, list(integer(0)))) "HCMC" else "iHCMC"
+    cli_progress_bar("Running {algname} algorithm")
     msg <- "Score {s1} Escapes {escapes} Trials {avg_trials_per_escape}"
     cli_progress_step(msg, spinner=TRUE)
   }
@@ -137,10 +147,10 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
     s0 <- s1
     dag <- rcar(dag, r, utargets)
     ne <- ncr.nh(dag, utargets)
-    s1 <- sapply(ne, function(g, d, tgts, tgt.idx, chd.sco)
+    s1 <- sapply(ne, function(g, d, tgts, tgt.idx, chd.sco, gbl.sst)
                        scorefun(g=g, dat=d, targets=tgts, target.index=tgt.idx,
-                                cached.scores=chd.sco), dat, targets,
-                                target.index, cached.scores)
+                                cached.scores=chd.sco, global.sufstats=gbl.sst),
+                 dat, targets, target.index, cached.scores, global.sufstats)
     dag1 <- ne[[which.max(s1)]]
     s1 <- max(s1)
     local_maximum <- s1 <= s0
@@ -164,6 +174,11 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
 
     if (verbose)
       cli_progress_update()
+  }
+
+  if (verbose) {
+    algname <- if (identical(targets, list(integer(0)))) "HCMC" else "iHCMC"
+    cli_progress_done("{algname} algorithm completed")
   }
 
   list(dag=dag, sco=s1)
