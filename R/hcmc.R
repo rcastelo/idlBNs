@@ -127,6 +127,9 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
       cli_alert_info("Calculating global sufficient statistics")
     global.sufstats <- global.sufstats.fun(dat, targets, target.index)
   }
+  scorefun.name <- NULL
+  if (!is.null(attr(scorefun, "scorefun.name")))
+    scorefun.name <- attr(scorefun, "scorefun.name")
 
   utargets <- sort(unique(unlist(targets)))
   dag <- graphNEL(colnames(dat), edgemode="directed")
@@ -138,7 +141,10 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
 
   if (verbose) {
     algname <- if (identical(targets, list(integer(0)))) "HCMC" else "iHCMC"
-    cli_progress_bar("Running {algname} algorithm")
+    msg <- "Running the {algname} algorithm"
+    if (!is.null(scorefun.name))
+      msg <- paste(msg, "with the {scorefun.name} score function")
+    cli_progress_bar(msg)
     msg <- "Score {s1} Escapes {escapes} Trials {avg_trials_per_escape}"
     cli_progress_step(msg, spinner=TRUE)
   }

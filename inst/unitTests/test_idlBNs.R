@@ -74,6 +74,13 @@ test_scores <- function() {
 
   checkTrue(ibge > ibge2)
 
+  ## verify that the iBGe() function returns the same value than the
+  ## vendored code called from the internal .vendored_iBGe() function
+  vendoredibge <- iBGe(g, dat, targets, target.index)
+  checkEqualsNumeric(ibge, vendoredibge)
+  vendoredibge2 <- iBGe(g2, dat, targets, target.index)
+  checkEqualsNumeric(ibge2, vendoredibge2)
+
   ## in the case when we do not indicate the presence of interventions
   ## in the data, both scores should be identical
   ibge <- iBGe(g, dat)

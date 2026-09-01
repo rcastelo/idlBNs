@@ -157,8 +157,11 @@ iBIC <- function(g, dat, targets=list(integer(0)),
     } else
         sco[i] <- s
   }
+
   sum(sco)
 }
+## assign a name attribute to the iBIC() scoring function for reporting purposes
+attr(iBIC, "scorefun.name") <- "iBIC"
 
 ## convert a list of targets and a vector of target indices to data
 ## observations into a logical matrix of observations by variables,
@@ -352,23 +355,115 @@ iBGe <- function(g, dat, targets=list(integer(0)),
                  cached.scores=NULL, global.sufstats=NULL) {
 
   .check_g_dat_consistency(g, dat)
-  v <- nodes(g)
-  p <- numNodes(g)
-  n <- nrow(dat)
+  v <- match(nodes(g), colnames(dat))
   em <- edgeMatrix(g)
-  pasets <- split(v[em["from", ]], factor(v[em["to", ]], levels=v))
+  pasets <- split(em["from", ], factor(v[em["to", ]], levels=v))
   stopifnot(identical(names(pasets), as.character(v)))
+  .check_cached_scores(g, cached.scores)
 
-  ## create intervention matrix for BiDAG
-  A <- .targets2mat(p, targets, target.index)
-  I <- matrix(0, nrow=n, ncol=p)
-  I[A] <- 1
-  A <- as(as(g, "graphAM"), "matrix")
+  if (is.null(global.sufstats))
+    global.sufstats <- .iBGe.global.sufstats(dat, targets, target.index)
 
-  param <- .scoreparameters(scoretype="usr", data=dat,
-                            usrpar=list(pctesttype="bge", Tmat=I))
-  .DAGscore(param, A)
+  sco <- numeric(length(v))
+  for (i in seq_along(pasets)) {
+    s <- NULL
+    if (!is.null(cached.scores)) {
+      k <- .cached_scores_key(pasets[[i]])
+      s <- cached.scores[[i]][[k]]
+    }
+    if (is.null(s)) {
+      TNj <- global.sufstats$TN[[i]]
+      lp <- length(pasets[[i]])
+      A <- TNj[i, i]
+      awpNd2 <- (global.sufstats$awpN[i] - global.sufstats$p + lp + 1) / 2
+      if (lp == 0L)
+        s <- global.sufstats$scoreconstvec[[i]][1L] - awpNd2 * log(A)
+      else {
+        D <- TNj[pasets[[i]], pasets[[i]], drop=FALSE]
+        R <- chol(D)
+        logdetD <- 2 * sum(log(diag(R)))
+        B <- TNj[i, pasets[[i]]]
+        logdetpart2 <- log(A - sum(backsolve(R, B, transpose=TRUE)^2))
+        s <- global.sufstats$scoreconstvec[[i]][lp + 1L] -
+             awpNd2 * logdetpart2 - logdetD / 2
+      }
+      if (!is.null(cached.scores))
+        cached.scores[[i]][[k]] <- s
+    }
+    sco[i] <- s
+  }
+
+  sum(sco)
 }
+## assign a name attribute to the iBIC() scoring function for reporting purposes
+attr(iBGe, "scorefun.name") <- "iBGe"
+
+## calculate global sufficient statistics for the iBGe score, which do not
+## depend on the structure of a specific DAG, but only on the input data,
+## the target vertices and the target indices of the interventions. part of
+## this code is adapted from the BGe parametrisation in Kuipers & Moffa (2025)
+## and the BiDAG pacakge, but stripped down to exclude BDe, BDecat, DBN, MDAG,
+## and other stuff not exposed in the iBGe() function of this package
+.iBGe.global.sufstats <- function(dat, targets=list(integer(0)),
+                                  target.index=rep(1L, nrow(dat))) {
+  p <- ncol(dat)
+  n <- nrow(dat)
+
+  ## BGe equivalent sample size for the prior distribution of the mean vector
+  ## set to 1, which assigns the weakest possible informative weight to this
+  ## prior distribution
+  ## see BiDAG::scoreparameters for further details on this parameter
+  ## we might want to expose this as a user parameter in the future
+  am <- 1
+
+  ## BGe edge penalization factor, set to 1 (no penalization)
+  ## see BiDAG::scoreparameters for further details on this parameter
+  ## we might want to expose this as a user parameter in the future
+  edgepf <- 1
+
+  aw <- p + am + 1
+  T0scale <- am * (aw - p - 1) / (am + 1) # follows from [GH2002, eqs. (19, 20)]
+  T0 <- diag(T0scale, p, p)
+  logedgepf <- log(edgepf)
+  l <- seq_len(p) # l = number of parents + 1
+
+  non.int <- NULL
+  data.count <- rep(n, p)
+  onlyobsdata <- identical(targets, list(integer(0)))
+  if (!onlyobsdata) {
+    ## index and tally the data points that have not been intervened
+    A <- !.targets2mat(p, targets, target.index)
+    non.int <- lapply(seq_len(ncol(A)), function(i) which(A[, i]))
+    data.count <- colSums(A)
+  }
+
+  TN <- vector("list", p)
+  awpN <- numeric(p)
+  scoreconstvec <- vector("list", p)
+  for (j in seq_len(p)) {
+    Xj <- as.matrix(dat)
+    if (!onlyobsdata)
+      Xj <- as.matrix(dat[non.int[[j]], , drop=FALSE])
+    Nj <- data.count[j]
+    means <- colMeans(Xj)
+    covmat <- cov(Xj) * (Nj - 1)
+    TN[[j]] <- T0 + covmat + (am * Nj / (am + Nj)) * outer(means, means)
+    awpN[j] <- aw + Nj
+    constscorefact <- -(Nj / 2) * log(pi) + 0.5 * log(am / (am + Nj))
+    awp <- aw - p + l
+    scoreconstvec[[j]] <- constscorefact - lgamma(awp / 2) + lgamma((awp + Nj) / 2) +
+                          ((awp + l - 1) / 2) * log(T0scale) - l * logedgepf
+  }
+
+  list(p=p, aw=aw, T0scale=T0scale, TN=TN, awpN=awpN,
+       scoreconstvec=scoreconstvec, non.int=non.int, data.count=data.count, n=n)
+}
+
+## assign the iBIC global sufficient statistics function as an attribute to the
+## iBIC() scoring function, so that any search algorithm taking iBIC() as an
+## input argument, e.g. scorefun=iBIC, can precompute the corresponding global
+## sufficient statistics before iteratively calling iBIC() during search
+attr(iBGe, "global.sufstats.fun") <- .iBGe.global.sufstats
 
 ## first original version of the iBGe() function, which calls the vendored code
 ## of the iBGe score by Kuipers and Moffa (2025) based and adapted from the
