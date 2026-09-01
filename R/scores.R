@@ -370,6 +370,34 @@ iBGe <- function(g, dat, targets=list(integer(0)),
   .DAGscore(param, A)
 }
 
+## first original version of the iBGe() function, which calls the vendored code
+## of the iBGe score by Kuipers and Moffa (2025) based and adapted from the
+## scripts provided at https://github.com/jackkuipers/iBGe and from the BiDAG
+## package at https://cran.r-project.org/package=BiDAG this is included here
+## to verify that further optimized versions of the iBGe() function produce the
+## same results as the original version of the iBGe score by Kuipers and Moffa
+.vendored_iBGe <- function(g, dat, targets=list(integer(0)),
+                           target.index=rep(1L, nrow(dat))) {
+
+  .check_g_dat_consistency(g, dat)
+  v <- nodes(g)
+  p <- numNodes(g)
+  n <- nrow(dat)
+  em <- edgeMatrix(g)
+  pasets <- split(v[em["from", ]], factor(v[em["to", ]], levels=v))
+  stopifnot(identical(names(pasets), as.character(v)))
+
+  ## create intervention matrix for BiDAG
+  A <- .targets2mat(p, targets, target.index)
+  I <- matrix(0, nrow=n, ncol=p)
+  I[A] <- 1
+  A <- as(as(g, "graphAM"), "matrix")
+
+  param <- .scoreparameters(scoretype="usr", data=dat,
+                            usrpar=list(pctesttype="bge", Tmat=I))
+  .DAGscore(param, A)
+}
+
 ## the code below has been copied and adapted from
 ## https://github.com/jackkuipers/iBGe and the BiDAG package at
 ## https://cran.r-project.org/package=BiDAG to enable calling it from the
