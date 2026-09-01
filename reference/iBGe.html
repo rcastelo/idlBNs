@@ -65,7 +65,8 @@ no interventions in the data.</p>
 <span>  <span class="va">dat</span>,</span>
 <span>  targets <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">integer</a></span><span class="op">(</span><span class="fl">0</span><span class="op">)</span><span class="op">)</span>,</span>
 <span>  target.index <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1L</span>, <span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">dat</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>  cached.scores <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  cached.scores <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  global.sufstats <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -108,6 +109,18 @@ and then pass it to this <code>cached.scores</code> parameter, i.e.,
 <code>cached.scores=csco</code>. This is currently not implemented for the iBGe score,
 but it is included as an API placeholder for future versions of the package
 that will enable this feature for the iBGe score.</p></dd>
+
+
+<dt id="arg-global-sufstats">global.sufstats<a class="anchor" aria-label="anchor" href="#arg-global-sufstats"></a></dt>
+<dd><p>(Default <code>NULL</code>) An optional list of global sufficient
+statistics for the iBGe score, as returned by the <code>.iBGe.global.sufstats()</code>
+function, which do not depend on the structure of a specific DAG, but only
+on the input data (<code>dat</code>), the target vertices (<code>targets</code>) and the target
+indices (<code>target.index</code>) of the interventions. If <code>NULL</code> (default), the
+<code>.iBGe.global.sufstats()</code> function is internally called. This is currently
+not implemented for the iBGe score, but it is included as an API placeholder
+for future versions of the package that will enable this feature for the
+iBGe score.</p></dd>
 
 </dl></div>
     <div class="section level2">

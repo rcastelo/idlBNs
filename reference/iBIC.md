@@ -18,7 +18,8 @@ iBIC(
   dat,
   targets = list(integer(0)),
   target.index = rep(1L, nrow(dat)),
-  cached.scores = NULL
+  cached.scores = NULL,
+  global.sufstats = NULL
 )
 ```
 
@@ -50,14 +51,24 @@ iBIC(
 
 - cached.scores:
 
-  An optional list of environment objects, containing cached scores per
-  parent set for each vertex in `g`. If `NULL` (default), no cached
-  scores are used. Using this argument can speed up the calculation of
-  the score when the same parent sets are scored multiple times. To use
-  this argument, first create an empty environment object with
+  (Default `NULL`) An optional list of environment objects, containing
+  cached scores per parent set for each vertex in `g`. If `NULL`
+  (default), no cached scores are used. Using this argument can speed up
+  the calculation of the score when the same parent sets are scored
+  multiple times. To use this argument, first create an empty
+  environment object with
   `csco <- replicate(numNodes(g), new.env(hash=TRUE, parent=emptyenv()), simplify=FALSE)`
   and then pass it to this `cached.scores` parameter, i.e.,
   `cached.scores=csco`.
+
+- global.sufstats:
+
+  (Default `NULL`) An optional list of global sufficient statistics for
+  the iBIC score, as returned by the `.iBIC.global.sufstats()` function,
+  which do not depend on the structure of a specific DAG, but only on
+  the input data (`dat`), the target vertices (`targets`) and the target
+  indices (`target.index`) of the interventions. If `NULL` (default),
+  the `.iBIC.global.sufstats()` function is internally called.
 
 ## Value
 

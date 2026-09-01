@@ -311,7 +311,7 @@ other attached packages:
 loaded via a namespace (and not attached):
  [1] sass_0.4.10         xml2_1.6.0          robustbase_0.99-7  
  [4] stringi_1.8.9       digest_0.6.39       magrittr_2.0.5     
- [7] RColorBrewer_1.1-3  evaluate_1.0.5      bookdown_0.47      
+ [7] RColorBrewer_1.1-3  evaluate_1.0.5      bookdown_0.48      
 [10] fastmap_1.2.0       sfsmisc_1.1-25      jsonlite_2.0.0     
 [13] BiocManager_1.30.27 viridisLite_0.4.3   scales_1.4.0       
 [16] textshaping_1.0.5   jquerylib_0.1.4     abind_1.4-8        

@@ -65,7 +65,8 @@ assumes there are no interventions in the data.</p>
 <span>  <span class="va">dat</span>,</span>
 <span>  targets <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">integer</a></span><span class="op">(</span><span class="fl">0</span><span class="op">)</span><span class="op">)</span>,</span>
 <span>  target.index <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1L</span>, <span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">dat</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>  cached.scores <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  cached.scores <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  global.sufstats <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -98,14 +99,23 @@ observational.</p></dd>
 
 
 <dt id="arg-cached-scores">cached.scores<a class="anchor" aria-label="anchor" href="#arg-cached-scores"></a></dt>
-<dd><p>An optional list of environment objects, containing
-cached scores per parent set for each vertex in <code>g</code>. If <code>NULL</code> (default),
-no cached scores are used. Using this argument can speed up the calculation
-of the score when the same parent sets are scored multiple times. To use
-this argument, first create an empty environment object with
+<dd><p>(Default <code>NULL</code>) An optional list of environment
+objects, containing cached scores per parent set for each vertex in <code>g</code>. If
+<code>NULL</code> (default), no cached scores are used. Using this argument can speed
+up the calculation of the score when the same parent sets are scored multiple
+times. To use this argument, first create an empty environment object with
 <code>csco &lt;- replicate(numNodes(g), new.env(hash=TRUE, parent=emptyenv()), simplify=FALSE)</code>
 and then pass it to this <code>cached.scores</code> parameter, i.e.,
 <code>cached.scores=csco</code>.</p></dd>
+
+
+<dt id="arg-global-sufstats">global.sufstats<a class="anchor" aria-label="anchor" href="#arg-global-sufstats"></a></dt>
+<dd><p>(Default <code>NULL</code>) An optional list of global sufficient
+statistics for the iBIC score, as returned by the <code>.iBIC.global.sufstats()</code>
+function, which do not depend on the structure of a specific DAG, but only
+on the input data (<code>dat</code>), the target vertices (<code>targets</code>) and the target
+indices (<code>target.index</code>) of the interventions. If <code>NULL</code> (default), the
+<code>.iBIC.global.sufstats()</code> function is internally called.</p></dd>
 
 </dl></div>
     <div class="section level2">

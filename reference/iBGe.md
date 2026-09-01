@@ -17,7 +17,8 @@ iBGe(
   dat,
   targets = list(integer(0)),
   target.index = rep(1L, nrow(dat)),
-  cached.scores = NULL
+  cached.scores = NULL,
+  global.sufstats = NULL
 )
 ```
 
@@ -59,6 +60,18 @@ iBGe(
   `cached.scores=csco`. This is currently not implemented for the iBGe
   score, but it is included as an API placeholder for future versions of
   the package that will enable this feature for the iBGe score.
+
+- global.sufstats:
+
+  (Default `NULL`) An optional list of global sufficient statistics for
+  the iBGe score, as returned by the `.iBGe.global.sufstats()` function,
+  which do not depend on the structure of a specific DAG, but only on
+  the input data (`dat`), the target vertices (`targets`) and the target
+  indices (`target.index`) of the interventions. If `NULL` (default),
+  the `.iBGe.global.sufstats()` function is internally called. This is
+  currently not implemented for the iBGe score, but it is included as an
+  API placeholder for future versions of the package that will enable
+  this feature for the iBGe score.
 
 ## Value
 
