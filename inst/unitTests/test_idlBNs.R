@@ -41,9 +41,9 @@ test_scores <- function() {
   for (i in seq_len(ncol(dat)))
       cached.scores[[i]] <- new.env(hash=TRUE, parent=emptyenv())
   ibic2 <- iBIC(g, dat, targets, target.index, cached.scores=cached.scores)
-  checkTrue(ibic == ibic2)
+  checkEqualsNumeric(ibic, ibic2)
   ibic3 <- iBIC(g, dat, targets, target.index, cached.scores=cached.scores)
-  checkTrue(ibic == ibic3)
+  checkEqualsNumeric(ibic, ibic3)
  
   ## create another Markov equivalent DAG by reversing the arc X1 -> X2
   ## to obtain X1 <- X2 -> X3
@@ -73,9 +73,9 @@ test_scores <- function() {
   for (i in seq_len(ncol(dat)))
       cached.scores[[i]] <- new.env(hash=TRUE, parent=emptyenv())
   ibge2 <- iBGe(g, dat, targets, target.index, cached.scores=cached.scores)
-  checkTrue(ibge == ibge2)
+  checkEqualsNumeric(ibge, ibge2)
   ibge3 <- iBGe(g, dat, targets, target.index, cached.scores=cached.scores)
-  checkTrue(ibge == ibge3)
+  checkEqualsNumeric(ibge, ibge3)
  
   ## calculate the interventional BGe score for the new DAG on the
   ## same data, the score should be different despite being a

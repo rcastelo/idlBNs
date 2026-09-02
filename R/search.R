@@ -208,10 +208,10 @@ hillclimbing <- function(dat, targets=list(integer(0)),
   while (s1 > s0) {
     s0 <- s1
     ne <- ar.nh(dag)
-    s1 <- sapply(ne, function(g, d, tgts, tgt.idx, chd.sco)
+    s1 <- sapply(ne, function(g, d, tgts, tgt.idx, chd.sco, gbl.sst)
                        scorefun(g=g, dat=d, targets=tgts, target.index=tgt.idx,
-                                cached.scores=chd.sco), dat, targets,
-                                target.index, cached.scores)
+                                cached.scores=chd.sco, global.sufstats=gbl.sst),
+                 dat, targets, target.index, cached.scores, global.sufstats)
     dag <- ne[[which.max(s1)]]
     s1 <- max(s1)
 
