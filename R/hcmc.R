@@ -113,6 +113,10 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                  target.index=rep(1L, nrow(dat)),
                  scorefun=iBIC, MAXTRIALS=5, verbose=TRUE) {
 
+  dat <- .check_input_data(dat)
+  dag <- graphNEL(colnames(dat), edgemode="directed")
+  attr(dat, "sanitycheck") <- TRUE
+
   stopifnot(is.list(targets)) ## QC
   scorefun <- match.fun(scorefun)
 
@@ -132,7 +136,6 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
     scorefun.name <- attr(scorefun, "scorefun.name")
 
   utargets <- sort(unique(unlist(targets)))
-  dag <- graphNEL(colnames(dat), edgemode="directed")
   s0 <- -Inf
   s1 <- scorefun(g=dag, dat=dat, targets=targets, target.index=target.index,
                  cached.scores=cached.scores, global.sufstats=global.sufstats)
@@ -188,4 +191,22 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
   }
 
   list(dag=dag, sco=s1)
+}
+
+#' @importFrom cli cli_abort
+.check_input_data <- function(dat) {
+  if (!is.data.frame(dat) && !is.matrix(dat))
+    cli_abort(c("x"="Input data in 'dat' must be a data.frame or matrix object."))
+
+  if (is.null(colnames(dat))) {
+    msg <- paste("Input data in 'dat' must have column names corresponding to",
+                 "the random variables.")
+    cli_abort(c("x"=msg))
+  }
+
+  dat <- as.matrix(dat)
+  if (!is.numeric(dat))
+    cli_abort(c("x"="Input data in 'dat' must be numeric."))
+
+  dat
 }

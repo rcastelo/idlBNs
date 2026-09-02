@@ -67,6 +67,16 @@ test_scores <- function() {
   ## calculate the interventional BGe score for the DAG and data set
   ibge <- iBGe(g, dat, targets, target.index)
 
+  ## verify that the iBGe() function returns the same score when
+  ## using the caching mechanism
+  cached.scores <- list()
+  for (i in seq_len(ncol(dat)))
+      cached.scores[[i]] <- new.env(hash=TRUE, parent=emptyenv())
+  ibge2 <- iBGe(g, dat, targets, target.index, cached.scores=cached.scores)
+  checkTrue(ibge == ibge2)
+  ibge3 <- iBGe(g, dat, targets, target.index, cached.scores=cached.scores)
+  checkTrue(ibge == ibge3)
+ 
   ## calculate the interventional BGe score for the new DAG on the
   ## same data, the score should be different despite being a
   ## Markov equivalent DAG and with a lower, more negative, value
@@ -76,9 +86,9 @@ test_scores <- function() {
 
   ## verify that the iBGe() function returns the same value than the
   ## vendored code called from the internal .vendored_iBGe() function
-  vendoredibge <- iBGe(g, dat, targets, target.index)
+  vendoredibge <- idlBNs:::.vendored_iBGe(g, dat, targets, target.index)
   checkEqualsNumeric(ibge, vendoredibge)
-  vendoredibge2 <- iBGe(g2, dat, targets, target.index)
+  vendoredibge2 <- idlBNs:::.vendored_iBGe(g2, dat, targets, target.index)
   checkEqualsNumeric(ibge2, vendoredibge2)
 
   ## in the case when we do not indicate the presence of interventions

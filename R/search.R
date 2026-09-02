@@ -176,16 +176,31 @@ hillclimbing <- function(dat, targets=list(integer(0)),
                          target.index=rep(1L, nrow(dat)),  scorefun=iBIC,
                          verbose=TRUE) {
 
+  dat <- .check_input_data(dat)
+  dag <- graphNEL(colnames(dat), edgemode="directed")
+  attr(dat, "sanitycheck") <- TRUE
+
+  stopifnot(is.list(targets)) ## QC
   scorefun <- match.fun(scorefun)
 
-  dag <- graphNEL(colnames(dat), edgemode="directed")
   cached.scores <- list()
   for (i in seq_len(ncol(dat)))
       cached.scores[[i]] <- new.env(hash=TRUE, parent=emptyenv())
 
+  global.sufstats <- NULL
+  global.sufstats.fun <- attr(scorefun, "global.sufstats.fun")
+  if (!is.null(global.sufstats.fun)) {
+    if (verbose)
+      cli_alert_info("Calculating global sufficient statistics")
+    global.sufstats <- global.sufstats.fun(dat, targets, target.index)
+  }
+  scorefun.name <- NULL
+  if (!is.null(attr(scorefun, "scorefun.name")))
+    scorefun.name <- attr(scorefun, "scorefun.name")
+
   s0 <- -Inf
   s1 <- scorefun(g=dag, dat=dat, targets=targets, target.index=target.index,
-                 cached.scores=cached.scores)
+                 cached.scores=cached.scores, global.sufstats=global.sufstats)
 
   if (verbose)
     cli_progress_step("Score {s1}")
