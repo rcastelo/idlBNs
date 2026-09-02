@@ -52,9 +52,9 @@ HCMC (iHCMC) on mixed observational and interventional Gaussian data
 \examples{
 
 suppressPackageStartupMessages({
-  library(graph)
-  library(pcalg)
-  library(idlBNs)
+    library(graph)
+    library(pcalg)
+    library(idlBNs)
 })
 
 p <- 5
@@ -77,9 +77,9 @@ nbytgts <- c(n - sum(nbytgts), nbytgts)
 ## simulate mixed observational and interventional data
 dat <- list()
 for (v in seq_along(I)) {
-  targets <- I[[v]]
-  dat[[v]] <- rmvnorm.ivent(nbytgts[v], Mg, target=targets,
-                            target.value=rep(2, length(targets)))
+    targets <- I[[v]]
+    dat[[v]] <- rmvnorm.ivent(nbytgts[v], Mg, target=targets,
+                              target.value=rep(2, length(targets)))
 }
 dat <- do.call("rbind", dat)
 

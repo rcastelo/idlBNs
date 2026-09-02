@@ -44,9 +44,9 @@
 #' @examples
 #'
 #' suppressPackageStartupMessages({
-#'   library(graph)
-#'   library(pcalg)
-#'   library(idlBNs)
+#'     library(graph)
+#'     library(pcalg)
+#'     library(idlBNs)
 #' })
 #' 
 #' p <- 5
@@ -69,9 +69,9 @@
 #' ## simulate mixed observational and interventional data
 #' dat <- list()
 #' for (v in seq_along(I)) {
-#'   targets <- I[[v]]
-#'   dat[[v]] <- rmvnorm.ivent(nbytgts[v], Mg, target=targets,
-#'                             target.value=rep(2, length(targets)))
+#'     targets <- I[[v]]
+#'     dat[[v]] <- rmvnorm.ivent(nbytgts[v], Mg, target=targets,
+#'                               target.value=rep(2, length(targets)))
 #' }
 #' dat <- do.call("rbind", dat)
 #'
@@ -108,105 +108,105 @@
 #' @importFrom cli cli_alert_success cli_alert_warning
 #' @export
 #' @rdname hcmc
-
 hcmc <- function(dat, r=20, targets=list(integer(0)),
                  target.index=rep(1L, nrow(dat)),
                  scorefun=iBIC, MAXTRIALS=5, verbose=TRUE) {
 
-  dat <- .check_input_data(dat)
-  dag <- graphNEL(colnames(dat), edgemode="directed")
-  attr(dat, "sanitycheck") <- TRUE
+    dat <- .check_input_data(dat)
+    dag <- graphNEL(colnames(dat), edgemode="directed")
+    attr(dat, "sanitycheck") <- TRUE
 
-  stopifnot(is.list(targets)) ## QC
-  scorefun <- match.fun(scorefun)
+    stopifnot(is.list(targets)) ## QC
+    scorefun <- match.fun(scorefun)
 
-  cached.scores <- list()
-  for (i in seq_len(ncol(dat)))
-      cached.scores[[i]] <- new.env(hash=TRUE, parent=emptyenv())
+    cached.scores <- list()
+    for (i in seq_len(ncol(dat)))
+        cached.scores[[i]] <- new.env(hash=TRUE, parent=emptyenv())
 
-  global.sufstats <- NULL
-  global.sufstats.fun <- attr(scorefun, "global.sufstats.fun")
-  if (!is.null(global.sufstats.fun)) {
-    if (verbose)
-      cli_alert_info("Calculating global sufficient statistics")
-    global.sufstats <- global.sufstats.fun(dat, targets, target.index)
-  }
-  scorefun.name <- NULL
-  if (!is.null(attr(scorefun, "scorefun.name")))
-    scorefun.name <- attr(scorefun, "scorefun.name")
+    global.sufstats <- NULL
+    global.sufstats.fun <- attr(scorefun, "global.sufstats.fun")
+    if (!is.null(global.sufstats.fun)) {
+        if (verbose)
+          cli_alert_info("Calculating global sufficient statistics")
+        global.sufstats <- global.sufstats.fun(dat, targets, target.index)
+    }
+    scorefun.name <- NULL
+    if (!is.null(attr(scorefun, "scorefun.name")))
+        scorefun.name <- attr(scorefun, "scorefun.name")
 
-  utargets <- sort(unique(unlist(targets)))
-  s0 <- -Inf
-  s1 <- scorefun(g=dag, dat=dat, targets=targets, target.index=target.index,
-                 cached.scores=cached.scores, global.sufstats=global.sufstats)
-  was_in_local_maximum <- local_maximum <- s1 < s0
-  trials <- escapes <- avg_trials_per_escape <- 0
+    utargets <- sort(unique(unlist(targets)))
+    s0 <- -Inf
+    s1 <- scorefun(g=dag, dat=dat, targets=targets, target.index=target.index,
+                   cached.scores=cached.scores, global.sufstats=global.sufstats)
+    was_in_local_maximum <- local_maximum <- s1 < s0
+    trials <- escapes <- avg_trials_per_escape <- 0
 
-  if (verbose) {
-    algname <- if (identical(targets, list(integer(0)))) "HCMC" else "iHCMC"
-    msg <- "Running the {algname} algorithm"
-    if (!is.null(scorefun.name))
-      msg <- paste(msg, "with the {scorefun.name} score function")
-    cli_progress_bar(msg)
-    msg <- "Score {s1} Escapes {escapes} Trials {avg_trials_per_escape}"
-    cli_progress_step(msg, spinner=TRUE)
-  }
+    if (verbose) {
+      algname <- if (identical(targets, list(integer(0)))) "HCMC" else "iHCMC"
+      msg <- "Running the {algname} algorithm"
+      if (!is.null(scorefun.name))
+          msg <- paste(msg, "with the {scorefun.name} score function")
+      cli_progress_bar(msg)
+      msg <- "Score {s1} Escapes {escapes} Trials {avg_trials_per_escape}"
+      cli_progress_step(msg, spinner=TRUE)
+    }
 
-  while (!local_maximum) {
-    s0 <- s1
-    dag <- rcar(dag, r, utargets)
-    ne <- ncr.nh(dag, utargets)
-    s1 <- sapply(ne, function(g, d, tgts, tgt.idx, chd.sco, gbl.sst)
-                       scorefun(g=g, dat=d, targets=tgts, target.index=tgt.idx,
-                                cached.scores=chd.sco, global.sufstats=gbl.sst),
-                 dat, targets, target.index, cached.scores, global.sufstats)
-    dag1 <- ne[[which.max(s1)]]
-    s1 <- max(s1)
-    local_maximum <- s1 <= s0
-    if (!local_maximum) {
-      dag <- dag1
-      if (was_in_local_maximum) {
-        escapes <- escapes + 1
-        avg_trials_per_escape <- (avg_trials_per_escape *
-                                  (escapes-1) + trials) / escapes
-        was_in_local_maximum <- FALSE
-      }
-      trials <- 0
-    } else if (trials < MAXTRIALS) {
-      s1 <- s0
-      dag <- rcar(dag, r, utargets)
-      local_maximum <- FALSE
-      was_in_local_maximum <- TRUE
-      trials <- trials + 1
-    } else
-      s1 <- s0
+    while (!local_maximum) {
+        s0 <- s1
+        dag <- rcar(dag, r, utargets)
+        ne <- ncr.nh(dag, utargets)
+        s1 <- sapply(ne, function(g, d, tgts, tgt.idx, chd.sco, gbl.sst)
+                           scorefun(g=g, dat=d, targets=tgts,
+                                    target.index=tgt.idx, cached.scores=chd.sco,
+                                    global.sufstats=gbl.sst),
+                     dat, targets, target.index, cached.scores, global.sufstats)
+        dag1 <- ne[[which.max(s1)]]
+        s1 <- max(s1)
+        local_maximum <- s1 <= s0
+        if (!local_maximum) {
+          dag <- dag1
+          if (was_in_local_maximum) {
+              escapes <- escapes + 1
+              avg_trials_per_escape <- (avg_trials_per_escape *
+                                        (escapes-1) + trials) / escapes
+              was_in_local_maximum <- FALSE
+          }
+          trials <- 0
+        } else if (trials < MAXTRIALS) {
+          s1 <- s0
+          dag <- rcar(dag, r, utargets)
+          local_maximum <- FALSE
+          was_in_local_maximum <- TRUE
+          trials <- trials + 1
+        } else
+          s1 <- s0
 
-    if (verbose)
-      cli_progress_update()
-  }
+        if (verbose)
+            cli_progress_update()
+    }
 
-  if (verbose) {
-    algname <- if (identical(targets, list(integer(0)))) "HCMC" else "iHCMC"
-    cli_progress_done("{algname} algorithm completed")
-  }
+    if (verbose) {
+        algname <- if (identical(targets, list(integer(0)))) "HCMC" else "iHCMC"
+        cli_progress_done("{algname} algorithm completed")
+    }
 
-  list(dag=dag, sco=s1)
+    list(dag=dag, sco=s1)
 }
 
 #' @importFrom cli cli_abort
 .check_input_data <- function(dat) {
-  if (!is.data.frame(dat) && !is.matrix(dat))
-    cli_abort(c("x"="Input data in 'dat' must be a data.frame or matrix object."))
+    if (!is.data.frame(dat) && !is.matrix(dat))
+      cli_abort(c("x"="Input data in 'dat' must be a data.frame or matrix object."))
 
-  if (is.null(colnames(dat))) {
-    msg <- paste("Input data in 'dat' must have column names corresponding to",
-                 "the random variables.")
-    cli_abort(c("x"=msg))
-  }
+    if (is.null(colnames(dat))) {
+      msg <- paste("Input data in 'dat' must have column names corresponding to",
+                   "the random variables.")
+      cli_abort(c("x"=msg))
+    }
 
-  dat <- as.matrix(dat)
-  if (!is.numeric(dat))
-    cli_abort(c("x"="Input data in 'dat' must be numeric."))
+    dat <- as.matrix(dat)
+    if (!is.numeric(dat))
+      cli_abort(c("x"="Input data in 'dat' must be numeric."))
 
-  dat
+    dat
 }

@@ -1,5 +1,5 @@
 ##
-## NEIGHBORHOODS
+## NEIGHBORHOODS (Castelo and Kocka, JMLR, 2003)
 ##
 
 ## NR: non-reversals neighborhood (addition and removal only)
@@ -7,28 +7,28 @@
 #' @importFrom graph edgeL removeEdge addEdge nodes
 #' @importFrom RBGL dag.sp
 nr.nh <- function(dag) {
-  v <- nodes(dag)
-  e <- edgeL(dag)
-  nr <- list()
-  nr.i <- 0
-  for (i in seq_along(e)) {
-    a <- v[e[[i]]$edges]
-    na <- setdiff(v, a)
-    for (j in seq_along(na)) { ## go through non-adjacent vertices
-      d <- dag.sp(dag, na[j])$distance[names(e)[i]]
-      if (is.nan(d) || is.infinite(d)) {
-        tmp.g <- addEdge(names(e)[i], na[j], dag)
-        nr.i <- nr.i + 1
-        nr[[nr.i]] <- tmp.g
-      }
+    v <- nodes(dag)
+    e <- edgeL(dag)
+    nr <- list()
+    nr.i <- 0
+    for (i in seq_along(e)) {
+        a <- v[e[[i]]$edges]
+        na <- setdiff(v, a)
+        for (j in seq_along(na)) { ## go through non-adjacent vertices
+            d <- dag.sp(dag, na[j])$distance[names(e)[i]]
+            if (is.nan(d) || is.infinite(d)) {
+                tmp.g <- addEdge(names(e)[i], na[j], dag)
+                nr.i <- nr.i + 1
+                nr[[nr.i]] <- tmp.g
+            }
+        }
+        for (j in seq_along(a)) { ## go through adjacent vertices
+            tmp.g <- removeEdge(names(e)[i], a[j], dag)
+            nr.i <- nr.i + 1
+            nr[[nr.i]] <- tmp.g
+        }
     }
-    for (j in seq_along(a)) { ## go through adjacent vertices
-      tmp.g <- removeEdge(names(e)[i], a[j], dag)
-      nr.i <- nr.i + 1
-      nr[[nr.i]] <- tmp.g
-    }
-  }
-  nr
+    nr
 }
 
 ## AR: all-reversals neighborhood (NR + all-arc-reversals)
@@ -36,23 +36,23 @@ nr.nh <- function(dag) {
 #' @importFrom graph edgeL removeEdge addEdge nodes
 #' @importFrom RBGL dag.sp
 ar.nh <- function(dag) {
-  v <- nodes(dag)
-  e <- edgeL(dag)
-  ar <- nr.nh(dag)
-  ar.i <- length(ar)
-  for (i in seq_along(e)) { ## reverse edges
-    a <- v[e[[i]]$edges]
-    for (j in seq_along(a)) { ## go through adjacent vertices
-      tmp.g <- removeEdge(names(e)[i], a[j], dag)
-      d <- dag.sp(tmp.g, names(e)[i])$distance[a[j]]
-      if (is.nan(d) || is.infinite(d)) {
-        tmp.g <- addEdge(a[j], names(e)[i], tmp.g)
-        ar.i <- ar.i + 1
-        ar[[ar.i]] <- tmp.g
-      }
+    v <- nodes(dag)
+    e <- edgeL(dag)
+    ar <- nr.nh(dag)
+    ar.i <- length(ar)
+    for (i in seq_along(e)) { ## reverse edges
+        a <- v[e[[i]]$edges]
+        for (j in seq_along(a)) { ## go through adjacent vertices
+            tmp.g <- removeEdge(names(e)[i], a[j], dag)
+            d <- dag.sp(tmp.g, names(e)[i])$distance[a[j]]
+            if (is.nan(d) || is.infinite(d)) {
+                tmp.g <- addEdge(a[j], names(e)[i], tmp.g)
+                ar.i <- ar.i + 1
+                ar[[ar.i]] <- tmp.g
+            }
+        }
     }
-  }
-  ar
+    ar
 }
 
 ## NCR: non-covered arc reversals neighborhood (NR + non-covered-arc-reversals)
@@ -60,32 +60,33 @@ ar.nh <- function(dag) {
 #' @importFrom graph edgeL removeEdge addEdge edgeMatrix nodes
 #' @importFrom RBGL dag.sp
 ncr.nh <- function(dag, utargets=integer(0)) {
-  v <- nodes(dag)
-  e <- edgeL(dag)
-  ncr <- nr.nh(dag)
-  ncr.i <- length(ncr)
-  em <- edgeMatrix(dag)
-  pasets <- split(v[em["from", ]], factor(v[em["to", ]], levels=v))
-  for (i in seq_along(e)) { ## reverse edges
-    a <- v[e[[i]]$edges]
-    for (j in seq_along(a)) { ## go through adjacent vertices
-      ced <- identical(sort(pasets[[names(e)[i]]]), sort(setdiff(pasets[[a[j]]], names(e)[i])))
-      if (!ced || any(c(e[[i]]$edges[j], i) %in% utargets)) { ## NCR including not interventionally covered
-        tmp.g <- removeEdge(names(e)[i], a[j], dag)
-        d <- dag.sp(tmp.g, names(e)[i])$distance[a[j]]
-        if (is.nan(d) || is.infinite(d)) {
-          tmp.g <- addEdge(a[j], names(e)[i], tmp.g)
-          ncr.i <- ncr.i + 1
-          ncr[[ncr.i]] <- tmp.g
+    v <- nodes(dag)
+    e <- edgeL(dag)
+    ncr <- nr.nh(dag)
+    ncr.i <- length(ncr)
+    em <- edgeMatrix(dag)
+    pasets <- split(v[em["from", ]], factor(v[em["to", ]], levels=v))
+    for (i in seq_along(e)) { ## reverse edges
+        a <- v[e[[i]]$edges]
+        for (j in seq_along(a)) { ## go through adjacent vertices
+            ced <- identical(sort(pasets[[names(e)[i]]]), sort(setdiff(pasets[[a[j]]], names(e)[i])))
+            if (!ced || any(c(e[[i]]$edges[j], i) %in% utargets)) { ## NCR including not interventionally covered
+                tmp.g <- removeEdge(names(e)[i], a[j], dag)
+                d <- dag.sp(tmp.g, names(e)[i])$distance[a[j]]
+                if (is.nan(d) || is.infinite(d)) {
+                    tmp.g <- addEdge(a[j], names(e)[i], tmp.g)
+                    ncr.i <- ncr.i + 1
+                    ncr[[ncr.i]] <- tmp.g
+                }
+            }
         }
-      }
     }
-  }
-  ncr
+    ncr
 }
 
 ##
-## REPEATED COVERED ARC REVERSAL ALGORITHM
+## REPEATED COVERED ARC REVERSAL ALGORITHM (Castelo and Kocka, JMLR, 2003)
+## ADAPTED TO INTERVENTIONS IN (Castelo, 2025)
 ##
 
 ## build a logical mask indicated what edges are "covered" in the input DAG
@@ -94,15 +95,15 @@ ncr.nh <- function(dag, utargets=integer(0)) {
 
 #' @importFrom graph nodes edgeMatrix
 cedges <- function(dag, utargets) {
-  v <- nodes(dag)
-  em <- edgeMatrix(dag)
-  pasets <- split(v[em["from", ]], factor(v[em["to", ]], levels=v))
-  cemask <- mapply(function(pafrom, pato, from) identical(sort(pafrom), sort(setdiff(pato, from))),
-                   pasets[em["from", ]], pasets[em["to", ]], v[em["from", ]])
-  temask <- rep(FALSE, ncol(em))
-  if (length(utargets) > 0)
-    temask <- colSums(matrix(as.vector(em) %in% utargets, ncol=ncol(em))) > 0
-  cemask & !temask
+    v <- nodes(dag)
+    em <- edgeMatrix(dag)
+    pasets <- split(v[em["from", ]], factor(v[em["to", ]], levels=v))
+    cemask <- mapply(function(pafrom, pato, from) identical(sort(pafrom), sort(setdiff(pato, from))),
+                     pasets[em["from", ]], pasets[em["to", ]], v[em["from", ]])
+    temask <- rep(FALSE, ncol(em))
+    if (length(utargets) > 0)
+        temask <- colSums(matrix(as.vector(em) %in% utargets, ncol=ncol(em))) > 0
+    cemask & !temask
 }
 
 ## resample helper function
@@ -113,23 +114,23 @@ resample <- function(x, ...) x[sample.int(length(x), ...)]
 
 #' @importFrom graph removeEdge addEdge numEdges edgeMatrix nodes
 rcar <- function(dag, r, utargets) {
-  if (numEdges(dag) == 0)
-    return(dag)
-  cemask <- cedges(dag, utargets)
-  if (!any(cemask))
-    return(dag)
+    if (numEdges(dag) == 0)
+        return(dag)
+    cemask <- cedges(dag, utargets)
+    if (!any(cemask))
+        return(dag)
 
-  tmp.g <- dag
-  v <- nodes(tmp.g)
-  rr <- sample(0:r, size=1)
-  for (i in seq_len(rr)) {
-    em <- edgeMatrix(tmp.g)
-    cemask <- cedges(tmp.g, utargets)
-    rndce <- resample(which(cemask), size=1)
-    tmp.g <- removeEdge(v[em["from", rndce]], v[em["to", rndce]], tmp.g)
-    tmp.g <- addEdge(v[em["to", rndce]], v[em["from", rndce]], tmp.g) ## a covered edge cannot introduce a cycle
-  }
-  tmp.g
+    tmp.g <- dag
+    v <- nodes(tmp.g)
+    rr <- sample(0:r, size=1)
+    for (i in seq_len(rr)) {
+        em <- edgeMatrix(tmp.g)
+        cemask <- cedges(tmp.g, utargets)
+        rndce <- resample(which(cemask), size=1)
+        tmp.g <- removeEdge(v[em["from", rndce]], v[em["to", rndce]], tmp.g)
+        tmp.g <- addEdge(v[em["to", rndce]], v[em["from", rndce]], tmp.g) ## a covered edge cannot introduce a cycle
+    }
+    tmp.g
 }
 
 
@@ -176,56 +177,57 @@ hillclimbing <- function(dat, targets=list(integer(0)),
                          target.index=rep(1L, nrow(dat)),  scorefun=iBIC,
                          verbose=TRUE) {
 
-  dat <- .check_input_data(dat)
-  dag <- graphNEL(colnames(dat), edgemode="directed")
-  attr(dat, "sanitycheck") <- TRUE
+    dat <- .check_input_data(dat)
+    dag <- graphNEL(colnames(dat), edgemode="directed")
+    attr(dat, "sanitycheck") <- TRUE
 
-  stopifnot(is.list(targets)) ## QC
-  scorefun <- match.fun(scorefun)
+    stopifnot(is.list(targets)) ## QC
+    scorefun <- match.fun(scorefun)
 
-  cached.scores <- list()
-  for (i in seq_len(ncol(dat)))
-      cached.scores[[i]] <- new.env(hash=TRUE, parent=emptyenv())
+    cached.scores <- list()
+    for (i in seq_len(ncol(dat)))
+        cached.scores[[i]] <- new.env(hash=TRUE, parent=emptyenv())
 
-  global.sufstats <- NULL
-  global.sufstats.fun <- attr(scorefun, "global.sufstats.fun")
-  if (!is.null(global.sufstats.fun)) {
+    global.sufstats <- NULL
+    global.sufstats.fun <- attr(scorefun, "global.sufstats.fun")
+    if (!is.null(global.sufstats.fun)) {
+        if (verbose)
+            cli_alert_info("Calculating global sufficient statistics")
+        global.sufstats <- global.sufstats.fun(dat, targets, target.index)
+    }
+    scorefun.name <- NULL
+    if (!is.null(attr(scorefun, "scorefun.name")))
+        scorefun.name <- attr(scorefun, "scorefun.name")
+
+    s0 <- -Inf
+    s1 <- scorefun(g=dag, dat=dat, targets=targets, target.index=target.index,
+                   cached.scores=cached.scores, global.sufstats=global.sufstats)
+
+    if (verbose) {
+        msg <- "Running a straightforward hill-climbing algorithm"
+        if (!is.null(scorefun.name))
+            msg <- paste(msg, "with the {scorefun.name} score function")
+        cli_progress_bar(msg)
+        cli_progress_step("Score {s1}", spinner=TRUE)
+    }
+
+    while (s1 > s0) {
+        s0 <- s1
+        ne <- ar.nh(dag)
+        s1 <- sapply(ne, function(g, d, tgts, tgt.idx, chd.sco, gbl.sst)
+                           scorefun(g=g, dat=d, targets=tgts,
+                                    target.index=tgt.idx, cached.scores=chd.sco,
+                                    global.sufstats=gbl.sst),
+                     dat, targets, target.index, cached.scores, global.sufstats)
+        dag <- ne[[which.max(s1)]]
+        s1 <- max(s1)
+
+        if (verbose)
+          cli_progress_update()
+    }
+
     if (verbose)
-      cli_alert_info("Calculating global sufficient statistics")
-    global.sufstats <- global.sufstats.fun(dat, targets, target.index)
-  }
-  scorefun.name <- NULL
-  if (!is.null(attr(scorefun, "scorefun.name")))
-    scorefun.name <- attr(scorefun, "scorefun.name")
+        cli_progress_done("straightforward hill-climbing algorithm completed")
 
-  s0 <- -Inf
-  s1 <- scorefun(g=dag, dat=dat, targets=targets, target.index=target.index,
-                 cached.scores=cached.scores, global.sufstats=global.sufstats)
-
-  if (verbose) {
-    msg <- "Running a straightforward hill-climbing algorithm"
-    if (!is.null(scorefun.name))
-      msg <- paste(msg, "with the {scorefun.name} score function")
-    cli_progress_bar(msg)
-    cli_progress_step("Score {s1}", spinner=TRUE)
-  }
-
-  while (s1 > s0) {
-    s0 <- s1
-    ne <- ar.nh(dag)
-    s1 <- sapply(ne, function(g, d, tgts, tgt.idx, chd.sco, gbl.sst)
-                       scorefun(g=g, dat=d, targets=tgts, target.index=tgt.idx,
-                                cached.scores=chd.sco, global.sufstats=gbl.sst),
-                 dat, targets, target.index, cached.scores, global.sufstats)
-    dag <- ne[[which.max(s1)]]
-    s1 <- max(s1)
-
-    if (verbose)
-      cli_progress_update()
-  }
-
-  if (verbose)
-    cli_progress_done("straightforward hill-climbing algorithm completed")
-
-  list(dag=dag, sco=s1)
+    list(dag=dag, sco=s1)
 }

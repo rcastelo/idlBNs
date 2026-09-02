@@ -113,56 +113,57 @@ iBIC <- function(g, dat, targets=list(integer(0)),
                  target.index=rep(1L, nrow(dat)),
                  cached.scores=NULL, global.sufstats=NULL) {
 
-  if (is.null(attr(dat, "sanitycheck"))) {
-    dat <- .check_input_data(dat)
-    .check_g_dat_consistency(g, dat)
-  }
-
-  v <- match(nodes(g), colnames(dat))
-  p <- numNodes(g)
-  n <- nrow(dat)
-  em <- edgeMatrix(g)
-  pasets <- split(em["from", ], factor(v[em["to", ]], levels=v))
-  stopifnot(identical(names(pasets), as.character(v)))
-  .check_cached_scores(g, cached.scores)
-
-  if (is.null(global.sufstats))
-    global.sufstats <- .iBIC.global.sufstats(dat, targets, target.index)
-  onlyobsdata <- identical(targets, list(integer(0)))
-
-  sco <- numeric(length(v))
-  for (i in seq_along(pasets)) {
-    s <- NULL
-    if (!is.null(cached.scores)) {
-        k <- .cached_scores_key(pasets[[i]])
-        s <- cached.scores[[i]][[k]]
+    if (is.null(attr(dat, "sanitycheck"))) {
+        dat <- .check_input_data(dat)
+        .check_g_dat_consistency(g, dat)
     }
-    if (is.null(s)) {
-        if (onlyobsdata) {
-          Y <- dat[, v[i]]
-          Z <- cbind(1, dat[, pasets[[i]], drop=FALSE])
-        } else {
-          Y <- dat[global.sufstats$non.int[[i]], v[i]]
-          Z <- cbind(1, dat[global.sufstats$non.int[[i]], pasets[[i]],
-                     drop=FALSE])
-        }
-        sigma2 <- sum(Y^2)
 
-        ## scaled error covariance using QR decomposition
-        Q <- qr.Q(qr(Z))
-        sigma2 <- sigma2 - sum((Y %*% Q)^2)
-        lambda <- 0.5 * log(n)
-        sco[i] <- -0.5 * global.sufstats$data.count[i] *
-                  (1 + log(sigma2 / global.sufstats$data.count[i])) -
-                  lambda * (1 + length(pasets[[i]]))
+    v <- match(nodes(g), colnames(dat))
+    p <- numNodes(g)
+    n <- nrow(dat)
+    em <- edgeMatrix(g)
+    pasets <- split(em["from", ], factor(v[em["to", ]], levels=v))
+    stopifnot(identical(names(pasets), as.character(v)))
+    .check_cached_scores(g, cached.scores)
+
+    if (is.null(global.sufstats))
+        global.sufstats <- .iBIC.global.sufstats(dat, targets, target.index)
+    onlyobsdata <- identical(targets, list(integer(0)))
+
+    sco <- numeric(length(v))
+    for (i in seq_along(pasets)) {
+        s <- NULL
         if (!is.null(cached.scores)) {
-            cached.scores[[i]][[k]] <- sco[i]
+            k <- .cached_scores_key(pasets[[i]])
+            s <- cached.scores[[i]][[k]]
         }
-    } else
-        sco[i] <- s
-  }
+        if (is.null(s)) {
+            if (onlyobsdata) {
+                Y <- dat[, v[i]]
+                Z <- cbind(1, dat[, pasets[[i]], drop=FALSE])
+            } else {
+                Y <- dat[global.sufstats$non.int[[i]], v[i]]
+                Z <- cbind(1, dat[global.sufstats$non.int[[i]], pasets[[i]],
+                           drop=FALSE])
+            }
+            sigma2 <- sum(Y^2)
 
-  sum(sco)
+            ## scaled error covariance using QR decomposition
+            Q <- qr.Q(qr(Z))
+            sigma2 <- sigma2 - sum((Y %*% Q)^2)
+            lambda <- 0.5 * log(n)
+            s <- -0.5 * global.sufstats$data.count[i] *
+                 (1 + log(sigma2 / global.sufstats$data.count[i])) -
+                 lambda * (1 + length(pasets[[i]]))
+
+            if (!is.null(cached.scores))
+                cached.scores[[i]][[k]] <- s
+        }
+
+        sco[i] <- s
+    }
+
+    sum(sco)
 }
 ## assign a name attribute to the iBIC() scoring function for reporting purposes
 attr(iBIC, "scorefun.name") <- "iBIC"
@@ -171,11 +172,11 @@ attr(iBIC, "scorefun.name") <- "iBIC"
 ## observations into a logical matrix of observations by variables,
 ## where TRUE indicates that a variable has been intervened in a observation
 .targets2mat <- function(p, targets, target.index) {
-  res <- matrix(FALSE, nrow=length(target.index), ncol=p)
-  ridx <- rep(seq_along(target.index), lengths(targets)[target.index])
-  cidx <- unlist(targets[target.index])
-  res[cbind(ridx, cidx)] <- TRUE
-  res
+    res <- matrix(FALSE, nrow=length(target.index), ncol=p)
+    ridx <- rep(seq_along(target.index), lengths(targets)[target.index])
+    cidx <- unlist(targets[target.index])
+    res[cbind(ridx, cidx)] <- TRUE
+    res
 }
 
 ## cached scores key for a given parent set, computed as sorted parent indices
@@ -184,10 +185,11 @@ attr(iBIC, "scorefun.name") <- "iBIC"
 ## cached scores for a given parent set in the corresponding per-node
 ## environment.
 .cached_scores_key <- function(paset) {
-  k <- paste(sort.int(paset), collapse=":")
-  if (nchar(k) == 0L)
-    k <- ":"
-  k
+    k <- paste(sort.int(paset), collapse=":")
+    if (nchar(k) == 0L)
+        k <- ":"
+
+    k
 }
 
 ## calculate global sufficient statistics for the iBIC score, which do not
@@ -207,6 +209,7 @@ attr(iBIC, "scorefun.name") <- "iBIC"
         non.int <- lapply(seq_len(ncol(A)), function(i) which(A[, i]))
         data.count <- colSums(A)
     }
+
     list(non.int=non.int, data.count=data.count, n=n)
 }
 
@@ -219,27 +222,31 @@ attr(iBIC, "global.sufstats.fun") <- .iBIC.global.sufstats
 #' @importFrom graph numNodes
 #' @importFrom cli cli_abort
 .check_cached_scores <- function(g, cached.scores) {
-  if (!is.null(cached.scores)) {
-    if (!is.list(cached.scores) || length(cached.scores) != numNodes(g)) {
-      msg <- paste("cached.scores must be a list of length equal to the number",
-                   "of nodes in g (", numNodes(g), ")")
-      cli_abort(c("x"=msg))
+    if (!is.null(cached.scores)) {
+        if (!is.list(cached.scores) || length(cached.scores) != numNodes(g)) {
+            msg <- paste("'cached.scores' must be a list of length equal to",
+                         "the number of vertices in g (", numNodes(g), ")")
+            cli_abort(c("x"=msg))
+        }
+        if (any(vapply(cached.scores, function(x) !is.environment(x),
+                       logical(1)))) {
+            msg <- paste("Each element of 'cached.scores' must be",
+                         "an environment")
+            cli_abort(c("x"=msg))
+        }
     }
-    if (any(vapply(cached.scores, function(x) !is.environment(x), logical(1))))
-      cli_abort(c("x"="Each element of cached.scores must be an environment"))
-  }
 }
 
 #' @importFrom cli cli_abort
 .check_g_dat_consistency <- function(g, dat) {
-  if (ncol(dat) != numNodes(g))
-      cli_abort(c("x"="The number of columns in dat must equal the number of nodes in g"))
-  if (is.null(colnames(dat)))
-      cli_abort(c("x"="Input data in dat must have column names corresponding to the node names in g"))
-  if (!all(nodes(g) %in% colnames(dat)))
-      cli_abort(c("x"="All nodes in g must be present as column names in dat"))
-  else if (!all(nodes(g) == colnames(dat)))
-      cli_abort(c("x"="The order of nodes in g must match the order of column names in dat"))
+    if (ncol(dat) != numNodes(g))
+        cli_abort(c("x"="The number of columns in dat must equal the number of nodes in g"))
+    if (is.null(colnames(dat)))
+        cli_abort(c("x"="Input data in dat must have column names corresponding to the node names in g"))
+    if (!all(nodes(g) %in% colnames(dat)))
+        cli_abort(c("x"="All nodes in g must be present as column names in dat"))
+    else if (!all(nodes(g) == colnames(dat)))
+        cli_abort(c("x"="The order of nodes in g must match the order of column names in dat"))
 }
 
 #' @title BGe score for interventional Gaussian data
@@ -359,50 +366,51 @@ iBGe <- function(g, dat, targets=list(integer(0)),
                  target.index=rep(1L, nrow(dat)),
                  cached.scores=NULL, global.sufstats=NULL) {
 
-  if (is.null(attr(dat, "sanitycheck"))) {
-    dat <- .check_input_data(dat)
-    .check_g_dat_consistency(g, dat)
-  }
-
-  v <- match(nodes(g), colnames(dat))
-  em <- edgeMatrix(g)
-  pasets <- split(em["from", ], factor(v[em["to", ]], levels=v))
-  stopifnot(identical(names(pasets), as.character(v)))
-  .check_cached_scores(g, cached.scores)
-
-  if (is.null(global.sufstats))
-    global.sufstats <- .iBGe.global.sufstats(dat, targets, target.index)
-
-  sco <- numeric(length(v))
-  for (i in seq_along(pasets)) {
-    s <- NULL
-    if (!is.null(cached.scores)) {
-      k <- .cached_scores_key(pasets[[i]])
-      s <- cached.scores[[i]][[k]]
+    if (is.null(attr(dat, "sanitycheck"))) {
+        dat <- .check_input_data(dat)
+        .check_g_dat_consistency(g, dat)
     }
-    if (is.null(s)) {
-      TNj <- global.sufstats$TN[[i]]
-      lp <- length(pasets[[i]])
-      A <- TNj[i, i]
-      awpNd2 <- (global.sufstats$awpN[i] - global.sufstats$p + lp + 1) / 2
-      if (lp == 0L)
-        s <- global.sufstats$scoreconstvec[[i]][1L] - awpNd2 * log(A)
-      else {
-        D <- TNj[pasets[[i]], pasets[[i]], drop=FALSE]
-        R <- chol(D)
-        logdetD <- 2 * sum(log(diag(R)))
-        B <- TNj[i, pasets[[i]]]
-        logdetpart2 <- log(A - sum(backsolve(R, B, transpose=TRUE)^2))
-        s <- global.sufstats$scoreconstvec[[i]][lp + 1L] -
-             awpNd2 * logdetpart2 - logdetD / 2
-      }
-      if (!is.null(cached.scores))
-        cached.scores[[i]][[k]] <- s
-    }
-    sco[i] <- s
-  }
 
-  sum(sco)
+    v <- match(nodes(g), colnames(dat))
+    em <- edgeMatrix(g)
+    pasets <- split(em["from", ], factor(v[em["to", ]], levels=v))
+    stopifnot(identical(names(pasets), as.character(v)))
+    .check_cached_scores(g, cached.scores)
+
+    if (is.null(global.sufstats))
+        global.sufstats <- .iBGe.global.sufstats(dat, targets, target.index)
+
+    sco <- numeric(length(v))
+    for (i in seq_along(pasets)) {
+        s <- NULL
+        if (!is.null(cached.scores)) {
+            k <- .cached_scores_key(pasets[[i]])
+            s <- cached.scores[[i]][[k]]
+        }
+        if (is.null(s)) {
+            TNj <- global.sufstats$TN[[i]]
+            lp <- length(pasets[[i]])
+            A <- TNj[i, i]
+            awpNd2 <- (global.sufstats$awpN[i] - global.sufstats$p + lp + 1) / 2
+            if (lp == 0L)
+                s <- global.sufstats$scoreconstvec[[i]][1L] - awpNd2 * log(A)
+            else {
+                D <- TNj[pasets[[i]], pasets[[i]], drop=FALSE]
+                R <- chol(D)
+                logdetD <- 2 * sum(log(diag(R)))
+                B <- TNj[i, pasets[[i]]]
+                logdetpart2 <- log(A - sum(backsolve(R, B, transpose=TRUE)^2))
+                s <- global.sufstats$scoreconstvec[[i]][lp + 1L] -
+                     awpNd2 * logdetpart2 - logdetD / 2
+            }
+
+            if (!is.null(cached.scores))
+                cached.scores[[i]][[k]] <- s
+        }
+        sco[i] <- s
+    }
+
+    sum(sco)
 }
 ## assign a name attribute to the iBGe() scoring function for reporting purposes
 attr(iBGe, "scorefun.name") <- "iBGe"
@@ -415,63 +423,64 @@ attr(iBGe, "scorefun.name") <- "iBGe"
 ## and other stuff not exposed in the iBGe() function of this package
 .iBGe.global.sufstats <- function(dat, targets=list(integer(0)),
                                   target.index=rep(1L, nrow(dat))) {
-  stopifnot(is.matrix(dat)) ## QC
-  p <- ncol(dat)
-  n <- nrow(dat)
+    stopifnot(is.matrix(dat)) ## QC
+    p <- ncol(dat)
+    n <- nrow(dat)
 
-  ## BGe equivalent sample size for the prior distribution of the mean vector
-  ## set to 1, which assigns the weakest possible informative weight to this
-  ## prior distribution
-  ## see BiDAG::scoreparameters for further details on this parameter
-  ## we might want to expose this as a user parameter in the future
-  am <- 1
+    ## BGe equivalent sample size for the prior distribution of the mean vector
+    ## set to 1, which assigns the weakest possible informative weight to this
+    ## prior distribution
+    ## see BiDAG::scoreparameters for further details on this parameter
+    ## we might want to expose this as a user parameter in the future
+    am <- 1
 
-  ## BGe edge penalization factor, set to 1 (no penalization)
-  ## see BiDAG::scoreparameters for further details on this parameter
-  ## we might want to expose this as a user parameter in the future
-  edgepf <- 1
+    ## BGe edge penalization factor, set to 1 (no penalization)
+    ## see BiDAG::scoreparameters for further details on this parameter
+    ## we might want to expose this as a user parameter in the future
+    edgepf <- 1
 
-  aw <- p + am + 1
-  T0scale <- am * (aw - p - 1) / (am + 1) # follows from [GH2002, eqs. (19, 20)]
-  T0 <- diag(T0scale, p, p)
-  logedgepf <- log(edgepf)
-  l <- seq_len(p) # l = number of parents + 1
+    aw <- p + am + 1
+    T0scale <- am * (aw - p - 1) / (am + 1) # follows [GH2002, eqs. (19, 20)]
+    T0 <- diag(T0scale, p, p)
+    logedgepf <- log(edgepf)
+    l <- seq_len(p) # l = number of parents + 1
 
-  non.int <- NULL
-  data.count <- rep(n, p)
-  onlyobsdata <- identical(targets, list(integer(0)))
-  if (!onlyobsdata) {
-    ## index and tally the data points that have not been intervened
-    A <- !.targets2mat(p, targets, target.index)
-    non.int <- lapply(seq_len(ncol(A)), function(i) which(A[, i]))
-    data.count <- colSums(A)
-  }
-
-  TN <- vector("list", p)
-  awpN <- numeric(p)
-  scoreconstvec <- vector("list", p)
-  for (j in seq_len(p)) {
-    Xj <- dat
-    if (!onlyobsdata)
-      Xj <- dat[non.int[[j]], , drop=FALSE]
-    Nj <- data.count[j]
-    if (Nj < 2) {
-      msg <- paste("Not enough observational input data in column number", j,
-                   "(", Nj, "observed values)")
-      cli_abort(c("x"=msg))
+    non.int <- NULL
+    data.count <- rep(n, p)
+    onlyobsdata <- identical(targets, list(integer(0)))
+    if (!onlyobsdata) {
+        ## index and tally the data points that have not been intervened
+        A <- !.targets2mat(p, targets, target.index)
+        non.int <- lapply(seq_len(ncol(A)), function(i) which(A[, i]))
+        data.count <- colSums(A)
     }
-    means <- colMeans(Xj)
-    covmat <- cov(Xj) * (Nj - 1)
-    TN[[j]] <- T0 + covmat + (am * Nj / (am + Nj)) * outer(means, means)
-    awpN[j] <- aw + Nj
-    constscorefact <- -(Nj / 2) * log(pi) + 0.5 * log(am / (am + Nj))
-    awp <- aw - p + l
-    scoreconstvec[[j]] <- constscorefact - lgamma(awp / 2) + lgamma((awp + Nj) / 2) +
-                          ((awp + l - 1) / 2) * log(T0scale) - l * logedgepf
-  }
 
-  list(p=p, aw=aw, T0scale=T0scale, TN=TN, awpN=awpN,
-       scoreconstvec=scoreconstvec, non.int=non.int, data.count=data.count, n=n)
+    TN <- vector("list", p)
+    awpN <- numeric(p)
+    scoreconstvec <- vector("list", p)
+    for (j in seq_len(p)) {
+        Xj <- dat
+        if (!onlyobsdata)
+            Xj <- dat[non.int[[j]], , drop=FALSE]
+        Nj <- data.count[j]
+        if (Nj < 2) {
+            msg <- paste("Not enough observational input data in column number",
+                         j, "(", Nj, "observed values)")
+            cli_abort(c("x"=msg))
+        }
+        means <- colMeans(Xj)
+        covmat <- cov(Xj) * (Nj - 1)
+        TN[[j]] <- T0 + covmat + (am * Nj / (am + Nj)) * outer(means, means)
+        awpN[j] <- aw + Nj
+        constscorefact <- -(Nj / 2) * log(pi) + 0.5 * log(am / (am + Nj))
+        awp <- aw - p + l
+        scoreconstvec[[j]] <- constscorefact - lgamma(awp / 2) +
+                              lgamma((awp + Nj) / 2) +
+                              ((awp + l - 1) / 2) * log(T0scale) - l * logedgepf
+    }
+
+    list(p=p, n=n, aw=aw, T0scale=T0scale, TN=TN, awpN=awpN,
+         scoreconstvec=scoreconstvec, non.int=non.int, data.count=data.count)
 }
 
 ## assign the iBGe global sufficient statistics function as an attribute to the
@@ -489,23 +498,23 @@ attr(iBGe, "global.sufstats.fun") <- .iBGe.global.sufstats
 .vendored_iBGe <- function(g, dat, targets=list(integer(0)),
                            target.index=rep(1L, nrow(dat))) { # nocov start
 
-  .check_g_dat_consistency(g, dat)
-  v <- nodes(g)
-  p <- numNodes(g)
-  n <- nrow(dat)
-  em <- edgeMatrix(g)
-  pasets <- split(v[em["from", ]], factor(v[em["to", ]], levels=v))
-  stopifnot(identical(names(pasets), as.character(v)))
+    .check_g_dat_consistency(g, dat)
+    v <- nodes(g)
+    p <- numNodes(g)
+    n <- nrow(dat)
+    em <- edgeMatrix(g)
+    pasets <- split(v[em["from", ]], factor(v[em["to", ]], levels=v))
+    stopifnot(identical(names(pasets), as.character(v)))
 
-  ## create intervention matrix for BiDAG
-  A <- .targets2mat(p, targets, target.index)
-  I <- matrix(0, nrow=n, ncol=p)
-  I[A] <- 1
-  A <- as(as(g, "graphAM"), "matrix")
+    ## create intervention matrix for BiDAG
+    A <- .targets2mat(p, targets, target.index)
+    I <- matrix(0, nrow=n, ncol=p)
+    I[A] <- 1
+    A <- as(as(g, "graphAM"), "matrix")
 
-  param <- .scoreparameters(scoretype="usr", data=dat,
-                            usrpar=list(pctesttype="bge", Tmat=I))
-  .DAGscore(param, A)
+    param <- .scoreparameters(scoretype="usr", data=dat,
+                              usrpar=list(pctesttype="bge", Tmat=I))
+    .DAGscore(param, A)
 } # nocov end
 
 ## the code below has been copied and adapted from
@@ -520,175 +529,186 @@ usrscoreparameters <- function(initparam,
                                usrpar = list(Tmat = NULL, pctesttype = "bge",
                                              am = 1, chi = 1, edgepf = 1,
                                              edgepmat = NULL)) { # nocov start
-  n <- initparam$n
-  Tmat <- usrpar$Tmat
-  nodeparams <- vector("list", n)
-  for (jj in 1:n){
-    nint_obs <- which(Tmat[, jj] == 0)
-    if (length(nint_obs) < 2) {
-      stop("Not enough observational data.")
-    } else {
-      nodeparams[[jj]] <- .scoreparameters(scoretype = usrpar$pctesttype,
-                                           data = initparam$data[nint_obs, ],
-                                           weightvector = initparam$weightvector[nint_obs],
-                                           bgepar = list(am = usrpar$am),
-                                           bdepar = list(chi = usrpar$chi, edgepf = usrpar$edgepf),
-                                           bdecatpar = list(chi = usrpar$chi, edgepf = usrpar$edgepf),
-                                           edgepmat = usrpar$edgepmat)
+    n <- initparam$n
+    Tmat <- usrpar$Tmat
+    nodeparams <- vector("list", n)
+    for (jj in 1:n) {
+        nint_obs <- which(Tmat[, jj] == 0)
+        if (length(nint_obs) < 2) {
+            stop("Not enough observational data.")
+        } else {
+            nodeparams[[jj]] <- .scoreparameters(scoretype=usrpar$pctesttype,
+                                                 data=initparam$data[nint_obs, ],
+                                                 weightvector=initparam$weightvector[nint_obs],
+                                                 bgepar=list(am=usrpar$am),
+                                                 bdepar=list(chi=usrpar$chi,
+                                                             edgepf=usrpar$edgepf),
+                                                 bdecatpar=list(chi=usrpar$chi,
+                                                                edgepf=usrpar$edgepf),
+                                                 edgepmat=usrpar$edgepmat)
+        }
     }
-  }
-  initparam$nodeparams <- nodeparams
+    initparam$nodeparams <- nodeparams
 
-  initparam
+    initparam
 } # nocov end
 
 ## here we have put only the BGe part
 
 #' @importFrom stats cov cov.wt
 .scoreparameters <- function(scoretype=c("bge","bde","bdecat","usr"), data,
-                          bgepar=list(am=1, aw=NULL, edgepf=1), bdepar=list(chi=0.5, edgepf=2),
-                          bdecatpar=list(chi=0.5, edgepf=2), dbnpar=list(samestruct=TRUE,
-                            slices=2, b=0, stationary=TRUE, rowids=NULL, datalist=NULL,
-                            learninit=TRUE), usrpar=list(pctesttype=c("bge","bde","bdecat")),
-                          mixedpar=list(nbin=0), MDAG=FALSE, DBN=FALSE, weightvector=NULL,
-                          bgnodes=NULL, edgepmat=NULL, nodeslabels=NULL) { # nocov start
+                             bgepar=list(am=1, aw=NULL, edgepf=1),
+                             bdepar=list(chi=0.5, edgepf=2),
+                             bdecatpar=list(chi=0.5, edgepf=2),
+                             dbnpar=list(samestruct=TRUE, slices=2, b=0,
+                                         stationary=TRUE, rowids=NULL,
+                                         datalist=NULL, learninit=TRUE),
+                             usrpar=list(pctesttype=c("bge","bde","bdecat")),
+                             mixedpar=list(nbin=0), MDAG=FALSE, DBN=FALSE,
+                             weightvector=NULL, bgnodes=NULL, edgepmat=NULL,
+                             nodeslabels=NULL) { # nocov start
 
-  initparam<-list()
+    initparam<-list()
 
-  bgn<-length(bgnodes)
-  n <- ncol(data)
-  nsmall<-n-bgn #number of nodes in the network excluding root nodes
+    bgn<-length(bgnodes)
+    n <- ncol(data)
+    nsmall<-n-bgn #number of nodes in the network excluding root nodes
 
-  if (ncol(data)!=nsmall+bgn)
-    stop("n and the number of columns in the data do not match")
+    if (ncol(data)!=nsmall+bgn)
+        stop("n and the number of columns in the data do not match")
 
-  if (!is.null(weightvector)) {
-    if (length(weightvector)!=nrow(data)) {
-      stop("Length of the weightvector does not match the number of rows (observations) in data")
+    if (!is.null(weightvector)) {
+        if (length(weightvector)!=nrow(data)) {
+            stop("Length of the weightvector does not match the number of rows (observations) in data")
+        }
     }
-  }
 
-  if (is.null(nodeslabels)) {
-    if(all(is.character(colnames(data)))){
-      nodeslabels<-colnames(data)
+    if (is.null(nodeslabels)) {
+        if(all(is.character(colnames(data)))){
+            nodeslabels<-colnames(data)
+        } else {
+            nodeslabels<-sapply(c(1:n), function(x)paste("v",x,sep=""))
+        }
+    }
+
+    multwv<-NULL
+
+    if (is.null(dbnpar$datalist)) colnames(data)<-nodeslabels
+
+    initparam$labels<-nodeslabels
+    initparam$type<-scoretype
+    initparam$DBN<-DBN
+    initparam$MDAG<-MDAG
+    initparam$weightvector<-weightvector
+    initparam$data<-data
+
+    initparam$bgnodes<-bgnodes
+    initparam$static<-bgnodes
+    if(!is.null(bgnodes))
+        initparam$mainnodes<-c(1:n)[-bgnodes]
+    else
+        initparam$mainnodes<-c(1:n)
+
+    initparam$bgn<-bgn
+    initparam$n<-n
+    initparam$nsmall<-nsmall
+
+    initparam$labels.short<-initparam$labels
+
+    if (is.null(edgepmat)) {
+        initparam$logedgepmat <- NULL
     } else {
-      nodeslabels<-sapply(c(1:n), function(x)paste("v",x,sep=""))
+        if (all(edgepmat>0))
+            initparam$logedgepmat <- log(edgepmat)
+        else
+            stop("all entries of edgepmat matrix must be bigger than 0! 1 corresponds to no penalization")
     }
-  }
 
-  multwv<-NULL
+    if (scoretype == "bge") {
 
-  if (is.null(dbnpar$datalist)) colnames(data)<-nodeslabels
+        if (is.null(bgepar$am)) {
+            bgepar$am<-1
+        }
+        if (is.null(bgepar$aw)) {
+            bgepar$aw<-n+bgepar$am+1
+        }
+        if (is.null(bgepar$edgepf)) {
+            bgepar$edgepf<-1
+        }
 
-  initparam$labels<-nodeslabels
-  initparam$type<-scoretype
-  initparam$DBN<-DBN
-  initparam$MDAG<-MDAG
-  initparam$weightvector<-weightvector
-  initparam$data<-data
+        if (is.null(weightvector)) {
+            N<-nrow(data)
+            covmat<-cov(data)*(N-1)
+            means<-colMeans(data)
+        } else {
+            N<-sum(weightvector)
+            forcov<-cov.wt(data,wt=weightvector,cor=TRUE,method="ML")
+            covmat<-forcov$cov*N
+            means<-forcov$center
+        }
 
-  initparam$bgnodes<-bgnodes
-  initparam$static<-bgnodes
-  if(!is.null(bgnodes)) {
-    initparam$mainnodes<-c(1:n)[-bgnodes]
-  } else initparam$mainnodes<-c(1:n)
+        initparam$am <- bgepar$am # store parameters
+        initparam$aw <- bgepar$aw
+        initparam$pf <- bgepar$edgepf
 
-  initparam$bgn<-bgn
-  initparam$n<-n
-  initparam$nsmall<-nsmall
+        initparam$N <- N # store effective sample size
+        #initparam$covmat <- (N-1)*covmat
+        initparam$means <- means # store means
 
-  initparam$labels.short<-initparam$labels
+        mu0<-numeric(n)
+        #https://arxiv.org/pdf/1302.6808.pdf page 10
+        T0scale <- bgepar$am*(bgepar$aw-n-1)/(bgepar$am+1) # This follows from equations (19) and (20) of [GH2002]
+        T0<-diag(T0scale,n,n)
+        initparam$TN <- T0 + covmat + ((bgepar$am*N)/(bgepar$am+N))* (mu0 - means)%*%t(mu0 - means)
+        initparam$awpN<-bgepar$aw+N
+        constscorefact<- -(N/2)*log(pi) + (1/2)*log(bgepar$am/(bgepar$am+N))
 
-  if (is.null(edgepmat)) {
-    initparam$logedgepmat <- NULL
-  } else {
-    if(all(edgepmat>0)) {
-    initparam$logedgepmat <- log(edgepmat)
+        initparam$muN <- (N*means + bgepar$am*mu0)/(N + bgepar$am) # posterior mean mean
+        initparam$SigmaN <- initparam$TN/(initparam$awpN-n-1) # posterior mode covariance matrix
+
+        initparam$scoreconstvec<-numeric(n)
+        for (j in (1:n)) {# j represents the number of parents plus 1
+            awp<-bgepar$aw-n+j
+            initparam$scoreconstvec[j] <- constscorefact - lgamma(awp/2) +
+                                          lgamma((awp+N)/2) +
+                                          ((awp+j-1)/2)*log(T0scale) - j*log(initparam$pf)
+        }
+
+    } else if (scoretype == "usr") { ## usr
+        if (is.null(usrpar$pctesttype)){usrpar$pctesttype <- "usr"}
+        initparam$pctesttype <- usrpar$pctesttype
+        initparam <- usrscoreparameters(initparam, usrpar)
     } else
-      stop("all entries of edgepmat matrix must be bigger than 0! 1 corresponds to no penalization")
-  }
+        stop("not supported in this package.")
 
-  if (scoretype == "bge") {
+    attr(initparam, "class") <- "scoreparameters"
 
-    if(is.null(bgepar$am)) {
-      bgepar$am<-1
-    }
-    if(is.null(bgepar$aw)) {
-      bgepar$aw<-n+bgepar$am+1
-    }
-    if(is.null(bgepar$edgepf)) {
-      bgepar$edgepf<-1
-    }
-
-    if (is.null(weightvector)) {
-      N<-nrow(data)
-      covmat<-cov(data)*(N-1)
-      means<-colMeans(data)
-    } else {
-      N<-sum(weightvector)
-      forcov<-cov.wt(data,wt=weightvector,cor=TRUE,method="ML")
-      covmat<-forcov$cov*N
-      means<-forcov$center
-    }
-
-    initparam$am <- bgepar$am # store parameters
-    initparam$aw <- bgepar$aw
-    initparam$pf <- bgepar$edgepf
-
-    initparam$N <- N # store effective sample size
-    #initparam$covmat <- (N-1)*covmat
-    initparam$means <- means # store means
-
-    mu0<-numeric(n)
-    #https://arxiv.org/pdf/1302.6808.pdf page 10
-    T0scale <- bgepar$am*(bgepar$aw-n-1)/(bgepar$am+1) # This follows from equations (19) and (20) of [GH2002]
-    T0<-diag(T0scale,n,n)
-    initparam$TN <- T0 + covmat + ((bgepar$am*N)/(bgepar$am+N))* (mu0 - means)%*%t(mu0 - means)
-    initparam$awpN<-bgepar$aw+N
-    constscorefact<- -(N/2)*log(pi) + (1/2)*log(bgepar$am/(bgepar$am+N))
-
-    initparam$muN <- (N*means + bgepar$am*mu0)/(N + bgepar$am) # posterior mean mean
-    initparam$SigmaN <- initparam$TN/(initparam$awpN-n-1) # posterior mode covariance matrix
-
-    initparam$scoreconstvec<-numeric(n)
-    for (j in (1:n)) {# j represents the number of parents plus 1
-      awp<-bgepar$aw-n+j
-      initparam$scoreconstvec[j]<-constscorefact - lgamma(awp/2) + lgamma((awp+N)/2) + ((awp+j-1)/2)*log(T0scale) - j*log(initparam$pf)
-    }
-
-  } else if (scoretype == "usr") { ## usr
-    if(is.null(usrpar$pctesttype)){usrpar$pctesttype <- "usr"}
-    initparam$pctesttype <- usrpar$pctesttype
-    initparam <- usrscoreparameters(initparam, usrpar)
-  } else
-    stop("not supported in this package.")
-
-  attr(initparam, "class") <- "scoreparameters"
-  return(initparam)
+    return(initparam)
 } # nocov end
 
 ### This function evaluates the log score of a node given its parents
 
 .usrDAGcorescore <- function (j, parentnodes, n, param) { # nocov start
-  .DAGcorescore(j, parentnodes, n, param$nodeparams[[j]])
+    .DAGcorescore(j, parentnodes, n, param$nodeparams[[j]])
 } # nocov end
 
 .DAGscore <- function(scorepar, incidence){ # nocov start
-  if(scorepar$DBN) {
-    stop("To calculate DBN score DBNscore should be used!")
-  }
-  n<-ncol(scorepar$data)
-  if(scorepar$bgn==0) {
-    mainnodes<-c(1:scorepar$n)
-  } else {
-    mainnodes<-c(1:n)[-scorepar$bgnodes]
-  }
-  P_local <- numeric(n)
-  for (j in mainnodes)  { #j is a node at which scoring is done
-    parentnodes <- which(incidence[,j]==1)
-    P_local[j]<-.DAGcorescore(j,parentnodes,scorepar$n,scorepar)
-  }
-  return(sum(P_local))
+    if (scorepar$DBN) {
+        stop("To calculate DBN score DBNscore should be used!")
+    }
+    n<-ncol(scorepar$data)
+    if(scorepar$bgn==0) {
+        mainnodes<-c(1:scorepar$n)
+    } else {
+        mainnodes<-c(1:n)[-scorepar$bgnodes]
+    }
+    P_local <- numeric(n)
+    for (j in mainnodes)  { #j is a node at which scoring is done
+        parentnodes <- which(incidence[,j]==1)
+        P_local[j]<-.DAGcorescore(j,parentnodes,scorepar$n,scorepar)
+    }
+
+    return(sum(P_local))
 } # nocov end
 
 
@@ -696,65 +716,65 @@ usrscoreparameters <- function(initparam,
 # see arXiv:1402.6863 
 .DAGcorescore<-function(j,parentnodes,n,param) { # nocov start
 
-  if (param$type=="bge") {
-    TN<-param$TN
-    awpN<-param$awpN
-    scoreconstvec<-param$scoreconstvec
+    if (param$type=="bge") {
+        TN<-param$TN
+        awpN<-param$awpN
+        scoreconstvec<-param$scoreconstvec
     
-    lp<-length(parentnodes) #number of parents
-    awpNd2<-(awpN-n+lp+1)/2
-    A<-TN[j,j]
-    switch(as.character(lp),
-           "0"={# just a single term if no parents
-             corescore <- scoreconstvec[lp+1] -awpNd2*log(A)
-           },
+        lp<-length(parentnodes) #number of parents
+        awpNd2<-(awpN-n+lp+1)/2
+        A<-TN[j,j]
+        switch(as.character(lp),
+            "0"={# just a single term if no parents
+                corescore <- scoreconstvec[lp+1] -awpNd2*log(A)
+            },
            
-           "1"={# no need for matrices
-             D<-TN[parentnodes,parentnodes]
-             logdetD<-log(D)
-             B<-TN[j,parentnodes]
-             logdetpart2<-log(A-B^2/D)
-             corescore <- scoreconstvec[lp+1]-awpNd2*logdetpart2 - logdetD/2
-             if (!is.null(param$logedgepmat)) { # if there is an additional edge penalisation
-               corescore <- corescore - param$logedgepmat[parentnodes, j]
-             }
-           },
+            "1"={# no need for matrices
+                D<-TN[parentnodes,parentnodes]
+                logdetD<-log(D)
+                B<-TN[j,parentnodes]
+                logdetpart2<-log(A-B^2/D)
+                corescore <- scoreconstvec[lp+1]-awpNd2*logdetpart2 - logdetD/2
+                if (!is.null(param$logedgepmat)) { # if there is an additional edge penalisation
+                    corescore <- corescore - param$logedgepmat[parentnodes, j]
+                }
+            },
            
-           "2"={# can do matrix determinant and inverse explicitly
-             # but this is numerically unstable for large matrices!
-             # so we use the same approach as for 3 parents
-             D<-TN[parentnodes,parentnodes]
-             detD<-dettwobytwo(D)
-             logdetD<-log(detD)
-             B<-TN[j,parentnodes]
-             #logdetpart2<-log(A-(D[2,2]*B[1]^2+D[1,1]*B[2]^2-2*D[1,2]*B[1]*B[2])/detD) #also using symmetry of D
-             logdetpart2<-log(dettwobytwo(D-(B)%*%t(B)/A))+log(A)-logdetD
-             corescore <- scoreconstvec[lp+1]-awpNd2*logdetpart2 - logdetD/2
-             if (!is.null(param$logedgepmat)) { # if there is an additional edge penalisation
-               corescore <- corescore - sum(param$logedgepmat[parentnodes, j])
-             }
-           },
+            "2"={# can do matrix determinant and inverse explicitly
+                # but this is numerically unstable for large matrices!
+                # so we use the same approach as for 3 parents
+                D<-TN[parentnodes,parentnodes]
+                detD<-dettwobytwo(D)
+                logdetD<-log(detD)
+                B<-TN[j,parentnodes]
+                #logdetpart2<-log(A-(D[2,2]*B[1]^2+D[1,1]*B[2]^2-2*D[1,2]*B[1]*B[2])/detD) #also using symmetry of D
+                logdetpart2<-log(dettwobytwo(D-(B)%*%t(B)/A))+log(A)-logdetD
+                corescore <- scoreconstvec[lp+1]-awpNd2*logdetpart2 - logdetD/2
+                if (!is.null(param$logedgepmat)) { # if there is an additional edge penalisation
+                    corescore <- corescore - sum(param$logedgepmat[parentnodes, j])
+                }
+            },
            
-           {# otherwise we use cholesky decomposition to perform both
-             D<-as.matrix(TN[parentnodes,parentnodes])
-             choltemp<-chol(D)
-             logdetD<-2*log(prod(choltemp[(lp+1)*c(0:(lp-1))+1]))
-             B<-TN[j,parentnodes]
-             logdetpart2<-log(A-sum(backsolve(choltemp,B,transpose=TRUE)^2))
-             corescore <- scoreconstvec[lp+1]-awpNd2*logdetpart2 - logdetD/2
-             if (!is.null(param$logedgepmat)) { # if there is an additional edge penalisation
-               corescore <- corescore - sum(param$logedgepmat[parentnodes, j])
-             }
-           })
+            {# otherwise we use cholesky decomposition to perform both
+                D<-as.matrix(TN[parentnodes,parentnodes])
+                choltemp<-chol(D)
+                logdetD<-2*log(prod(choltemp[(lp+1)*c(0:(lp-1))+1]))
+                B<-TN[j,parentnodes]
+                logdetpart2<-log(A-sum(backsolve(choltemp,B,transpose=TRUE)^2))
+                corescore <- scoreconstvec[lp+1]-awpNd2*logdetpart2 - logdetD/2
+                if (!is.null(param$logedgepmat)) { # if there is an additional edge penalisation
+                    corescore <- corescore - sum(param$logedgepmat[parentnodes, j])
+                }
+            })
 
-  } else if (param$type=="usr") {
-    corescore <- .usrDAGcorescore(j,parentnodes,n,param)
-  } 
+    } else if (param$type=="usr") {
+        corescore <- .usrDAGcorescore(j,parentnodes,n,param)
+    } 
   
-  return(corescore)
+    return(corescore)
 } # nocov end
 
 # The determinant of a 2 by 2 matrix
 dettwobytwo <- function(D) { # nocov start
-  D[1,1]*D[2,2]-D[1,2]*D[2,1]
+    D[1,1]*D[2,2]-D[1,2]*D[2,1]
 } # nocov end
