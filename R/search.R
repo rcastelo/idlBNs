@@ -202,8 +202,13 @@ hillclimbing <- function(dat, targets=list(integer(0)),
   s1 <- scorefun(g=dag, dat=dat, targets=targets, target.index=target.index,
                  cached.scores=cached.scores, global.sufstats=global.sufstats)
 
-  if (verbose)
-    cli_progress_step("Score {s1}")
+  if (verbose) {
+    msg <- "Running a straightforward hill-climbing algorithm"
+    if (!is.null(scorefun.name))
+      msg <- paste(msg, "with the {scorefun.name} score function")
+    cli_progress_bar(msg)
+    cli_progress_step("Score {s1}", spinner=TRUE)
+  }
 
   while (s1 > s0) {
     s0 <- s1
@@ -218,5 +223,9 @@ hillclimbing <- function(dat, targets=list(integer(0)),
     if (verbose)
       cli_progress_update()
   }
+
+  if (verbose)
+    cli_progress_done("straightforward hill-climbing algorithm completed")
+
   list(dag=dag, sco=s1)
 }

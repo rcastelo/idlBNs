@@ -474,10 +474,10 @@ attr(iBGe, "scorefun.name") <- "iBGe"
        scoreconstvec=scoreconstvec, non.int=non.int, data.count=data.count, n=n)
 }
 
-## assign the iBIC global sufficient statistics function as an attribute to the
-## iBIC() scoring function, so that any search algorithm taking iBIC() as an
-## input argument, e.g. scorefun=iBIC, can precompute the corresponding global
-## sufficient statistics before iteratively calling iBIC() during search
+## assign the iBGe global sufficient statistics function as an attribute to the
+## iBGe() scoring function, so that any search algorithm taking iBGe() as an
+## input argument, e.g. scorefun=iBGe, can precompute the corresponding global
+## sufficient statistics before iteratively calling iBGe() during search
 attr(iBGe, "global.sufstats.fun") <- .iBGe.global.sufstats
 
 ## first original version of the iBGe() function, which calls the vendored code
