@@ -113,7 +113,11 @@ iBIC <- function(g, dat, targets=list(integer(0)),
                  target.index=rep(1L, nrow(dat)),
                  cached.scores=NULL, global.sufstats=NULL) {
 
-  .check_g_dat_consistency(g, dat)
+  if (is.null(attr(dat, "sanitycheck"))) {
+    dat <- .check_input_data(dat)
+    .check_g_dat_consistency(g, dat)
+  }
+
   v <- match(nodes(g), colnames(dat))
   p <- numNodes(g)
   n <- nrow(dat)
@@ -130,9 +134,7 @@ iBIC <- function(g, dat, targets=list(integer(0)),
   for (i in seq_along(pasets)) {
     s <- NULL
     if (!is.null(cached.scores)) {
-        k <- paste(sort.int(pasets[[i]]), collapse=":")
-        if (nchar(k) == 0)
-            k <- ":"
+        k <- .cached_scores_key(pasets[[i]])
         s <- cached.scores[[i]][[k]]
     }
     if (is.null(s)) {
@@ -159,8 +161,11 @@ iBIC <- function(g, dat, targets=list(integer(0)),
     } else
         sco[i] <- s
   }
+
   sum(sco)
 }
+## assign a name attribute to the iBIC() scoring function for reporting purposes
+attr(iBIC, "scorefun.name") <- "iBIC"
 
 ## convert a list of targets and a vector of target indices to data
 ## observations into a logical matrix of observations by variables,
@@ -173,11 +178,24 @@ iBIC <- function(g, dat, targets=list(integer(0)),
   res
 }
 
+## cached scores key for a given parent set, computed as sorted parent indices
+## glued together with a colon, e.g., '1:2:3'. this type of parent set key is
+## used by both, the iBIC() and iBGe() score functions, to store and retrieve
+## cached scores for a given parent set in the corresponding per-node
+## environment.
+.cached_scores_key <- function(paset) {
+  k <- paste(sort.int(paset), collapse=":")
+  if (nchar(k) == 0L)
+    k <- ":"
+  k
+}
+
 ## calculate global sufficient statistics for the iBIC score, which do not
 ## depend on the structure of a specific DAG, but only on the input data,
 ## the target vertices and the target indices of the interventions
 .iBIC.global.sufstats <- function(dat, targets=list(integer(0)),
                                   target.index=rep(1L, nrow(dat))) {
+    stopifnot(is.matrix(dat)) ## QC
     p <- ncol(dat)
     n <- nrow(dat)
     non.int <- NULL
@@ -341,6 +359,136 @@ iBGe <- function(g, dat, targets=list(integer(0)),
                  target.index=rep(1L, nrow(dat)),
                  cached.scores=NULL, global.sufstats=NULL) {
 
+  if (is.null(attr(dat, "sanitycheck"))) {
+    dat <- .check_input_data(dat)
+    .check_g_dat_consistency(g, dat)
+  }
+
+  v <- match(nodes(g), colnames(dat))
+  em <- edgeMatrix(g)
+  pasets <- split(em["from", ], factor(v[em["to", ]], levels=v))
+  stopifnot(identical(names(pasets), as.character(v)))
+  .check_cached_scores(g, cached.scores)
+
+  if (is.null(global.sufstats))
+    global.sufstats <- .iBGe.global.sufstats(dat, targets, target.index)
+
+  sco <- numeric(length(v))
+  for (i in seq_along(pasets)) {
+    s <- NULL
+    if (!is.null(cached.scores)) {
+      k <- .cached_scores_key(pasets[[i]])
+      s <- cached.scores[[i]][[k]]
+    }
+    if (is.null(s)) {
+      TNj <- global.sufstats$TN[[i]]
+      lp <- length(pasets[[i]])
+      A <- TNj[i, i]
+      awpNd2 <- (global.sufstats$awpN[i] - global.sufstats$p + lp + 1) / 2
+      if (lp == 0L)
+        s <- global.sufstats$scoreconstvec[[i]][1L] - awpNd2 * log(A)
+      else {
+        D <- TNj[pasets[[i]], pasets[[i]], drop=FALSE]
+        R <- chol(D)
+        logdetD <- 2 * sum(log(diag(R)))
+        B <- TNj[i, pasets[[i]]]
+        logdetpart2 <- log(A - sum(backsolve(R, B, transpose=TRUE)^2))
+        s <- global.sufstats$scoreconstvec[[i]][lp + 1L] -
+             awpNd2 * logdetpart2 - logdetD / 2
+      }
+      if (!is.null(cached.scores))
+        cached.scores[[i]][[k]] <- s
+    }
+    sco[i] <- s
+  }
+
+  sum(sco)
+}
+## assign a name attribute to the iBGe() scoring function for reporting purposes
+attr(iBGe, "scorefun.name") <- "iBGe"
+
+## calculate global sufficient statistics for the iBGe score, which do not
+## depend on the structure of a specific DAG, but only on the input data,
+## the target vertices and the target indices of the interventions. part of
+## this code is adapted from the BGe parametrisation in Kuipers & Moffa (2025)
+## and the BiDAG package, but stripped down to exclude BDe, BDecat, DBN, MDAG,
+## and other stuff not exposed in the iBGe() function of this package
+.iBGe.global.sufstats <- function(dat, targets=list(integer(0)),
+                                  target.index=rep(1L, nrow(dat))) {
+  stopifnot(is.matrix(dat)) ## QC
+  p <- ncol(dat)
+  n <- nrow(dat)
+
+  ## BGe equivalent sample size for the prior distribution of the mean vector
+  ## set to 1, which assigns the weakest possible informative weight to this
+  ## prior distribution
+  ## see BiDAG::scoreparameters for further details on this parameter
+  ## we might want to expose this as a user parameter in the future
+  am <- 1
+
+  ## BGe edge penalization factor, set to 1 (no penalization)
+  ## see BiDAG::scoreparameters for further details on this parameter
+  ## we might want to expose this as a user parameter in the future
+  edgepf <- 1
+
+  aw <- p + am + 1
+  T0scale <- am * (aw - p - 1) / (am + 1) # follows from [GH2002, eqs. (19, 20)]
+  T0 <- diag(T0scale, p, p)
+  logedgepf <- log(edgepf)
+  l <- seq_len(p) # l = number of parents + 1
+
+  non.int <- NULL
+  data.count <- rep(n, p)
+  onlyobsdata <- identical(targets, list(integer(0)))
+  if (!onlyobsdata) {
+    ## index and tally the data points that have not been intervened
+    A <- !.targets2mat(p, targets, target.index)
+    non.int <- lapply(seq_len(ncol(A)), function(i) which(A[, i]))
+    data.count <- colSums(A)
+  }
+
+  TN <- vector("list", p)
+  awpN <- numeric(p)
+  scoreconstvec <- vector("list", p)
+  for (j in seq_len(p)) {
+    Xj <- dat
+    if (!onlyobsdata)
+      Xj <- dat[non.int[[j]], , drop=FALSE]
+    Nj <- data.count[j]
+    if (Nj < 2) {
+      msg <- paste("Not enough observational input data in column number", j,
+                   "(", Nj, "observed values)")
+      cli_abort(c("x"=msg))
+    }
+    means <- colMeans(Xj)
+    covmat <- cov(Xj) * (Nj - 1)
+    TN[[j]] <- T0 + covmat + (am * Nj / (am + Nj)) * outer(means, means)
+    awpN[j] <- aw + Nj
+    constscorefact <- -(Nj / 2) * log(pi) + 0.5 * log(am / (am + Nj))
+    awp <- aw - p + l
+    scoreconstvec[[j]] <- constscorefact - lgamma(awp / 2) + lgamma((awp + Nj) / 2) +
+                          ((awp + l - 1) / 2) * log(T0scale) - l * logedgepf
+  }
+
+  list(p=p, aw=aw, T0scale=T0scale, TN=TN, awpN=awpN,
+       scoreconstvec=scoreconstvec, non.int=non.int, data.count=data.count, n=n)
+}
+
+## assign the iBGe global sufficient statistics function as an attribute to the
+## iBGe() scoring function, so that any search algorithm taking iBGe() as an
+## input argument, e.g. scorefun=iBGe, can precompute the corresponding global
+## sufficient statistics before iteratively calling iBGe() during search
+attr(iBGe, "global.sufstats.fun") <- .iBGe.global.sufstats
+
+## first original version of the iBGe() function, which calls the vendored code
+## of the iBGe score by Kuipers and Moffa (2025) based and adapted from the
+## scripts provided at https://github.com/jackkuipers/iBGe and from the BiDAG
+## package at https://cran.r-project.org/package=BiDAG this is included here
+## to verify that further optimized versions of the iBGe() function produce the
+## same results as the original version of the iBGe score by Kuipers and Moffa
+.vendored_iBGe <- function(g, dat, targets=list(integer(0)),
+                           target.index=rep(1L, nrow(dat))) { # nocov start
+
   .check_g_dat_consistency(g, dat)
   v <- nodes(g)
   p <- numNodes(g)
@@ -358,7 +506,7 @@ iBGe <- function(g, dat, targets=list(integer(0)),
   param <- .scoreparameters(scoretype="usr", data=dat,
                             usrpar=list(pctesttype="bge", Tmat=I))
   .DAGscore(param, A)
-}
+} # nocov end
 
 ## the code below has been copied and adapted from
 ## https://github.com/jackkuipers/iBGe and the BiDAG package at
@@ -371,7 +519,7 @@ iBGe <- function(g, dat, targets=list(integer(0)),
 usrscoreparameters <- function(initparam,
                                usrpar = list(Tmat = NULL, pctesttype = "bge",
                                              am = 1, chi = 1, edgepf = 1,
-                                             edgepmat = NULL)) {
+                                             edgepmat = NULL)) { # nocov start
   n <- initparam$n
   Tmat <- usrpar$Tmat
   nodeparams <- vector("list", n)
@@ -392,7 +540,7 @@ usrscoreparameters <- function(initparam,
   initparam$nodeparams <- nodeparams
 
   initparam
-}
+} # nocov end
 
 ## here we have put only the BGe part
 
@@ -403,7 +551,7 @@ usrscoreparameters <- function(initparam,
                             slices=2, b=0, stationary=TRUE, rowids=NULL, datalist=NULL,
                             learninit=TRUE), usrpar=list(pctesttype=c("bge","bde","bdecat")),
                           mixedpar=list(nbin=0), MDAG=FALSE, DBN=FALSE, weightvector=NULL,
-                          bgnodes=NULL, edgepmat=NULL, nodeslabels=NULL) {
+                          bgnodes=NULL, edgepmat=NULL, nodeslabels=NULL) { # nocov start
 
   initparam<-list()
 
@@ -517,15 +665,15 @@ usrscoreparameters <- function(initparam,
 
   attr(initparam, "class") <- "scoreparameters"
   return(initparam)
-}
+} # nocov end
 
 ### This function evaluates the log score of a node given its parents
 
-.usrDAGcorescore <- function (j, parentnodes, n, param) {
+.usrDAGcorescore <- function (j, parentnodes, n, param) { # nocov start
   .DAGcorescore(j, parentnodes, n, param$nodeparams[[j]])
-}
+} # nocov end
 
-.DAGscore <- function(scorepar, incidence){
+.DAGscore <- function(scorepar, incidence){ # nocov start
   if(scorepar$DBN) {
     stop("To calculate DBN score DBNscore should be used!")
   }
@@ -541,12 +689,12 @@ usrscoreparameters <- function(initparam,
     P_local[j]<-.DAGcorescore(j,parentnodes,scorepar$n,scorepar)
   }
   return(sum(P_local))
-}
+} # nocov end
 
 
 # The log of the BGe/BDe score, but simplified as much as possible
 # see arXiv:1402.6863 
-.DAGcorescore<-function(j,parentnodes,n,param) {
+.DAGcorescore<-function(j,parentnodes,n,param) { # nocov start
 
   if (param$type=="bge") {
     TN<-param$TN
@@ -604,9 +752,9 @@ usrscoreparameters <- function(initparam,
   } 
   
   return(corescore)
-}
+} # nocov end
 
 # The determinant of a 2 by 2 matrix
-dettwobytwo <- function(D) {
+dettwobytwo <- function(D) { # nocov start
   D[1,1]*D[2,2]-D[1,2]*D[2,1]
-}
+} # nocov end

@@ -176,32 +176,56 @@ hillclimbing <- function(dat, targets=list(integer(0)),
                          target.index=rep(1L, nrow(dat)),  scorefun=iBIC,
                          verbose=TRUE) {
 
+  dat <- .check_input_data(dat)
+  dag <- graphNEL(colnames(dat), edgemode="directed")
+  attr(dat, "sanitycheck") <- TRUE
+
+  stopifnot(is.list(targets)) ## QC
   scorefun <- match.fun(scorefun)
 
-  dag <- graphNEL(colnames(dat), edgemode="directed")
   cached.scores <- list()
   for (i in seq_len(ncol(dat)))
       cached.scores[[i]] <- new.env(hash=TRUE, parent=emptyenv())
 
+  global.sufstats <- NULL
+  global.sufstats.fun <- attr(scorefun, "global.sufstats.fun")
+  if (!is.null(global.sufstats.fun)) {
+    if (verbose)
+      cli_alert_info("Calculating global sufficient statistics")
+    global.sufstats <- global.sufstats.fun(dat, targets, target.index)
+  }
+  scorefun.name <- NULL
+  if (!is.null(attr(scorefun, "scorefun.name")))
+    scorefun.name <- attr(scorefun, "scorefun.name")
+
   s0 <- -Inf
   s1 <- scorefun(g=dag, dat=dat, targets=targets, target.index=target.index,
-                 cached.scores=cached.scores)
+                 cached.scores=cached.scores, global.sufstats=global.sufstats)
 
-  if (verbose)
-    cli_progress_step("Score {s1}")
+  if (verbose) {
+    msg <- "Running a straightforward hill-climbing algorithm"
+    if (!is.null(scorefun.name))
+      msg <- paste(msg, "with the {scorefun.name} score function")
+    cli_progress_bar(msg)
+    cli_progress_step("Score {s1}", spinner=TRUE)
+  }
 
   while (s1 > s0) {
     s0 <- s1
     ne <- ar.nh(dag)
-    s1 <- sapply(ne, function(g, d, tgts, tgt.idx, chd.sco)
+    s1 <- sapply(ne, function(g, d, tgts, tgt.idx, chd.sco, gbl.sst)
                        scorefun(g=g, dat=d, targets=tgts, target.index=tgt.idx,
-                                cached.scores=chd.sco), dat, targets,
-                                target.index, cached.scores)
+                                cached.scores=chd.sco, global.sufstats=gbl.sst),
+                 dat, targets, target.index, cached.scores, global.sufstats)
     dag <- ne[[which.max(s1)]]
     s1 <- max(s1)
 
     if (verbose)
       cli_progress_update()
   }
+
+  if (verbose)
+    cli_progress_done("straightforward hill-climbing algorithm completed")
+
   list(dag=dag, sco=s1)
 }
