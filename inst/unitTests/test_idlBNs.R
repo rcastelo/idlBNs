@@ -58,6 +58,13 @@ test_scores <- function() {
 
   checkTrue(ibic > ibic2)
  
+  ## verify that the iBIC() function returns the same value than the
+  ## vendored code called from the internal .vendored_iBIC() function
+  vendoredibic <- idlBNs:::.vendored_iBIC(g, dat, targets, target.index)
+  checkEqualsNumeric(ibic, vendoredibic)
+  vendoredibic2 <- idlBNs:::.vendored_iBIC(g2, dat, targets, target.index)
+  checkEqualsNumeric(ibic2, vendoredibic2)
+
   ## in the case when we do not indicate the presence of interventions
   ## in the data, both scores should be identical
   ibic <- iBIC(g, dat)

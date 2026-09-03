@@ -107,7 +107,7 @@
 #' iBIC(g, dat)
 #' iBIC(g2, dat)
 #'
-#' @importFrom graph numNodes edgeMatrix
+#' @importFrom graph edgeMatrix
 #' @export
 iBIC <- function(g, dat, targets=list(integer(0)),
                  target.index=rep(1L, nrow(dat)),
@@ -119,8 +119,6 @@ iBIC <- function(g, dat, targets=list(integer(0)),
     }
 
     v <- match(nodes(g), colnames(dat))
-    p <- numNodes(g)
-    n <- nrow(dat)
     em <- edgeMatrix(g)
     pasets <- split(em["from", ], factor(v[em["to", ]], levels=v))
     stopifnot(identical(names(pasets), as.character(v)))
@@ -128,7 +126,6 @@ iBIC <- function(g, dat, targets=list(integer(0)),
 
     if (is.null(global.sufstats))
         global.sufstats <- .iBIC.global.sufstats(dat, targets, target.index)
-    onlyobsdata <- identical(targets, list(integer(0)))
 
     sco <- numeric(length(v))
     for (i in seq_along(pasets)) {
@@ -138,22 +135,20 @@ iBIC <- function(g, dat, targets=list(integer(0)),
             s <- cached.scores[[i]][[k]]
         }
         if (is.null(s)) {
-            if (onlyobsdata) {
-                Y <- dat[, v[i]]
-                Z <- cbind(1, dat[, pasets[[i]], drop=FALSE])
-            } else {
-                Y <- dat[global.sufstats$non.int[[i]], v[i]]
-                Z <- cbind(1, dat[global.sufstats$non.int[[i]], pasets[[i]],
-                           drop=FALSE])
-            }
-            sigma2 <- sum(Y^2)
+            Sj <- global.sufstats$S[[i]]
+            if (is.null(Sj))
+                Sj <- global.sufstats$S[[1L]]
+            idx <- c(1L, pasets[[i]] + 1L)
+            ZtZ <- Sj[idx, idx, drop=FALSE]
+            ZtY <- Sj[idx, i + 1L]
+            YtY <- Sj[i + 1L, i + 1L]
+            R <- chol(ZtZ)
+            cc <- backsolve(R, ZtY, transpose=TRUE)
+            RSS <- YtY - sum(cc^2)
 
-            ## scaled error covariance using QR decomposition
-            Q <- qr.Q(qr(Z))
-            sigma2 <- sigma2 - sum((Y %*% Q)^2)
-            lambda <- 0.5 * log(n)
-            s <- -0.5 * global.sufstats$data.count[i] *
-                 (1 + log(sigma2 / global.sufstats$data.count[i])) -
+            Nj <- global.sufstats$data.count[i]
+            lambda <- 0.5 * log(global.sufstats$n)
+            s <- -0.5 * Nj * (1 + log(RSS / Nj)) -
                  lambda * (1 + length(pasets[[i]]))
 
             if (!is.null(cached.scores))
@@ -194,7 +189,17 @@ attr(iBIC, "scorefun.name") <- "iBIC"
 
 ## calculate global sufficient statistics for the iBIC score, which do not
 ## depend on the structure of a specific DAG, but only on the input data,
-## the target vertices and the target indices of the interventions
+## the target vertices and the target indices of the interventions.
+##
+## for each vertex j, precompute the (p+1) x (p+1) raw cross-product matrix
+## S[[j]] = crossprod(cbind(1, X)), where X is the input data matrix restricted
+## to the non-intervened rows/observations for vertex j, and the first column
+## of S[[j]] corresponds to the intercept term. Any submatrix (j, parents) can
+## then get its residual sum of squares from a small submatrix of S[[j]] via a
+## Cholesky decomposition, without accessing the original input N-row data
+## matrix again, analogously to the iBGe score's TN matrix.
+
+#' @importFrom cli cli_abort
 .iBIC.global.sufstats <- function(dat, targets=list(integer(0)),
                                   target.index=rep(1L, nrow(dat))) {
     stopifnot(is.matrix(dat)) ## QC
@@ -210,7 +215,25 @@ attr(iBIC, "scorefun.name") <- "iBIC"
         data.count <- colSums(A)
     }
 
-    list(non.int=non.int, data.count=data.count, n=n)
+    S <- vector("list", p)
+    for (j in seq_len(p)) {
+        Xj <- dat
+        if (!onlyobsdata && length(non.int[[j]]) < n)
+            Xj <- dat[non.int[[j]], , drop=FALSE]
+        Nj <- data.count[j]
+        if (Nj < 2) {
+            msg <- paste("Not enough observational input data in column number",
+                         j, "(", Nj, "observed values)")
+            cli_abort(c("x"=msg))
+        }
+        ## if there are no interventions, store only the first copy of the
+        ## cross-product matrix for the first vertex, since it is the same
+        ## for all vertices
+        if ((!onlyobsdata && length(non.int[[j]]) < n) || j == 1L)
+            S[[j]] <- crossprod(cbind(1, Xj))
+    }
+
+    list(p=p, n=n, non.int=non.int, data.count=data.count, S=S)
 }
 
 ## assign the iBIC global sufficient statistics function as an attribute to the
@@ -460,7 +483,7 @@ attr(iBGe, "scorefun.name") <- "iBGe"
     scoreconstvec <- vector("list", p)
     for (j in seq_len(p)) {
         Xj <- dat
-        if (!onlyobsdata)
+        if (!onlyobsdata && length(non.int[[j]] < n))
             Xj <- dat[non.int[[j]], , drop=FALSE]
         Nj <- data.count[j]
         if (Nj < 2) {
@@ -479,8 +502,8 @@ attr(iBGe, "scorefun.name") <- "iBGe"
                               ((awp + l - 1) / 2) * log(T0scale) - l * logedgepf
     }
 
-    list(p=p, n=n, aw=aw, T0scale=T0scale, TN=TN, awpN=awpN,
-         scoreconstvec=scoreconstvec, non.int=non.int, data.count=data.count)
+    list(p=p, n=n, non.int=non.int, data.count=data.count, aw=aw,
+         T0scale=T0scale, TN=TN, awpN=awpN, scoreconstvec=scoreconstvec)
 }
 
 ## assign the iBGe global sufficient statistics function as an attribute to the
@@ -489,12 +512,86 @@ attr(iBGe, "scorefun.name") <- "iBGe"
 ## sufficient statistics before iteratively calling iBGe() during search
 attr(iBGe, "global.sufstats.fun") <- .iBGe.global.sufstats
 
+
+##
+## VENDORED CODE FROM THE iBIC SCORE BY HAUSER AND BÜHLMANN (2015)
+##
+
+## first original version of the iBIC() function, which calls the vendored R
+## code of the iBIC score by Hauser and Bühlmann (2015) based and adapted from
+## the pcalg pacakge at https://cran.r-project.org/package=pcalg this is
+## included here to verify that further optimized versions of the iBIC()
+## function produce the same results as the original version of the iBIC score
+## by Hauser and Bühlmann
+
+.vendored_iBIC <- function(g, dat, targets=list(integer(0)),
+                           target.index=rep(1L, nrow(dat)),
+                           cached.scores=NULL, global.sufstats=NULL) { # nocov start
+
+    if (is.null(attr(dat, "sanitycheck"))) {
+        dat <- .check_input_data(dat)
+        .check_g_dat_consistency(g, dat)
+    }
+
+    v <- match(nodes(g), colnames(dat))
+    n <- nrow(dat)
+    em <- edgeMatrix(g)
+    pasets <- split(em["from", ], factor(v[em["to", ]], levels=v))
+    stopifnot(identical(names(pasets), as.character(v)))
+    .check_cached_scores(g, cached.scores)
+
+    if (is.null(global.sufstats))
+        global.sufstats <- .iBIC.global.sufstats(dat, targets, target.index)
+    onlyobsdata <- identical(targets, list(integer(0)))
+
+    sco <- numeric(length(v))
+    for (i in seq_along(pasets)) {
+        s <- NULL
+        if (!is.null(cached.scores)) {
+            k <- .cached_scores_key(pasets[[i]])
+            s <- cached.scores[[i]][[k]]
+        }
+        if (is.null(s)) {
+            if (onlyobsdata) {
+                Y <- dat[, v[i]]
+                Z <- cbind(1, dat[, pasets[[i]], drop=FALSE])
+            } else {
+                Y <- dat[global.sufstats$non.int[[i]], v[i]]
+                Z <- cbind(1, dat[global.sufstats$non.int[[i]], pasets[[i]],
+                           drop=FALSE])
+            }
+            sigma2 <- sum(Y^2)
+
+            ## scaled error covariance using QR decomposition
+            Q <- qr.Q(qr(Z))
+            sigma2 <- sigma2 - sum((Y %*% Q)^2)
+            lambda <- 0.5 * log(n)
+            s <- -0.5 * global.sufstats$data.count[i] *
+                 (1 + log(sigma2 / global.sufstats$data.count[i])) -
+                 lambda * (1 + length(pasets[[i]]))
+
+            if (!is.null(cached.scores))
+                cached.scores[[i]][[k]] <- s
+        }
+
+        sco[i] <- s
+    }
+
+    sum(sco)
+} # nocov end
+
+##
+## VENDORED CODE FROM THE iBGe SCORE BY KUIPERS AND MOFFA (2025)
+##
+
 ## first original version of the iBGe() function, which calls the vendored code
 ## of the iBGe score by Kuipers and Moffa (2025) based and adapted from the
 ## scripts provided at https://github.com/jackkuipers/iBGe and from the BiDAG
 ## package at https://cran.r-project.org/package=BiDAG this is included here
 ## to verify that further optimized versions of the iBGe() function produce the
 ## same results as the original version of the iBGe score by Kuipers and Moffa
+
+#' @importFrom graph nodes numNodes edgeMatrix
 .vendored_iBGe <- function(g, dat, targets=list(integer(0)),
                            target.index=rep(1L, nrow(dat))) { # nocov start
 
