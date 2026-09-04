@@ -272,6 +272,10 @@ where the results will be saved in a CSV file named
 | 1.0.4   |       10 | iBGe           |    481.68ms |           498.12KB |
 | 1.0.4   |       20 | iBIC           |       5.82s |           302.69MB |
 | 1.0.4   |       20 | iBGe           |       5.23s |           196.38MB |
+| 1.0.5   |       10 | iBIC           |    255.21ms |           449.64KB |
+| 1.0.5   |       10 | iBGe           |    263.04ms |           409.61KB |
+| 1.0.5   |       20 | iBIC           |        3.4s |            86.11MB |
+| 1.0.5   |       20 | iBGe           |       3.06s |            61.48MB |
 
 Table 5.1: Benchmark of computational performance of the iHCMC algorithm
 implemented in
@@ -308,7 +312,7 @@ attached base packages:
 
 other attached packages:
  [1] kableExtra_1.4.1    cli_3.6.6           bench_1.1.4        
- [4] tibble_3.3.1        dplyr_1.2.1         idlBNs_1.0.4       
+ [4] tibble_3.3.1        dplyr_1.2.1         idlBNs_1.0.5       
  [7] pcalg_2.7-12        graph_1.90.0        BiocGenerics_0.58.1
 [10] generics_0.1.4      knitr_1.51         
 

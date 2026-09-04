@@ -124,7 +124,7 @@ tindex <- rep(1:length(nbytgts), nbytgts)
 dhat.hcmc <- hcmc(dat)
 #> ℹ Calculating global sufficient statistics
 #> ⠙ Score -87.004214222737 Escapes 0 Trials 0
-#> ✔ Score -83.2933160642061 Escapes 0 Trials 0 [315ms]
+#> ✔ Score -83.2933160642061 Escapes 0 Trials 0 [150ms]
 #> 
 dhat.hcmc
 #> $dag
@@ -147,8 +147,7 @@ shd(e, dag2essgraph(dhat.hcmc$dag))
 dhat.ihcmc <- hcmc(dat, targets=I, target.index=tindex)
 #> ℹ Calculating global sufficient statistics
 #> ⠙ Score -59.3908043567074 Escapes 0 Trials 0
-#> ⠹ Score -50.1894486770717 Escapes 0 Trials 0
-#> ✔ Score -50.0166049861733 Escapes 1 Trials 3 [395ms]
+#> ✔ Score -50.0166049861733 Escapes 0 Trials 0 [79ms]
 #> 
 dhat.ihcmc
 #> $dag
@@ -171,7 +170,7 @@ shd(e, dag2essgraph(dhat.ihcmc$dag))
 dhat.ihcmc2 <- hcmc(dat, targets=I, target.index=tindex, scorefun=iBGe)
 #> ℹ Calculating global sufficient statistics
 #> ⠙ Score -189.956899563879 Escapes 0 Trials 0
-#> ✔ Score -181.640790427507 Escapes 0 Trials 0 [378ms]
+#> ✔ Score -181.640790427507 Escapes 0 Trials 0 [173ms]
 #> 
 shd(e, dag2essgraph(dhat.ihcmc2$dag))
 #> [1] 2
