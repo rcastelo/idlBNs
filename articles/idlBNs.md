@@ -268,10 +268,10 @@ where the results will be saved in a CSV file named
 | 1.0.3   |       10 | iBGe           |       1.18s |           367.96MB |
 | 1.0.3   |       20 | iBIC           |       5.73s |             1.07GB |
 | 1.0.3   |       20 | iBGe           |      18.45s |            11.75GB |
-| 1.0.4   |       10 | iBIC           |    506.89ms |             5.17MB |
-| 1.0.4   |       10 | iBGe           |    483.76ms |           553.14KB |
-| 1.0.4   |       20 | iBIC           |       5.98s |           342.83MB |
-| 1.0.4   |       20 | iBGe           |       4.98s |           204.29MB |
+| 1.0.4   |       10 | iBIC           |    490.59ms |           536.47KB |
+| 1.0.4   |       10 | iBGe           |    481.68ms |           498.12KB |
+| 1.0.4   |       20 | iBIC           |       5.82s |           302.69MB |
+| 1.0.4   |       20 | iBGe           |       5.23s |           196.38MB |
 
 Table 5.1: Benchmark of computational performance of the iHCMC algorithm
 implemented in
