@@ -136,8 +136,6 @@ iBIC <- function(g, dat, targets=list(integer(0)),
         }
         if (is.null(s)) {
             Sj <- global.sufstats$S[[i]]
-            if (is.null(Sj))
-                Sj <- global.sufstats$S[[1L]]
             idx <- c(1L, pasets[[i]] + 1L)
             ZtZ <- Sj[idx, idx, drop=FALSE]
             ZtY <- Sj[idx, i + 1L]
@@ -216,21 +214,27 @@ attr(iBIC, "scorefun.name") <- "iBIC"
     }
 
     S <- vector("list", p)
+    S.full <- NULL ## cross-product matrix for all variables using all
+                   ## rows/observations, computed once and shared by reference
+                   ## among vertices that have no interventions in the data
     for (j in seq_len(p)) {
-        Xj <- dat
-        if (!onlyobsdata && length(non.int[[j]]) < n)
-            Xj <- dat[non.int[[j]], , drop=FALSE]
         Nj <- data.count[j]
         if (Nj < 2) {
             msg <- paste("Not enough observational input data in column number",
                          j, "(", Nj, "observed values)")
             cli_abort(c("x"=msg))
         }
-        ## if there are no interventions, store only the first copy of the
-        ## cross-product matrix for the first vertex, since it is the same
-        ## for all vertices
-        if ((!onlyobsdata && length(non.int[[j]]) < n) || j == 1L)
+        ## if there are no interventions in this vertex, compute once the full
+        ## cross-product matrix for all variables using all rows/observations,
+        ## and share it by reference among vertices that have no interventions
+        if (!onlyobsdata && Nj < n) {
+            Xj <- dat[non.int[[j]], , drop=FALSE]
             S[[j]] <- crossprod(cbind(1, Xj))
+        } else {
+            if (is.null(S.full))
+                S.full <- crossprod(cbind(1, dat))
+            S[[j]] <- S.full
+        }
     }
 
     list(p=p, n=n, non.int=non.int, data.count=data.count, S=S)
@@ -483,7 +487,7 @@ attr(iBGe, "scorefun.name") <- "iBGe"
     scoreconstvec <- vector("list", p)
     for (j in seq_len(p)) {
         Xj <- dat
-        if (!onlyobsdata && length(non.int[[j]] < n))
+        if (!onlyobsdata && length(non.int[[j]]) < n)
             Xj <- dat[non.int[[j]], , drop=FALSE]
         Nj <- data.count[j]
         if (Nj < 2) {
