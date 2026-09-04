@@ -5,7 +5,7 @@ export(hillclimbing)
 export(iBGe)
 export(iBIC)
 importClassesFrom(graph,graphNEL)
-importFrom(RBGL,dag.sp)
+importFrom(RBGL,tsort)
 importFrom(cli,
   cli_abort,
   cli_alert_info,

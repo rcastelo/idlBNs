@@ -1,31 +1,94 @@
 ##
+## ANCESTOR MATRIX MAINTENANCE (Giudici and Castelo, ML, 2003)
+##
+## an ancestor matrix 'anc' is a p x p logical matrix, dimnames=list(v, v),
+## where v are the DAG vertex names, and anc[u, v] is TRUE iff u is an
+## ancestor of v (a directed path u -> ... -> v exists). It is maintained
+## incrementally across the whole search, instead of being recomputed from
+## scratch on every neighborhood-generation call, and is used to test
+## whether a candidate edge addition/reversal preserves acyclicity with O(1)
+## (addition) or O(degree) (reversal) lookups.
+
+## build an all-FALSE ancestor matrix for an edgeless DAG on vertex names v
+init.ancestors <- function(v) {
+    p <- length(v)
+    matrix(FALSE, nrow=p, ncol=p, dimnames=list(v, v))
+}
+
+## incremental update of 'anc' after adding edge u -> v
+add.ancestors <- function(anc, u, v) {
+    anc[u, v] <- TRUE
+    delta <- anc[, u]
+    delta[u] <- TRUE
+    D <- c(v, rownames(anc)[anc[v, ]]) ## v and its descendants
+    anc[, D] <- anc[, D] | delta
+    anc
+}
+
+## incremental update of 'anc' after removing edge u -> v from 'dag', where
+## 'dag' is the DAG as it stood BEFORE the removal (used only to read parent
+## sets and a topological order)
+
+#' @importFrom graph nodes edgeMatrix
+#' @importFrom RBGL tsort
+remove.ancestors <- function(anc, dag, u, v) {
+    vnodes <- nodes(dag)
+    em <- edgeMatrix(dag)
+    pasets <- split(vnodes[em["from", ]], factor(vnodes[em["to", ]],
+                                                 levels=vnodes))
+    D <- c(v, rownames(anc)[anc[v, ]]) ## v and its descendants
+    ## any topological order of 'dag' remains valid after removing an edge
+    to <- tsort(dag)
+    D <- to[to %in% D]
+    for (k in D) {
+        pa.k <- pasets[[k]]
+        if (k == v)
+            pa.k <- setdiff(pa.k, u)
+        newcol <- rep(FALSE, length(vnodes))
+        names(newcol) <- vnodes
+        if (length(pa.k) > 0) {
+            newcol[pa.k] <- TRUE
+            newcol <- newcol | apply(anc[, pa.k, drop=FALSE], 1, any)
+        }
+        anc[, k] <- newcol
+    }
+    anc
+}
+
+## incremental update of 'anc' after reversing edge u -> v into v -> u in
+## 'dag', where 'dag' is the DAG as it stood BEFORE the reversal
+reverse.ancestors <- function(anc, dag, u, v) {
+    anc <- remove.ancestors(anc, dag, u, v)
+    add.ancestors(anc, v, u)
+}
+
+##
 ## NEIGHBORHOODS (Castelo and Kocka, JMLR, 2003)
 ##
 
 ## NR: non-reversals neighborhood (addition and removal only)
+## each returned entry is a list(graph=, op=, u=, v=) describing the move
 
 #' @importFrom graph edgeL removeEdge addEdge nodes
-#' @importFrom RBGL dag.sp
-nr.nh <- function(dag) {
+nr.nh <- function(dag, anc) {
     v <- nodes(dag)
     e <- edgeL(dag)
     nr <- list()
     nr.i <- 0
     for (i in seq_along(e)) {
         a <- v[e[[i]]$edges]
-        na <- setdiff(v, a)
+        na <- setdiff(v, c(a, names(e)[i])) ## exclude i itself (no self-loops)
         for (j in seq_along(na)) { ## go through non-adjacent vertices
-            d <- dag.sp(dag, na[j])$distance[names(e)[i]]
-            if (is.nan(d) || is.infinite(d)) {
+            if (!anc[na[j], names(e)[i]]) {
                 tmp.g <- addEdge(names(e)[i], na[j], dag)
                 nr.i <- nr.i + 1
-                nr[[nr.i]] <- tmp.g
+                nr[[nr.i]] <- list(graph=tmp.g, op="add", u=names(e)[i], v=na[j])
             }
         }
         for (j in seq_along(a)) { ## go through adjacent vertices
             tmp.g <- removeEdge(names(e)[i], a[j], dag)
             nr.i <- nr.i + 1
-            nr[[nr.i]] <- tmp.g
+            nr[[nr.i]] <- list(graph=tmp.g, op="remove", u=names(e)[i], v=a[j])
         }
     }
     nr
@@ -34,21 +97,19 @@ nr.nh <- function(dag) {
 ## AR: all-reversals neighborhood (NR + all-arc-reversals)
 
 #' @importFrom graph edgeL removeEdge addEdge nodes
-#' @importFrom RBGL dag.sp
-ar.nh <- function(dag) {
+ar.nh <- function(dag, anc) {
     v <- nodes(dag)
     e <- edgeL(dag)
-    ar <- nr.nh(dag)
+    ar <- nr.nh(dag, anc)
     ar.i <- length(ar)
     for (i in seq_along(e)) { ## reverse edges
         a <- v[e[[i]]$edges]
         for (j in seq_along(a)) { ## go through adjacent vertices
-            tmp.g <- removeEdge(names(e)[i], a[j], dag)
-            d <- dag.sp(tmp.g, names(e)[i])$distance[a[j]]
-            if (is.nan(d) || is.infinite(d)) {
+            if (!any(anc[a[-j], a[j]])) {
+                tmp.g <- removeEdge(names(e)[i], a[j], dag)
                 tmp.g <- addEdge(a[j], names(e)[i], tmp.g)
                 ar.i <- ar.i + 1
-                ar[[ar.i]] <- tmp.g
+                ar[[ar.i]] <- list(graph=tmp.g, op="reverse", u=names(e)[i], v=a[j])
             }
         }
     }
@@ -58,11 +119,10 @@ ar.nh <- function(dag) {
 ## NCR: non-covered arc reversals neighborhood (NR + non-covered-arc-reversals)
 
 #' @importFrom graph edgeL removeEdge addEdge edgeMatrix nodes
-#' @importFrom RBGL dag.sp
-ncr.nh <- function(dag, utargets=integer(0)) {
+ncr.nh <- function(dag, anc, utargets=integer(0)) {
     v <- nodes(dag)
     e <- edgeL(dag)
-    ncr <- nr.nh(dag)
+    ncr <- nr.nh(dag, anc)
     ncr.i <- length(ncr)
     em <- edgeMatrix(dag)
     pasets <- split(v[em["from", ]], factor(v[em["to", ]], levels=v))
@@ -71,12 +131,11 @@ ncr.nh <- function(dag, utargets=integer(0)) {
         for (j in seq_along(a)) { ## go through adjacent vertices
             ced <- identical(sort(pasets[[names(e)[i]]]), sort(setdiff(pasets[[a[j]]], names(e)[i])))
             if (!ced || any(c(e[[i]]$edges[j], i) %in% utargets)) { ## NCR including not interventionally covered
-                tmp.g <- removeEdge(names(e)[i], a[j], dag)
-                d <- dag.sp(tmp.g, names(e)[i])$distance[a[j]]
-                if (is.nan(d) || is.infinite(d)) {
+                if (!any(anc[a[-j], a[j]])) {
+                    tmp.g <- removeEdge(names(e)[i], a[j], dag)
                     tmp.g <- addEdge(a[j], names(e)[i], tmp.g)
                     ncr.i <- ncr.i + 1
-                    ncr[[ncr.i]] <- tmp.g
+                    ncr[[ncr.i]] <- list(graph=tmp.g, op="reverse", u=names(e)[i], v=a[j])
                 }
             }
         }
@@ -111,14 +170,18 @@ resample <- function(x, ...) x[sample.int(length(x), ...)]
 
 ## RCAR: repeated covered arc reversal algorithm
 ## utargets should be a vector of unique target vertices
+## returns a list(dag=, anc=) since every reversal it performs, although
+## always cycle-safe by construction (a covered edge cannot introduce a
+## cycle), still changes true ancestor relationships and must keep 'anc'
+## in sync for subsequent neighborhood generation to remain correct
 
 #' @importFrom graph removeEdge addEdge numEdges edgeMatrix nodes
-rcar <- function(dag, r, utargets) {
+rcar <- function(dag, r, utargets, anc) {
     if (numEdges(dag) == 0)
-        return(dag)
+        return(list(dag=dag, anc=anc))
     cemask <- cedges(dag, utargets)
     if (!any(cemask))
-        return(dag)
+        return(list(dag=dag, anc=anc))
 
     tmp.g <- dag
     v <- nodes(tmp.g)
@@ -127,10 +190,13 @@ rcar <- function(dag, r, utargets) {
         em <- edgeMatrix(tmp.g)
         cemask <- cedges(tmp.g, utargets)
         rndce <- resample(which(cemask), size=1)
-        tmp.g <- removeEdge(v[em["from", rndce]], v[em["to", rndce]], tmp.g)
-        tmp.g <- addEdge(v[em["to", rndce]], v[em["from", rndce]], tmp.g) ## a covered edge cannot introduce a cycle
+        u <- v[em["from", rndce]]
+        w <- v[em["to", rndce]]
+        anc <- reverse.ancestors(anc, tmp.g, u, w) ## a covered edge cannot introduce a cycle
+        tmp.g <- removeEdge(u, w, tmp.g)
+        tmp.g <- addEdge(w, u, tmp.g)
     }
-    tmp.g
+    list(dag=tmp.g, anc=anc)
 }
 
 
@@ -166,7 +232,7 @@ rcar <- function(dag, r, utargets) {
 #'
 #' @return A list containing a [`graphNEL`][graph::graphNEL-class] object with
 #' the structure of the learned DAG, and its corresponding score.
-#' 
+#'
 #' @seealso [iBIC()], [iBGe()]
 #'
 #' @importFrom graph graphNEL
@@ -199,6 +265,8 @@ hillclimbing <- function(dat, targets=list(integer(0)),
     if (!is.null(attr(scorefun, "scorefun.name")))
         scorefun.name <- attr(scorefun, "scorefun.name")
 
+    anc <- init.ancestors(colnames(dat))
+
     s0 <- -Inf
     s1 <- scorefun(g=dag, dat=dat, targets=targets, target.index=target.index,
                    cached.scores=cached.scores, global.sufstats=global.sufstats)
@@ -213,13 +281,18 @@ hillclimbing <- function(dat, targets=list(integer(0)),
 
     while (s1 > s0) {
         s0 <- s1
-        ne <- ar.nh(dag)
-        s1 <- sapply(ne, function(g, d, tgts, tgt.idx, chd.sco, gbl.sst)
-                           scorefun(g=g, dat=d, targets=tgts,
+        ne <- ar.nh(dag, anc)
+        s1 <- sapply(ne, function(nb, d, tgts, tgt.idx, chd.sco, gbl.sst)
+                           scorefun(g=nb$graph, dat=d, targets=tgts,
                                     target.index=tgt.idx, cached.scores=chd.sco,
                                     global.sufstats=gbl.sst),
                      dat, targets, target.index, cached.scores, global.sufstats)
-        dag <- ne[[which.max(s1)]]
+        best <- ne[[which.max(s1)]]
+        anc <- switch(best$op,
+                      add     = add.ancestors(anc, best$u, best$v),
+                      remove  = remove.ancestors(anc, dag, best$u, best$v),
+                      reverse = reverse.ancestors(anc, dag, best$u, best$v))
+        dag <- best$graph
         s1 <- max(s1)
 
         if (verbose)
