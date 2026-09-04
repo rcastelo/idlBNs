@@ -134,6 +134,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
     if (!is.null(attr(scorefun, "scorefun.name")))
         scorefun.name <- attr(scorefun, "scorefun.name")
 
+    anc <- init.ancestors(colnames(dat))
     utargets <- sort(unique(unlist(targets)))
     s0 <- -Inf
     s1 <- scorefun(g=dag, dat=dat, targets=targets, target.index=target.index,
@@ -153,18 +154,24 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
 
     while (!local_maximum) {
         s0 <- s1
-        dag <- rcar(dag, r, utargets)
-        ne <- ncr.nh(dag, utargets)
-        s1 <- sapply(ne, function(g, d, tgts, tgt.idx, chd.sco, gbl.sst)
-                           scorefun(g=g, dat=d, targets=tgts,
+        rcar.out <- rcar(dag, r, utargets, anc)
+        dag <- rcar.out$dag
+        anc <- rcar.out$anc
+        ne <- ncr.nh(dag, anc, utargets)
+        s1 <- sapply(ne, function(nb, d, tgts, tgt.idx, chd.sco, gbl.sst)
+                           scorefun(g=nb$graph, dat=d, targets=tgts,
                                     target.index=tgt.idx, cached.scores=chd.sco,
                                     global.sufstats=gbl.sst),
                      dat, targets, target.index, cached.scores, global.sufstats)
-        dag1 <- ne[[which.max(s1)]]
+        best <- ne[[which.max(s1)]]
         s1 <- max(s1)
         local_maximum <- s1 <= s0
         if (!local_maximum) {
-          dag <- dag1
+          anc <- switch(best$op,
+                        add     = add.ancestors(anc, best$u, best$v),
+                        remove  = remove.ancestors(anc, dag, best$u, best$v),
+                        reverse = reverse.ancestors(anc, dag, best$u, best$v))
+          dag <- best$graph
           if (was_in_local_maximum) {
               escapes <- escapes + 1
               avg_trials_per_escape <- (avg_trials_per_escape *
@@ -174,7 +181,9 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
           trials <- 0
         } else if (trials < MAXTRIALS) {
           s1 <- s0
-          dag <- rcar(dag, r, utargets)
+          rcar.out <- rcar(dag, r, utargets, anc)
+          dag <- rcar.out$dag
+          anc <- rcar.out$anc
           local_maximum <- FALSE
           was_in_local_maximum <- TRUE
           trials <- trials + 1
@@ -195,18 +204,27 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
 
 #' @importFrom cli cli_abort
 .check_input_data <- function(dat) {
-    if (!is.data.frame(dat) && !is.matrix(dat))
-      cli_abort(c("x"="Input data in 'dat' must be a data.frame or matrix object."))
+    if (!is.data.frame(dat) && !is.matrix(dat)) {
+        msg <- paste("Input data in 'dat' must be a data.frame or a",
+                     "matrix object.")
+        cli_abort(c("x"=msg))
+    }
 
     if (is.null(colnames(dat))) {
-      msg <- paste("Input data in 'dat' must have column names corresponding to",
-                   "the random variables.")
-      cli_abort(c("x"=msg))
+        msg <- paste("Input data in 'dat' must have column names",
+                     "corresponding to the random variables of the sought DAG.")
+        cli_abort(c("x"=msg))
     }
 
     dat <- as.matrix(dat)
     if (!is.numeric(dat))
-      cli_abort(c("x"="Input data in 'dat' must be numeric."))
+        cli_abort(c("x"="Input data in 'dat' must be numeric."))
+
+    if (nrow(dat) < 4)
+        cli_abort(c("x"="Input data in 'dat' must have 3 or more rows."))
+
+    if (ncol(dat) < 2)
+        cli_abort(c("x"="Input data in 'dat' must have 2 or more columns."))
 
     dat
 }
