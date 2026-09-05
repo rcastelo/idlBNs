@@ -11,7 +11,8 @@ iBIC(
   target.index = rep(1L, nrow(dat)),
   cached.scores = NULL,
   global.sufstats = NULL,
-  engine = c("C", "R")
+  engine = c("C", "R"),
+  pasets = NULL
 )
 }
 \arguments{
@@ -50,6 +51,13 @@ indices (\code{target.index}) of the interventions. If \code{NULL} (default), th
 \item{engine}{(Default \code{"C"}) A character string selecting the computation
 engine: \code{"C"} (default) uses a compiled C routine for speed; \code{"R"} uses the
 pure-R implementation and is provided for testing and verification.}
+
+\item{pasets}{(Default \code{NULL}) An optional list of parent sets, one per
+vertex in \code{g} in the order given by \code{colnames(dat)}, as internally built
+by \code{iBIC()} from the structure of \code{g}. If \code{NULL} (default), it is
+internally computed from \code{g}. Search algorithms that maintain \code{pasets}
+incrementally across many calls (e.g. \code{\link[=hcmc]{hcmc()}}, \code{\link[=hillclimbing]{hillclimbing()}}) can
+pass it in directly to skip rebuilding it from \code{g} on every call.}
 }
 \value{
 A single numeric value corresponding to the interventional BIC score

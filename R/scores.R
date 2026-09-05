@@ -45,6 +45,13 @@
 #' engine: `"C"` (default) uses a compiled C routine for speed; `"R"` uses the
 #' pure-R implementation and is provided for testing and verification.
 #'
+#' @param pasets (Default `NULL`) An optional list of parent sets, one per
+#' vertex in `g` in the order given by `colnames(dat)`, as internally built
+#' by `iBIC()` from the structure of `g`. If `NULL` (default), it is
+#' internally computed from `g`. Search algorithms that maintain `pasets`
+#' incrementally across many calls (e.g. [hcmc()], [hillclimbing()]) can
+#' pass it in directly to skip rebuilding it from `g` on every call.
+#'
 #' @return A single numeric value corresponding to the interventional BIC score
 #' of the given structure of the Bayesian network for the given data set.
 #'
@@ -111,12 +118,12 @@
 #' iBIC(g, dat)
 #' iBIC(g2, dat)
 #'
-#' @importFrom graph edgeMatrix
+#' @importFrom graph edgeMatrix numNodes
 #' @export
 iBIC <- function(g, dat, targets=list(integer(0)),
                  target.index=rep(1L, nrow(dat)),
                  cached.scores=NULL, global.sufstats=NULL,
-                 engine=c("C", "R")) {
+                 engine=c("C", "R"), pasets=NULL) {
 
     engine <- match.arg(engine)
 
@@ -125,16 +132,16 @@ iBIC <- function(g, dat, targets=list(integer(0)),
         .check_g_dat_consistency(g, dat)
     }
 
-    v <- match(nodes(g), colnames(dat))
-    em <- edgeMatrix(g)
-    pasets <- split(em["from", ], factor(v[em["to", ]], levels=v))
-    stopifnot(identical(names(pasets), as.character(v)))
+    if (is.null(pasets))
+        pasets <- .build_pasets(g, dat)
+    else
+        stopifnot(length(pasets) == numNodes(g))
     .check_cached_scores(g, cached.scores)
 
     if (is.null(global.sufstats))
         global.sufstats <- .iBIC.global.sufstats(dat, targets, target.index)
 
-    sco <- numeric(length(v))
+    sco <- numeric(length(pasets))
     for (i in seq_along(pasets)) {
         s <- NULL
         if (!is.null(cached.scores)) {
@@ -176,6 +183,30 @@ iBIC <- function(g, dat, targets=list(integer(0)),
 }
 ## assign a name attribute to the iBIC() scoring function for reporting purposes
 attr(iBIC, "scorefun.name") <- "iBIC"
+
+## build the list of parent sets of every vertex in g, one element per
+## vertex in the order given by colnames(dat), where pasets[[i]] is an
+## integer vector of the dat-column-index parents of vertex i. shared by
+## iBIC() and iBGe(), and used as the "ground truth" to validate an
+## incrementally-maintained pasets structure (see init.pasets() et al. in
+## search.R) against.
+#' @importFrom graph nodes edgeMatrix
+.build_pasets <- function(g, dat) {
+    v <- match(nodes(g), colnames(dat))
+    em <- edgeMatrix(g)
+    pasets <- split(em["from", ], factor(v[em["to", ]], levels=v))
+    stopifnot(identical(names(pasets), as.character(v)))
+    pasets
+}
+
+## mark iBIC() as able to accept a precomputed 'pasets' argument, so that
+## hcmc()/hillclimbing() can pass in an incrementally-maintained pasets
+## structure instead of having iBIC() rebuild it from g on every call. this
+## is a deliberate opt-in attribute rather than formals() introspection: a
+## custom user scorefun that happens to have an unrelated 'pasets' parameter
+## will never accidentally be fed one, since the attribute is never set on
+## it.
+attr(iBIC, "supports.pasets") <- TRUE
 
 ## convert a list of targets and a vector of target indices to data
 ## observations into a logical matrix of observations by variables,
@@ -357,6 +388,13 @@ attr(iBIC, "global.sufstats.fun") <- .iBIC.global.sufstats
 #' for future versions of the package that will enable this feature for the
 #' iBGe score.
 #'
+#' @param pasets (Default `NULL`) An optional list of parent sets, one per
+#' vertex in `g` in the order given by `colnames(dat)`, as internally built
+#' by `iBGe()` from the structure of `g`. If `NULL` (default), it is
+#' internally computed from `g`. Search algorithms that maintain `pasets`
+#' incrementally across many calls (e.g. [hcmc()], [hillclimbing()]) can
+#' pass it in directly to skip rebuilding it from `g` on every call.
+#'
 #' @return A single numeric value corresponding to the interventional BGe score
 #' of the given structure of the Bayesian network for the given data set.
 #'
@@ -424,23 +462,24 @@ attr(iBIC, "global.sufstats.fun") <- .iBIC.global.sufstats
 #' @export
 iBGe <- function(g, dat, targets=list(integer(0)),
                  target.index=rep(1L, nrow(dat)),
-                 cached.scores=NULL, global.sufstats=NULL) {
+                 cached.scores=NULL, global.sufstats=NULL,
+                 pasets=NULL) {
 
     if (is.null(attr(dat, "sanitycheck"))) {
         dat <- .check_input_data(dat)
         .check_g_dat_consistency(g, dat)
     }
 
-    v <- match(nodes(g), colnames(dat))
-    em <- edgeMatrix(g)
-    pasets <- split(em["from", ], factor(v[em["to", ]], levels=v))
-    stopifnot(identical(names(pasets), as.character(v)))
+    if (is.null(pasets))
+        pasets <- .build_pasets(g, dat)
+    else
+        stopifnot(length(pasets) == numNodes(g))
     .check_cached_scores(g, cached.scores)
 
     if (is.null(global.sufstats))
         global.sufstats <- .iBGe.global.sufstats(dat, targets, target.index)
 
-    sco <- numeric(length(v))
+    sco <- numeric(length(pasets))
     for (i in seq_along(pasets)) {
         s <- NULL
         if (!is.null(cached.scores)) {
@@ -474,6 +513,10 @@ iBGe <- function(g, dat, targets=list(integer(0)),
 }
 ## assign a name attribute to the iBGe() scoring function for reporting purposes
 attr(iBGe, "scorefun.name") <- "iBGe"
+
+## mark iBGe() as able to accept a precomputed 'pasets' argument -- see the
+## identical attribute on iBIC() for the rationale.
+attr(iBGe, "supports.pasets") <- TRUE
 
 ## calculate global sufficient statistics for the iBGe score, which do not
 ## depend on the structure of a specific DAG, but only on the input data,
