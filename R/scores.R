@@ -265,19 +265,36 @@ attr(iBIC, "global.sufstats.fun") <- .iBIC.global.sufstats
 #' @importFrom graph numNodes
 #' @importFrom cli cli_abort
 .check_cached_scores <- function(g, cached.scores) {
-    if (!is.null(cached.scores)) {
-        if (!is.list(cached.scores) || length(cached.scores) != numNodes(g)) {
-            msg <- paste("'cached.scores' must be a list of length equal to",
-                         "the number of vertices in g (", numNodes(g), ")")
-            cli_abort(c("x"=msg))
-        }
-        if (any(vapply(cached.scores, function(x) !is.environment(x),
-                       logical(1)))) {
-            msg <- paste("Each element of 'cached.scores' must be",
-                         "an environment")
-            cli_abort(c("x"=msg))
-        }
+    if (is.null(cached.scores))
+        return(invisible(NULL))
+
+    ## fast path: skip the full O(p) validation below on repeat calls with
+    ## the same cached.scores object, e.g. once per neighbor from inside
+    ## hcmc()'s or hillclimbing()'s search loop, where the same
+    ## cached.scores is threaded through every call for the whole search.
+    ## the marker is stored inside one of the per-node environments
+    ## (a reference object in R), so it persists across calls even though
+    ## the 'cached.scores' list argument itself is a fresh local binding
+    ## on every call.
+    if (is.list(cached.scores) && length(cached.scores) > 0L &&
+        is.environment(cached.scores[[1L]]) &&
+        isTRUE(cached.scores[[1L]]$.validated))
+        return(invisible(NULL))
+
+    if (!is.list(cached.scores) || length(cached.scores) != numNodes(g)) {
+        msg <- paste("'cached.scores' must be a list of length equal to",
+                     "the number of vertices in g (", numNodes(g), ")")
+        cli_abort(c("x"=msg))
     }
+    if (any(vapply(cached.scores, function(x) !is.environment(x),
+                   logical(1)))) {
+        msg <- paste("Each element of 'cached.scores' must be",
+                     "an environment")
+        cli_abort(c("x"=msg))
+    }
+
+    assign(".validated", TRUE, envir=cached.scores[[1L]])
+    invisible(NULL)
 }
 
 #' @importFrom cli cli_abort

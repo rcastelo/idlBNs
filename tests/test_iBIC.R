@@ -75,3 +75,41 @@ stopifnot(abs(sobs_C - sobs_R) < tol)
 sobs2_C <- iBIC(g2, dat, engine="C")
 sobs2_R <- iBIC(g2, dat, engine="R")
 stopifnot(abs(sobs2_C - sobs2_R) < tol)
+
+## verify that .check_cached_scores()'s fast path (skip full validation on
+## repeat calls with the same cached.scores object, marked internally after
+## its first successful validation) does not change the calculated score,
+## reusing the same cached.scores object across repeated calls, as is done
+## by hcmc()/hillclimbing() during search
+
+csco <- replicate(numNodes(g), new.env(hash=TRUE, parent=emptyenv()),
+                  simplify=FALSE)
+
+s_first  <- iBIC(g, dat, targets, target.index, cached.scores=csco)
+s_second <- iBIC(g, dat, targets, target.index, cached.scores=csco)
+s_third  <- iBIC(g, dat, targets, target.index, cached.scores=csco)
+stopifnot(abs(s_first - s_second) < tol)
+stopifnot(abs(s_first - s_third) < tol)
+
+## a different DAG, reusing the same (now fast-pathed) cached.scores object
+s2_cached <- iBIC(g2, dat, targets, target.index, cached.scores=csco)
+stopifnot(abs(s2_cached - s2_C) < tol)
+
+## a malformed cached.scores must still be rejected: since it has never been
+## validated before, it cannot have the internal '.validated' marker set, so
+## the fast path must not accidentally bypass validation for it
+
+bad_length <- replicate(numNodes(g) - 1L,
+                        new.env(hash=TRUE, parent=emptyenv()), simplify=FALSE)
+res <- tryCatch({
+    iBIC(g, dat, targets, target.index, cached.scores=bad_length)
+    "no error"
+}, error=function(e) "error")
+stopifnot(identical(res, "error"))
+
+bad_elements <- as.list(seq_len(numNodes(g)))
+res <- tryCatch({
+    iBIC(g, dat, targets, target.index, cached.scores=bad_elements)
+    "no error"
+}, error=function(e) "error")
+stopifnot(identical(res, "error"))
