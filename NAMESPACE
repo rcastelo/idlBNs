@@ -29,5 +29,7 @@ importFrom(graph,
 importFrom(methods,as)
 importFrom(stats,
   cov,
-  cov.wt
+  cov.wt,
+  setNames
 )
+useDynLib(idlBNs, .registration=TRUE)
