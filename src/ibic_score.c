@@ -1,4 +1,7 @@
 #include <math.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
 #include <R.h>
 #include <Rinternals.h>
 #include <R_ext/Lapack.h>
@@ -128,4 +131,135 @@ iBIC_node_score(const double* Sj, int p1, const int* pa, int lp, int node,
     double s = -0.5 * Nj * (1.0 + log(rss / Nj)) - lambda * (1.0 + lp);
 
     return s;
+}
+
+/* ascending comparator for qsort(), avoiding the classic overflow-prone
+   "return *a - *b" pattern */
+static int
+cmp_int(const void *a, const void *b) {
+    int ia = *(const int *) a, ib = *(const int *) b;
+    return (ia > ib) - (ia < ib);
+}
+
+/*
+ * build_cache_key
+ *
+ * Builds the same cache key format as the R function .cached_scores_key(),
+ * i.e. paste(sort.int(paset), collapse=":"), or the literal ":" when
+ * paset is empty (matching .cached_scores_key()'s nchar(k)==0L special
+ * case). Returns an R_alloc'd, NUL-terminated string, freed automatically
+ * when the top-level .Call returns (or earlier, if the caller rewinds the
+ * R_alloc "vmax" stack with vmaxset() after each node -- see
+ * C_iBIC_score()).
+ *
+ * Assumes pa[] contains no NA_INTEGER values (guaranteed by construction
+ * of 'pasets' on the R side; not defensively checked here).
+ */
+static char *
+build_cache_key(const int *pa, int lp) {
+    if (lp == 0)
+        return ":";
+
+    int *sorted = (int *) R_alloc(lp, sizeof(int));
+    memcpy(sorted, pa, (size_t) lp * sizeof(int));
+    qsort(sorted, lp, sizeof(int), cmp_int);
+
+    /* worst case: 11 chars per int (sign + 10 digits) + 1 separator */
+    size_t bufsize = (size_t) lp * 12 + 1;
+    char *buf = (char *) R_alloc(bufsize, sizeof(char));
+    size_t pos = 0;
+    for (int k = 0; k < lp; k++) {
+        int written = snprintf(buf + pos, bufsize - pos,
+                               k == 0 ? "%d" : ":%d", sorted[k]);
+        pos += (size_t) written;
+    }
+    return buf;
+}
+
+/*
+ * C_iBIC_score
+ *
+ * Computes the iBIC score for a whole DAG, replicating the inner body of
+ * the iBIC() R loop (cache lookup, cache-miss computation via
+ * iBIC_node_score(), cache write-back) entirely in C, so that a single
+ * .Call() replaces what used to be one .Call() per cache-miss node inside
+ * an R for loop. The caching logic and key format are unchanged from
+ * .cached_scores_key()/cached.scores[[i]][[k]] -- only their
+ * implementation moved from R to C.
+ *
+ * Arguments
+ * ---------
+ * S_R             VECSXP   global.sufstats$S: a list of p (p+1)x(p+1)
+ *                          sufficient-statistics matrices, one per vertex
+ * pasets_R        VECSXP   a list of p integer vectors, one per vertex,
+ *                          the 1-based parent indices of that vertex
+ * data_count_R    REALSXP  global.sufstats$data.count, length p
+ * n_R             REALSXP  scalar: global.sufstats$n
+ * cached_scores_R VECSXP   a list of p environments, or R_NilValue if no
+ *                          caching is requested (cached.scores=NULL)
+ *
+ * Returns a length-1 REALSXP containing the total score (sum over nodes).
+ */
+SEXP
+C_iBIC_score(SEXP S_R, SEXP pasets_R, SEXP data_count_R, SEXP n_R,
+            SEXP cached_scores_R) {
+    int p = LENGTH(pasets_R);
+    double n = REAL(n_R)[0];
+    int has_cache = (cached_scores_R != R_NilValue);
+    double total = 0.0;
+
+    for (int i = 0; i < p; i++) {
+        void *vmax = vmaxget(); /* bound R_alloc accumulation to one node
+                                   at a time, instead of the whole loop */
+
+        SEXP pa_R = VECTOR_ELT(pasets_R, i);
+        const int *pa = INTEGER(pa_R);
+        int lp = LENGTH(pa_R);
+
+        SEXP env = R_NilValue;
+        SEXP sym = R_NilValue;
+        double s = 0.0;
+        int found = 0;
+
+        if (has_cache) {
+            env = VECTOR_ELT(cached_scores_R, i);
+            char *key = build_cache_key(pa, lp);
+            sym = Rf_install(key); /* symbols are GC-safe unprotected */
+            /* R_existsVarInFrame()/R_getVar() (envir.c), not the
+               legacy-only Rf_findVarInFrame() (declared in Rinternals.h
+               only under #ifdef ENABLE_LEGACY_NONAPI_FUNS, not part of
+               the default package-facing C API); inherits=FALSE matches
+               cached.scores[[i]]'s single-frame (parent=emptyenv()) R
+               "[[" lookup semantics */
+            if (R_existsVarInFrame(env, sym)) {
+                SEXP val = R_getVar(sym, env, FALSE);
+                s = REAL(val)[0];
+                found = 1;
+            }
+        }
+
+        if (!found) {
+            SEXP Sj_R = VECTOR_ELT(S_R, i);
+            int p1 = (int) sqrt((double) LENGTH(Sj_R));
+            double Nj = REAL(data_count_R)[i];
+            s = iBIC_node_score(REAL(Sj_R), p1, pa, lp, i + 1, Nj, n);
+            if (has_cache) {
+                /* Rf_install() above and Rf_ScalarReal() here are kept as
+                   separate statements, and the ScalarReal() result is
+                   protected before defineVar(): nesting both allocating
+                   calls as sibling arguments to defineVar() would leave
+                   the unprotected ScalarReal() result exposed to GC under
+                   C's unspecified argument-evaluation order */
+                SEXP val = PROTECT(Rf_ScalarReal(s));
+                Rf_defineVar(sym, val, env);
+                UNPROTECT(1);
+            }
+        }
+        total += s;
+
+        vmaxset(vmax); /* reclaim this node's scratch space (idx/ZtZ/ZtY
+                           inside iBIC_node_score(), plus the key buffer) */
+    }
+
+    return Rf_ScalarReal(total);
 }

@@ -135,3 +135,58 @@ Type 'q()' to quit R.
 + }, error=function(e) "error")
 > stopifnot(identical(res, "error"))
 > 
+> ## verify that iBIC()'s C engine's whole-DAG-loop C function (which does
+> ## cache lookup/write-back entirely in C, replicating .cached_scores_key()'s
+> ## key format) is cross-compatible with the pure-R engine's cache handling:
+> ## a cached.scores object populated by one engine must be readable, with
+> ## identical scores, by the other engine
+> 
+> csco_R_populated <- replicate(numNodes(g), new.env(hash=TRUE, parent=emptyenv()),
++                               simplify=FALSE)
+> s_via_R <- iBIC(g, dat, targets, target.index,
++                 cached.scores=csco_R_populated, engine="R")
+> s_via_C_cached <- iBIC(g, dat, targets, target.index,
++                        cached.scores=csco_R_populated, engine="C")
+> stopifnot(abs(s_via_R - s_via_C_cached) < tol)
+> 
+> csco_C_populated <- replicate(numNodes(g), new.env(hash=TRUE, parent=emptyenv()),
++                               simplify=FALSE)
+> s_via_C <- iBIC(g, dat, targets, target.index,
++                cached.scores=csco_C_populated, engine="C")
+> s_via_R_cached <- iBIC(g, dat, targets, target.index,
++                       cached.scores=csco_C_populated, engine="R")
+> stopifnot(abs(s_via_C - s_via_R_cached) < tol)
+> 
+> ## the two cached.scores objects, populated independently by the C and R
+> ## engines respectively, must end up with identical keys in every per-node
+> ## environment (confirms the C and R cache-key formats are byte-identical,
+> ## not merely that the final scores happen to match)
+> for (i in seq_len(numNodes(g)))
++     stopifnot(identical(sort(ls(csco_R_populated[[i]])),
++                         sort(ls(csco_C_populated[[i]]))))
+> 
+> ## edge cases: a minimal 2-node DAG (one root with an empty parent set,
+> ## exercising the literal ":" cache-key special case, plus one child), and
+> ## repeated cache hits/misses through the C engine
+> 
+> g2n <- new("graphNEL", nodes=c("Y1", "Y2"), edgemode="directed")
+> g2n <- addEdge("Y1", "Y2", g2n)
+> set.seed(1)
+> dat2n <- data.frame(Y1=rnorm(50), Y2=rnorm(50))
+> s2n_C <- iBIC(g2n, dat2n, engine="C")
+> s2n_R <- iBIC(g2n, dat2n, engine="R")
+> stopifnot(abs(s2n_C - s2n_R) < tol)
+> 
+> csco_hitmiss <- replicate(numNodes(g), new.env(hash=TRUE, parent=emptyenv()),
++                           simplify=FALSE)
+> s_allmiss <- iBIC(g, dat, targets, target.index,
++                   cached.scores=csco_hitmiss, engine="C")
+> s_allhit  <- iBIC(g, dat, targets, target.index,
++                   cached.scores=csco_hitmiss, engine="C")
+> stopifnot(abs(s_allmiss - s_allhit) < tol)
+> 
+> ## no caching at all (cached.scores=NULL) through the C engine, repeated
+> s_nocache1 <- iBIC(g, dat, targets, target.index, cached.scores=NULL, engine="C")
+> s_nocache2 <- iBIC(g, dat, targets, target.index, cached.scores=NULL, engine="C")
+> stopifnot(abs(s_nocache1 - s_nocache2) < tol)
+> 

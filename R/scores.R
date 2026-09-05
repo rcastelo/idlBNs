@@ -141,6 +141,14 @@ iBIC <- function(g, dat, targets=list(integer(0)),
     if (is.null(global.sufstats))
         global.sufstats <- .iBIC.global.sufstats(dat, targets, target.index)
 
+    if (engine == "C")
+        return(.Call(C_iBIC_score,
+                     global.sufstats$S,
+                     lapply(pasets, as.integer),
+                     as.double(global.sufstats$data.count),
+                     as.double(global.sufstats$n),
+                     cached.scores))
+
     sco <- numeric(length(pasets))
     for (i in seq_along(pasets)) {
         s <- NULL
@@ -149,28 +157,19 @@ iBIC <- function(g, dat, targets=list(integer(0)),
             s <- cached.scores[[i]][[k]]
         }
         if (is.null(s)) {
-            if (engine == "C") {
-                s <- .Call(C_iBIC_node_score,
-                           global.sufstats$S[[i]],
-                           as.integer(pasets[[i]]),
-                           i,
-                           as.double(global.sufstats$data.count[i]),
-                           as.double(global.sufstats$n))
-            } else {
-                Sj <- global.sufstats$S[[i]]
-                idx <- c(1L, pasets[[i]] + 1L)
-                ZtZ <- Sj[idx, idx, drop=FALSE]
-                ZtY <- Sj[idx, i + 1L]
-                YtY <- Sj[i + 1L, i + 1L]
-                R <- chol(ZtZ)
-                cc <- backsolve(R, ZtY, transpose=TRUE)
-                RSS <- YtY - sum(cc^2)
+            Sj <- global.sufstats$S[[i]]
+            idx <- c(1L, pasets[[i]] + 1L)
+            ZtZ <- Sj[idx, idx, drop=FALSE]
+            ZtY <- Sj[idx, i + 1L]
+            YtY <- Sj[i + 1L, i + 1L]
+            R <- chol(ZtZ)
+            cc <- backsolve(R, ZtY, transpose=TRUE)
+            RSS <- YtY - sum(cc^2)
 
-                Nj <- global.sufstats$data.count[i]
-                lambda <- 0.5 * log(global.sufstats$n)
-                s <- -0.5 * Nj * (1 + log(RSS / Nj)) -
-                     lambda * (1 + length(pasets[[i]]))
-            }
+            Nj <- global.sufstats$data.count[i]
+            lambda <- 0.5 * log(global.sufstats$n)
+            s <- -0.5 * Nj * (1 + log(RSS / Nj)) -
+                 lambda * (1 + length(pasets[[i]]))
 
             if (!is.null(cached.scores))
                 cached.scores[[i]][[k]] <- s
