@@ -76,3 +76,24 @@ Type 'q()' to quit R.
 > iBIC(g2, dat)
 [1] -326.3833
 > 
+> ## verify that the C engine and the R engine give numerically identical results
+> 
+> tol <- .Machine$double.eps^0.5
+> 
+> s_C  <- iBIC(g, dat, targets, target.index, engine="C")
+> s_R  <- iBIC(g, dat, targets, target.index, engine="R")
+> stopifnot(abs(s_C - s_R) < tol)
+> 
+> s2_C <- iBIC(g2, dat, targets, target.index, engine="C")
+> s2_R <- iBIC(g2, dat, targets, target.index, engine="R")
+> stopifnot(abs(s2_C - s2_R) < tol)
+> 
+> ## pure observational data (no interventions)
+> sobs_C  <- iBIC(g,  dat, engine="C")
+> sobs_R  <- iBIC(g,  dat, engine="R")
+> stopifnot(abs(sobs_C - sobs_R) < tol)
+> 
+> sobs2_C <- iBIC(g2, dat, engine="C")
+> sobs2_R <- iBIC(g2, dat, engine="R")
+> stopifnot(abs(sobs2_C - sobs2_R) < tol)
+> 

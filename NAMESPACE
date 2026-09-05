@@ -31,3 +31,4 @@ importFrom(stats,
   cov,
   cov.wt
 )
+useDynLib(idlBNs, .registration=TRUE)

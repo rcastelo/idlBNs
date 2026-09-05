@@ -50,6 +50,7 @@
 #'
 #' @references Kuipers, J. and Moffa, G. The interventional {B}ayesian {G}aussian equivalent score for {B}ayesian causal inference with unknown soft interventions. In \emph{Causal Learning and Reasoning}, pages 772--791. PMLR, 2025.
 #'
+#' @useDynLib idlBNs, .registration=TRUE
 #' @keywords package
 "_PACKAGE"
 

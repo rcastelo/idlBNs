@@ -10,7 +10,8 @@ iBIC(
   targets = list(integer(0)),
   target.index = rep(1L, nrow(dat)),
   cached.scores = NULL,
-  global.sufstats = NULL
+  global.sufstats = NULL,
+  engine = c("C", "R")
 )
 }
 \arguments{
@@ -45,6 +46,10 @@ function, which do not depend on the structure of a specific DAG, but only
 on the input data (\code{dat}), the target vertices (\code{targets}) and the target
 indices (\code{target.index}) of the interventions. If \code{NULL} (default), the
 \code{.iBIC.global.sufstats()} function is internally called.}
+
+\item{engine}{(Default \code{"C"}) A character string selecting the computation
+engine: \code{"C"} (default) uses a compiled C routine for speed; \code{"R"} uses the
+pure-R implementation and is provided for testing and verification.}
 }
 \value{
 A single numeric value corresponding to the interventional BIC score

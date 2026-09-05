@@ -41,6 +41,10 @@
 #' indices (`target.index`) of the interventions. If `NULL` (default), the
 #' `.iBIC.global.sufstats()` function is internally called.
 #'
+#' @param engine (Default `"C"`) A character string selecting the computation
+#' engine: `"C"` (default) uses a compiled C routine for speed; `"R"` uses the
+#' pure-R implementation and is provided for testing and verification.
+#'
 #' @return A single numeric value corresponding to the interventional BIC score
 #' of the given structure of the Bayesian network for the given data set.
 #'
@@ -111,7 +115,10 @@
 #' @export
 iBIC <- function(g, dat, targets=list(integer(0)),
                  target.index=rep(1L, nrow(dat)),
-                 cached.scores=NULL, global.sufstats=NULL) {
+                 cached.scores=NULL, global.sufstats=NULL,
+                 engine=c("C", "R")) {
+
+    engine <- match.arg(engine)
 
     if (is.null(attr(dat, "sanitycheck"))) {
         dat <- .check_input_data(dat)
@@ -135,19 +142,28 @@ iBIC <- function(g, dat, targets=list(integer(0)),
             s <- cached.scores[[i]][[k]]
         }
         if (is.null(s)) {
-            Sj <- global.sufstats$S[[i]]
-            idx <- c(1L, pasets[[i]] + 1L)
-            ZtZ <- Sj[idx, idx, drop=FALSE]
-            ZtY <- Sj[idx, i + 1L]
-            YtY <- Sj[i + 1L, i + 1L]
-            R <- chol(ZtZ)
-            cc <- backsolve(R, ZtY, transpose=TRUE)
-            RSS <- YtY - sum(cc^2)
+            if (engine == "C") {
+                s <- .Call(C_iBIC_node_score,
+                           global.sufstats$S[[i]],
+                           as.integer(pasets[[i]]),
+                           i,
+                           as.double(global.sufstats$data.count[i]),
+                           as.double(global.sufstats$n))
+            } else {
+                Sj <- global.sufstats$S[[i]]
+                idx <- c(1L, pasets[[i]] + 1L)
+                ZtZ <- Sj[idx, idx, drop=FALSE]
+                ZtY <- Sj[idx, i + 1L]
+                YtY <- Sj[i + 1L, i + 1L]
+                R <- chol(ZtZ)
+                cc <- backsolve(R, ZtY, transpose=TRUE)
+                RSS <- YtY - sum(cc^2)
 
-            Nj <- global.sufstats$data.count[i]
-            lambda <- 0.5 * log(global.sufstats$n)
-            s <- -0.5 * Nj * (1 + log(RSS / Nj)) -
-                 lambda * (1 + length(pasets[[i]]))
+                Nj <- global.sufstats$data.count[i]
+                lambda <- 0.5 * log(global.sufstats$n)
+                s <- -0.5 * Nj * (1 + log(RSS / Nj)) -
+                     lambda * (1 + length(pasets[[i]]))
+            }
 
             if (!is.null(cached.scores))
                 cached.scores[[i]][[k]] <- s
