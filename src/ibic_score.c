@@ -3,11 +3,19 @@
 #include <Rinternals.h>
 #include <R_ext/Lapack.h>
 
+/* prototypes */
+
+double
+iBIC_node_score(const double* Sj, int p1, const int* pa, int lp, int node,
+                double Nj, double n);
+
 /*
  * C_iBIC_node_score
  *
  * Computes the iBIC score contribution for one node, replicating the inner
- * body of the iBIC() R loop using LAPACK Cholesky + triangular solve.
+ * body of the iBIC() R loop using LAPACK Cholesky + triangular solve. This
+ * is an R-facing API C wrapper for the iBIC_node_score() function, which does
+ * the actual computation.
  *
  * Arguments
  * ---------
@@ -36,6 +44,43 @@ C_iBIC_node_score(SEXP Sj_R, SEXP pa_R, SEXP node_R, SEXP Nj_R, SEXP n_R) {
     const double* Sj = REAL(Sj_R);
     const int*    pa = INTEGER(pa_R);
 
+    double s = iBIC_node_score(Sj, p1, pa, lp, node_C, Nj, n);
+
+    /* return as length-1 numeric vector */
+    SEXP result = PROTECT(allocVector(REALSXP, 1));
+    REAL(result)[0] = s;
+    UNPROTECT(1);
+
+    return result;
+}
+
+/*
+ * iBIC_node_score
+ *
+ * Computes the iBIC score contribution for one node, replicating the inner
+ * body of the iBIC() R loop using LAPACK Cholesky + triangular solve.
+ *
+ * Arguments
+ * ---------
+ * Sj      double* the (p+1)x(p+1) sufficient-statistics matrix S[[i]],
+ *                  stored in column-major order (as R matrices always are)
+ * p1      int      p+1, dim of square S
+ * pa      INTSXP   parent variable indices, 1-based (may be length 0)
+ * lp      int      number of parents
+ * node    int      scalar: the R loop variable i (1-based, range 1..p)
+ *                  NOTE: the 0-based column of the response in S is node=i,
+ *                  not i-1, because R accesses S at column i+1 (1-based) which
+ *                  is column i in 0-based indexing
+ * Nj      REALSXP  scalar: number of non-intervened observations for this node
+ * n       REALSXP  scalar: total observation count n (used to compute lambda)
+ *
+ * Returns a length-1 REALSXP containing the node score s.
+ */
+double
+iBIC_node_score(const double* Sj, int p1, const int* pa, int lp, int node,
+                double Nj, double n) {
+    int m = lp + 1;                  /* intercept + parents */
+
     /* build 0-based index array: [0, pa[0], pa[1], ...] */
     int* idx = (int *) R_alloc(m, sizeof(int));
     idx[0] = 0;
@@ -52,16 +97,16 @@ C_iBIC_node_score(SEXP Sj_R, SEXP pa_R, SEXP node_R, SEXP Nj_R, SEXP n_R) {
     /* extract ZtY (mx1) */
     double* ZtY = (double *) R_alloc(m, sizeof(double));
     for (int r = 0; r < m; r++)
-        ZtY[r] = Sj[(size_t)node_C * p1 + idx[r]];
+        ZtY[r] = Sj[(size_t)node * p1 + idx[r]];
 
     /* extract YtY scalar */
-    double YtY = Sj[(size_t)node_C * p1 + node_C];
+    double YtY = Sj[(size_t)node * p1 + node];
 
     /* Cholesky factorisation of ZtZ (upper triangular in-place) */
     int info;
     F77_CALL(dpotrf)("U", &m, ZtZ, &m, &info FCONE);
     if (info != 0)
-        error("C_iBIC_node_score: dpotrf failed (info=%d); "
+        error("iBIC_node_score: dpotrf failed (info=%d); "
               "ZtZ is not positive definite", info);
 
     /* triangular solve: R^T * cc = ZtY, result overwrites ZtY */
@@ -71,7 +116,7 @@ C_iBIC_node_score(SEXP Sj_R, SEXP pa_R, SEXP node_R, SEXP Nj_R, SEXP n_R) {
     F77_CALL(dtrtrs)("U", "T", "N", &m, &nrhs, ZtZ, &m, ZtY, &m, &info
                      FCONE FCONE FCONE);
     if (info != 0)
-        error("C_iBIC_node_score: dtrtrs failed (info=%d)", info);
+        error("iBIC_node_score: dtrtrs failed (info=%d)", info);
 
     /* RSS = YtY - sum(cc^2) */
     double rss = YtY;
@@ -82,10 +127,5 @@ C_iBIC_node_score(SEXP Sj_R, SEXP pa_R, SEXP node_R, SEXP Nj_R, SEXP n_R) {
     double lambda = 0.5 * log(n);
     double s = -0.5 * Nj * (1.0 + log(rss / Nj)) - lambda * (1.0 + lp);
 
-    /* return as length-1 numeric vector */
-    SEXP result = PROTECT(allocVector(REALSXP, 1));
-    REAL(result)[0] = s;
-    UNPROTECT(1);
-
-    return result;
+    return s;
 }
