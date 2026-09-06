@@ -21,7 +21,7 @@ no interventions in the data."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">idlBNs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.5</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -66,7 +66,8 @@ no interventions in the data.</p>
 <span>  targets <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">integer</a></span><span class="op">(</span><span class="fl">0</span><span class="op">)</span><span class="op">)</span>,</span>
 <span>  target.index <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1L</span>, <span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">dat</span><span class="op">)</span><span class="op">)</span>,</span>
 <span>  cached.scores <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  global.sufstats <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  global.sufstats <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  pasets <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -121,6 +122,15 @@ indices (<code>target.index</code>) of the interventions. If <code>NULL</code> (
 not implemented for the iBGe score, but it is included as an API placeholder
 for future versions of the package that will enable this feature for the
 iBGe score.</p></dd>
+
+
+<dt id="arg-pasets">pasets<a class="anchor" aria-label="anchor" href="#arg-pasets"></a></dt>
+<dd><p>(Default <code>NULL</code>) An optional list of parent sets, one per
+vertex in <code>g</code> in the order given by <code>colnames(dat)</code>, as internally built
+by <code>iBGe()</code> from the structure of <code>g</code>. If <code>NULL</code> (default), it is
+internally computed from <code>g</code>. Search algorithms that maintain <code>pasets</code>
+incrementally across many calls (e.g. <code><a href="hcmc.html">hcmc()</a></code>, <code><a href="hillclimbing.html">hillclimbing()</a></code>) can
+pass it in directly to skip rebuilding it from <code>g</code> on every call.</p></dd>
 
 </dl></div>
     <div class="section level2">

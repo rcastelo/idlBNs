@@ -18,7 +18,8 @@ iBGe(
   targets = list(integer(0)),
   target.index = rep(1L, nrow(dat)),
   cached.scores = NULL,
-  global.sufstats = NULL
+  global.sufstats = NULL,
+  pasets = NULL
 )
 ```
 
@@ -72,6 +73,17 @@ iBGe(
   currently not implemented for the iBGe score, but it is included as an
   API placeholder for future versions of the package that will enable
   this feature for the iBGe score.
+
+- pasets:
+
+  (Default `NULL`) An optional list of parent sets, one per vertex in
+  `g` in the order given by `colnames(dat)`, as internally built by
+  `iBGe()` from the structure of `g`. If `NULL` (default), it is
+  internally computed from `g`. Search algorithms that maintain `pasets`
+  incrementally across many calls (e.g.
+  [`hcmc()`](https://rcastelo.github.io/idlBNs/reference/hcmc.md),
+  [`hillclimbing()`](https://rcastelo.github.io/idlBNs/reference/hillclimbing.md))
+  can pass it in directly to skip rebuilding it from `g` on every call.
 
 ## Value
 

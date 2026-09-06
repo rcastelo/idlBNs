@@ -19,7 +19,9 @@ iBIC(
   targets = list(integer(0)),
   target.index = rep(1L, nrow(dat)),
   cached.scores = NULL,
-  global.sufstats = NULL
+  global.sufstats = NULL,
+  engine = c("C", "R"),
+  pasets = NULL
 )
 ```
 
@@ -69,6 +71,23 @@ iBIC(
   the input data (`dat`), the target vertices (`targets`) and the target
   indices (`target.index`) of the interventions. If `NULL` (default),
   the `.iBIC.global.sufstats()` function is internally called.
+
+- engine:
+
+  (Default `"C"`) A character string selecting the computation engine:
+  `"C"` (default) uses a compiled C routine for speed; `"R"` uses the
+  pure-R implementation and is provided for testing and verification.
+
+- pasets:
+
+  (Default `NULL`) An optional list of parent sets, one per vertex in
+  `g` in the order given by `colnames(dat)`, as internally built by
+  `iBIC()` from the structure of `g`. If `NULL` (default), it is
+  internally computed from `g`. Search algorithms that maintain `pasets`
+  incrementally across many calls (e.g.
+  [`hcmc()`](https://rcastelo.github.io/idlBNs/reference/hcmc.md),
+  [`hillclimbing()`](https://rcastelo.github.io/idlBNs/reference/hillclimbing.md))
+  can pass it in directly to skip rebuilding it from `g` on every call.
 
 ## Value
 
