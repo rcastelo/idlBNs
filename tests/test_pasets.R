@@ -17,11 +17,78 @@ pasets_equal <- function(a, b) {
 }
 
 ################################################################################
-## 1. property test: for every neighbor returned by nr.nh()/ar.nh()/ncr.nh(),
-## the pasets derived by applying the neighbor's own (op, u, v) delta to the
-## current DAG's pasets must equal a from-scratch rebuild on the neighbor's
-## own graph
+## 1. property test: for every move returned by nr.nh()/ar.nh()/ncr.nh(),
+## the pasets derived by applying the move's own (op, u, v) delta to the
+## current DAG's pasets must equal a from-scratch rebuild on the graph that
+## apply.move() produces for that same move. also checks that the three
+## neighborhoods enumerate exactly the move sets an independent brute-force
+## reference produces (see nh_reference() below), since the neighborhoods no
+## longer return candidate graphs to check against
 ################################################################################
+
+## independent brute-force reference for the three neighborhoods, written
+## against the DAG itself (adjacency + reachability recomputed from scratch)
+## rather than against the incrementally maintained ancestor matrix, so it
+## does not share any machinery with the functions under test. returns a
+## character vector of "op:u:v" move descriptors.
+nh_reference <- function(dag, kind=c("nr", "ar", "ncr"), utargets=integer(0)) {
+  kind <- match.arg(kind)
+  v <- nodes(dag)
+  p <- length(v)
+  adj <- matrix(FALSE, p, p)
+  em <- edgeMatrix(dag)
+  if (ncol(em) > 0)
+    adj[cbind(em["from", ], em["to", ])] <- TRUE
+  ## transitive closure by repeated squaring (reach[a, b]: a path a -> b)
+  reach <- adj
+  repeat {
+    nxt <- reach | ((reach %*% adj) > 0)
+    if (identical(nxt, reach)) break
+    reach <- nxt
+  }
+  pa <- lapply(seq_len(p), function(j) which(adj[, j]))
+  ## a move is legal iff the resulting adjacency matrix has no directed cycle
+  acyclic <- function(A) {
+    R <- A
+    repeat {
+      N <- R | ((R %*% A) > 0)
+      if (identical(N, R)) break
+      R <- N
+    }
+    !any(diag(R))
+  }
+  mv <- character(0)
+  for (i in seq_len(p)) {          ## additions, in i-major then j order
+    for (j in seq_len(p)) {
+      if (i == j || adj[i, j]) next
+      A <- adj; A[i, j] <- TRUE
+      if (acyclic(A)) mv <- c(mv, paste("1", i, j, sep=":"))
+    }
+  }
+  ## nr.nh() emits, per vertex i, that vertex's additions then its removals
+  mv2 <- character(0)
+  for (i in seq_len(p)) {
+    mv2 <- c(mv2, grep(paste0("^1:", i, ":"), mv, value=TRUE))
+    for (j in which(adj[i, ])) mv2 <- c(mv2, paste("2", i, j, sep=":"))
+  }
+  mv <- mv2
+  if (kind == "nr") return(mv)
+  for (i in seq_len(p)) {          ## reversals
+    for (j in which(adj[i, ])) {
+      A <- adj; A[i, j] <- FALSE; A[j, i] <- TRUE
+      if (!acyclic(A)) next
+      if (kind == "ncr") {
+        covered <- setequal(pa[[i]], setdiff(pa[[j]], i))
+        touches <- (i %in% utargets) || (j %in% utargets)
+        if (covered && !touches) next
+      }
+      mv <- c(mv, paste("3", i, j, sep=":"))
+    }
+  }
+  mv
+}
+
+nh_moves <- function(ne) paste(ne$op, ne$u, ne$v, sep=":")
 
 set.seed(42)
 for (p in c(4, 6, 8)) {
@@ -47,18 +114,32 @@ for (p in c(4, 6, 8)) {
     vidx <- setNames(seq_len(p), varnames)
     pasets <- idlBNs:::.build_pasets(dag, dat)
 
-    utargets <- integer(0)
-    all_ne <- c(idlBNs:::nr.nh(dag, anc),
-                idlBNs:::ar.nh(dag, anc),
-                idlBNs:::ncr.nh(dag, anc, utargets))
+    ## exercise both the no-intervention and the with-targets branch of
+    ## ncr.nh()'s I-covered arc test
+    for (utargets in list(integer(0), c(1L, min(3L, p)))) {
+      nhs <- list(nr=idlBNs:::nr.nh(dag, anc),
+                  ar=idlBNs:::ar.nh(dag, anc),
+                  ncr=idlBNs:::ncr.nh(dag, anc, utargets))
 
-    for (nb in all_ne) {
-      derived <- switch(nb$op,
-                        add     = idlBNs:::add.pasets(pasets, vidx[[nb$u]], vidx[[nb$v]]),
-                        remove  = idlBNs:::remove.pasets(pasets, vidx[[nb$u]], vidx[[nb$v]]),
-                        reverse = idlBNs:::reverse.pasets(pasets, vidx[[nb$u]], vidx[[nb$v]]))
-      truth <- idlBNs:::.build_pasets(nb$graph, dat)
-      stopifnot(pasets_equal(derived, truth))
+      for (kind in names(nhs)) {
+        ne <- nhs[[kind]]
+        ## the enumerated move set matches the independent reference exactly,
+        ## including its order (which.max() breaks ties by position)
+        stopifnot(identical(nh_moves(ne),
+                            nh_reference(dag, kind, utargets)))
+
+        for (m in seq_along(ne$op)) {
+          uu <- vidx[[varnames[ne$u[m]]]]
+          vv <- vidx[[varnames[ne$v[m]]]]
+          derived <- switch(ne$op[m],
+                            idlBNs:::add.pasets(pasets, uu, vv),
+                            idlBNs:::remove.pasets(pasets, uu, vv),
+                            idlBNs:::reverse.pasets(pasets, uu, vv))
+          gm <- idlBNs:::apply.move(dag, ne$op[m], ne$u[m], ne$v[m], varnames)
+          truth <- idlBNs:::.build_pasets(gm, dat)
+          stopifnot(pasets_equal(derived, truth))
+        }
+      }
     }
   }
 }
