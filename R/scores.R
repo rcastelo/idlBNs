@@ -134,8 +134,9 @@ iBIC <- function(g, dat, targets=list(integer(0)),
 
     if (is.null(pasets))
         pasets <- .build_pasets(g, dat)
-    else
-        stopifnot(length(pasets) == numNodes(g))
+    else if (!is.list(pasets) || length(pasets) != numNodes(g) ||
+            any(vapply(pasets, function(x) !is.integer(x), logical(1))))
+            cli_abort(c("x"="'pasets' must be a list of integer vectors"))
     .check_cached_scores(g, cached.scores)
 
     if (is.null(global.sufstats))
@@ -144,7 +145,7 @@ iBIC <- function(g, dat, targets=list(integer(0)),
     if (engine == "C")
         return(.Call(C_iBIC_score,
                      global.sufstats$S,
-                     lapply(pasets, as.integer),
+                     pasets,
                      as.double(global.sufstats$data.count),
                      as.double(global.sufstats$n),
                      cached.scores))
@@ -193,6 +194,7 @@ attr(iBIC, "scorefun.name") <- "iBIC"
 .build_pasets <- function(g, dat) {
     v <- match(nodes(g), colnames(dat))
     em <- edgeMatrix(g)
+    stopifnot(is.integer(em), nrow(em) == 2L, ncol(em) >= 0L) ## QC
     pasets <- split(em["from", ], factor(v[em["to", ]], levels=v))
     stopifnot(identical(names(pasets), as.character(v)))
     pasets
@@ -375,19 +377,14 @@ attr(iBIC, "global.sufstats.fun") <- .iBIC.global.sufstats
 #' this argument, first create an empty environment object with
 #' `csco <- replicate(numNodes(g), new.env(hash=TRUE, parent=emptyenv()), simplify=FALSE)`
 #' and then pass it to this `cached.scores` parameter, i.e.,
-#' `cached.scores=csco`. This is currently not implemented for the iBGe score,
-#' but it is included as an API placeholder for future versions of the package
-#' that will enable this feature for the iBGe score.
+#' `cached.scores=csco`.
 #'
 #' @param global.sufstats (Default `NULL`) An optional list of global sufficient
 #' statistics for the iBGe score, as returned by the `.iBGe.global.sufstats()`
 #' function, which do not depend on the structure of a specific DAG, but only
 #' on the input data (`dat`), the target vertices (`targets`) and the target
 #' indices (`target.index`) of the interventions. If `NULL` (default), the
-#' `.iBGe.global.sufstats()` function is internally called. This is currently
-#' not implemented for the iBGe score, but it is included as an API placeholder
-#' for future versions of the package that will enable this feature for the
-#' iBGe score.
+#' `.iBGe.global.sufstats()` function is internally called.
 #'
 #' @param pasets (Default `NULL`) An optional list of parent sets, one per
 #' vertex in `g` in the order given by `colnames(dat)`, as internally built
@@ -395,6 +392,10 @@ attr(iBIC, "global.sufstats.fun") <- .iBIC.global.sufstats
 #' internally computed from `g`. Search algorithms that maintain `pasets`
 #' incrementally across many calls (e.g. [hcmc()], [hillclimbing()]) can
 #' pass it in directly to skip rebuilding it from `g` on every call.
+#'
+#' @param engine (Default `"C"`) A character string selecting the computation
+#' engine: `"C"` (default) uses a compiled C routine for speed; `"R"` uses the
+#' pure-R implementation and is provided for testing and verification.
 #'
 #' @return A single numeric value corresponding to the interventional BGe score
 #' of the given structure of the Bayesian network for the given data set.
@@ -464,7 +465,9 @@ attr(iBIC, "global.sufstats.fun") <- .iBIC.global.sufstats
 iBGe <- function(g, dat, targets=list(integer(0)),
                  target.index=rep(1L, nrow(dat)),
                  cached.scores=NULL, global.sufstats=NULL,
-                 pasets=NULL) {
+                 pasets=NULL, engine=c("C", "R")) {
+
+    engine <- match.arg(engine)
 
     if (is.null(attr(dat, "sanitycheck"))) {
         dat <- .check_input_data(dat)
@@ -473,12 +476,22 @@ iBGe <- function(g, dat, targets=list(integer(0)),
 
     if (is.null(pasets))
         pasets <- .build_pasets(g, dat)
-    else
-        stopifnot(length(pasets) == numNodes(g))
+    else if (!is.list(pasets) || length(pasets) != numNodes(g) ||
+            any(vapply(pasets, function(x) !is.integer(x), logical(1))))
+            cli_abort(c("x"="'pasets' must be a list of integer vectors"))
     .check_cached_scores(g, cached.scores)
 
     if (is.null(global.sufstats))
         global.sufstats <- .iBGe.global.sufstats(dat, targets, target.index)
+
+    if (engine == "C")
+        return(.Call(C_iBGe_score,
+                     global.sufstats$TN,
+                     pasets,
+                     as.double(global.sufstats$awpN),
+                     as.double(global.sufstats$p),
+                     global.sufstats$scoreconstvec,
+                     cached.scores))
 
     sco <- numeric(length(pasets))
     for (i in seq_along(pasets)) {

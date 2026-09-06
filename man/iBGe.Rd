@@ -11,7 +11,8 @@ iBGe(
   target.index = rep(1L, nrow(dat)),
   cached.scores = NULL,
   global.sufstats = NULL,
-  pasets = NULL
+  pasets = NULL,
+  engine = c("C", "R")
 )
 }
 \arguments{
@@ -38,19 +39,14 @@ of the score when the same parent sets are scored multiple times. To use
 this argument, first create an empty environment object with
 \code{csco <- replicate(numNodes(g), new.env(hash=TRUE, parent=emptyenv()), simplify=FALSE)}
 and then pass it to this \code{cached.scores} parameter, i.e.,
-\code{cached.scores=csco}. This is currently not implemented for the iBGe score,
-but it is included as an API placeholder for future versions of the package
-that will enable this feature for the iBGe score.}
+\code{cached.scores=csco}.}
 
 \item{global.sufstats}{(Default \code{NULL}) An optional list of global sufficient
 statistics for the iBGe score, as returned by the \code{.iBGe.global.sufstats()}
 function, which do not depend on the structure of a specific DAG, but only
 on the input data (\code{dat}), the target vertices (\code{targets}) and the target
 indices (\code{target.index}) of the interventions. If \code{NULL} (default), the
-\code{.iBGe.global.sufstats()} function is internally called. This is currently
-not implemented for the iBGe score, but it is included as an API placeholder
-for future versions of the package that will enable this feature for the
-iBGe score.}
+\code{.iBGe.global.sufstats()} function is internally called.}
 
 \item{pasets}{(Default \code{NULL}) An optional list of parent sets, one per
 vertex in \code{g} in the order given by \code{colnames(dat)}, as internally built
@@ -58,6 +54,10 @@ by \code{iBGe()} from the structure of \code{g}. If \code{NULL} (default), it is
 internally computed from \code{g}. Search algorithms that maintain \code{pasets}
 incrementally across many calls (e.g. \code{\link[=hcmc]{hcmc()}}, \code{\link[=hillclimbing]{hillclimbing()}}) can
 pass it in directly to skip rebuilding it from \code{g} on every call.}
+
+\item{engine}{(Default \code{"C"}) A character string selecting the computation
+engine: \code{"C"} (default) uses a compiled C routine for speed; \code{"R"} uses the
+pure-R implementation and is provided for testing and verification.}
 }
 \value{
 A single numeric value corresponding to the interventional BGe score
