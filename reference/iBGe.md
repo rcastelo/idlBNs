@@ -19,7 +19,8 @@ iBGe(
   target.index = rep(1L, nrow(dat)),
   cached.scores = NULL,
   global.sufstats = NULL,
-  pasets = NULL
+  pasets = NULL,
+  engine = c("C", "R")
 )
 ```
 
@@ -58,9 +59,7 @@ iBGe(
   this argument, first create an empty environment object with
   `csco <- replicate(numNodes(g), new.env(hash=TRUE, parent=emptyenv()), simplify=FALSE)`
   and then pass it to this `cached.scores` parameter, i.e.,
-  `cached.scores=csco`. This is currently not implemented for the iBGe
-  score, but it is included as an API placeholder for future versions of
-  the package that will enable this feature for the iBGe score.
+  `cached.scores=csco`.
 
 - global.sufstats:
 
@@ -69,10 +68,7 @@ iBGe(
   which do not depend on the structure of a specific DAG, but only on
   the input data (`dat`), the target vertices (`targets`) and the target
   indices (`target.index`) of the interventions. If `NULL` (default),
-  the `.iBGe.global.sufstats()` function is internally called. This is
-  currently not implemented for the iBGe score, but it is included as an
-  API placeholder for future versions of the package that will enable
-  this feature for the iBGe score.
+  the `.iBGe.global.sufstats()` function is internally called.
 
 - pasets:
 
@@ -84,6 +80,12 @@ iBGe(
   [`hcmc()`](https://rcastelo.github.io/idlBNs/reference/hcmc.md),
   [`hillclimbing()`](https://rcastelo.github.io/idlBNs/reference/hillclimbing.md))
   can pass it in directly to skip rebuilding it from `g` on every call.
+
+- engine:
+
+  (Default `"C"`) A character string selecting the computation engine:
+  `"C"` (default) uses a compiled C routine for speed; `"R"` uses the
+  pure-R implementation and is provided for testing and verification.
 
 ## Value
 

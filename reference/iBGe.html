@@ -21,7 +21,7 @@ no interventions in the data."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">idlBNs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.7</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -67,7 +67,8 @@ no interventions in the data.</p>
 <span>  target.index <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1L</span>, <span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">dat</span><span class="op">)</span><span class="op">)</span>,</span>
 <span>  cached.scores <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  global.sufstats <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  pasets <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  pasets <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  engine <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"C"</span>, <span class="st">"R"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -107,9 +108,7 @@ of the score when the same parent sets are scored multiple times. To use
 this argument, first create an empty environment object with
 <code>csco &lt;- replicate(numNodes(g), new.env(hash=TRUE, parent=emptyenv()), simplify=FALSE)</code>
 and then pass it to this <code>cached.scores</code> parameter, i.e.,
-<code>cached.scores=csco</code>. This is currently not implemented for the iBGe score,
-but it is included as an API placeholder for future versions of the package
-that will enable this feature for the iBGe score.</p></dd>
+<code>cached.scores=csco</code>.</p></dd>
 
 
 <dt id="arg-global-sufstats">global.sufstats<a class="anchor" aria-label="anchor" href="#arg-global-sufstats"></a></dt>
@@ -118,10 +117,7 @@ statistics for the iBGe score, as returned by the <code>.iBGe.global.sufstats()<
 function, which do not depend on the structure of a specific DAG, but only
 on the input data (<code>dat</code>), the target vertices (<code>targets</code>) and the target
 indices (<code>target.index</code>) of the interventions. If <code>NULL</code> (default), the
-<code>.iBGe.global.sufstats()</code> function is internally called. This is currently
-not implemented for the iBGe score, but it is included as an API placeholder
-for future versions of the package that will enable this feature for the
-iBGe score.</p></dd>
+<code>.iBGe.global.sufstats()</code> function is internally called.</p></dd>
 
 
 <dt id="arg-pasets">pasets<a class="anchor" aria-label="anchor" href="#arg-pasets"></a></dt>
@@ -131,6 +127,12 @@ by <code>iBGe()</code> from the structure of <code>g</code>. If <code>NULL</code
 internally computed from <code>g</code>. Search algorithms that maintain <code>pasets</code>
 incrementally across many calls (e.g. <code><a href="hcmc.html">hcmc()</a></code>, <code><a href="hillclimbing.html">hillclimbing()</a></code>) can
 pass it in directly to skip rebuilding it from <code>g</code> on every call.</p></dd>
+
+
+<dt id="arg-engine">engine<a class="anchor" aria-label="anchor" href="#arg-engine"></a></dt>
+<dd><p>(Default <code>"C"</code>) A character string selecting the computation
+engine: <code>"C"</code> (default) uses a compiled C routine for speed; <code>"R"</code> uses the
+pure-R implementation and is provided for testing and verification.</p></dd>
 
 </dl></div>
     <div class="section level2">
