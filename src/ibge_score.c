@@ -39,9 +39,25 @@ iBGe_node_score(const double* TNj, int p, const int* pa, int lp, int node,
 SEXP
 C_iBGe_node_score(SEXP TNj_R, SEXP pa_R, SEXP node_R, SEXP awpN_i_R,
                   SEXP gsP_R, SEXP scoreconstvec_i_R) {
-    int p      = (int) sqrt((double) LENGTH(TNj_R)); /* dim of square TN  */
-    int lp     = LENGTH(pa_R);                       /* number of parents */
-    int node   = INTEGER(node_R)[0];                 /* 1-based node idx  */
+
+    if (TYPEOF(TNj_R) != REALSXP)
+        error("C_iBGe_node_score: 'TNj' must be a numeric matrix");
+    R_xlen_t TNj_len = XLENGTH(TNj_R);
+
+    int p      = (int) sqrt((double) TNj_len); /* dim of square TN  */
+
+    if ((R_xlen_t) p * p != TNj_len)
+        error("C_iBGe_node_score: 'TNj' must be a square matrix, but length(TNj)=%lld is not a perfect square",
+              (long long) TNj_len);
+    if (TYPEOF(pa_R) != INTSXP)
+        error("C_iBGe_node_score: 'pa' must be an integer vector");
+
+    int lp     = LENGTH(pa_R);                 /* number of parents */
+
+    if (TYPEOF(node_R) != INTSXP || XLENGTH(node_R) != 1)
+        error("C_iBGe_node_score: 'node' must be an integer scalar");
+
+    int node   = INTEGER(node_R)[0];           /* 1-based node idx  */
 
     double awpN_i = REAL(awpN_i_R)[0];
     double gsP    = REAL(gsP_R)[0];
