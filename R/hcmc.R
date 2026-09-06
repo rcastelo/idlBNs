@@ -138,6 +138,11 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
 
     anc <- init.ancestors(colnames(dat))
     vidx <- setNames(seq_len(ncol(dat)), colnames(dat))
+    ## nodes(dag) never changes during the search, only its edges do, so the
+    ## vertex names and the nodes(dag)-position -> dat-column map that
+    ## translate a move's integer u/v are built once here
+    vnames <- nodes(dag)
+    vidx.nodes <- unname(vidx[vnames])
     pasets <- init.pasets(ncol(dat))
     utargets <- sort(unique(unlist(targets)))
     s0 <- -Inf
@@ -163,39 +168,28 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
         anc <- rcar.out$anc
         pasets <- rcar.out$pasets
         ne <- ncr.nh(dag, anc, utargets)
-        s1 <- sapply(ne, function(nb, d, tgts, tgt.idx, chd.sco, gbl.sst,
-                                  pas, vix, use.pas) {
-                          args <- list(g=nb$graph, dat=d, targets=tgts,
-                                       target.index=tgt.idx, cached.scores=chd.sco,
-                                       global.sufstats=gbl.sst)
-                          if (use.pas)
-                              args$pasets <- switch(nb$op,
-                                                    add     = add.pasets(pas,
-                                                                         vix[[nb$u]],
-                                                                         vix[[nb$v]]),
-                                                    remove  = remove.pasets(pas,
-                                                                            vix[[nb$u]],
-                                                                            vix[[nb$v]]),
-                                                    reverse = reverse.pasets(pas,
-                                                                             vix[[nb$u]],
-                                                                             vix[[nb$v]]))
-                          do.call(scorefun, args)
-                      },
-                     dat, targets, target.index, cached.scores, global.sufstats,
-                     pasets, vidx, supports.pasets)
-        best <- ne[[which.max(s1)]]
-        s1 <- max(s1)
+        sco <- score.nh(ne, dag, dat, targets, target.index, cached.scores,
+                        global.sufstats, pasets, vidx.nodes, supports.pasets,
+                        scorefun)
+        b <- which.max(sco)
+        b.op <- ne$op[b]
+        b.u <- ne$u[b]
+        b.v <- ne$v[b]
+        s1 <- sco[b]
         local_maximum <- s1 <= s0
         if (!local_maximum) {
-          anc <- switch(best$op,
-                        add     = add.ancestors(anc, best$u, best$v),
-                        remove  = remove.ancestors(anc, dag, best$u, best$v),
-                        reverse = reverse.ancestors(anc, dag, best$u, best$v))
-          pasets <- switch(best$op,
-                           add     = add.pasets(pasets, vidx[[best$u]], vidx[[best$v]]),
-                           remove  = remove.pasets(pasets, vidx[[best$u]], vidx[[best$v]]),
-                           reverse = reverse.pasets(pasets, vidx[[best$u]], vidx[[best$v]]))
-          dag <- best$graph
+          ## 'anc' and 'pasets' are updated before 'dag', since
+          ## remove.ancestors()/reverse.ancestors() read the DAG as it stood
+          ## BEFORE the move
+          anc <- switch(b.op,
+                        add.ancestors(anc, vnames[b.u], vnames[b.v]),
+                        remove.ancestors(anc, dag, vnames[b.u], vnames[b.v]),
+                        reverse.ancestors(anc, dag, vnames[b.u], vnames[b.v]))
+          pasets <- switch(b.op,
+                           add.pasets(pasets, vidx.nodes[b.u], vidx.nodes[b.v]),
+                           remove.pasets(pasets, vidx.nodes[b.u], vidx.nodes[b.v]),
+                           reverse.pasets(pasets, vidx.nodes[b.u], vidx.nodes[b.v]))
+          dag <- apply.move(dag, b.op, b.u, b.v, vnames)
           if (was_in_local_maximum) {
               escapes <- escapes + 1
               avg_trials_per_escape <- (avg_trials_per_escape *

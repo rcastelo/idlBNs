@@ -107,82 +107,210 @@ reverse.pasets <- function(pasets, u, v) {
 ##
 ## NEIGHBORHOODS (Castelo and Kocka, JMLR, 2003)
 ##
+## a neighborhood is returned as a list(op=, u=, v=) of three parallel
+## integer vectors of the same length k, describing k candidate moves on the
+## input DAG: op[m] is one of the OP.* codes below, and u[m], v[m] are
+## indices into nodes(dag) naming the arc u -> v that the move acts on (for
+## OP.REVERSE, the arc as it stands BEFORE the reversal). no candidate graph
+## is built here: a search step scores the whole neighborhood from the
+## (op, u, v) parent-set deltas alone (see score.nh()) and materialises a
+## single graph, for the winning move, via apply.move(). building one
+## graphNEL per candidate used to dominate the whole search -- addEdge() on
+## a p=30 DAG costs ~60us against ~1us for the C score of one vertex, and
+## every step discards all but one of its O(p^2) candidate graphs.
+
+OP.ADD     <- 1L
+OP.REMOVE  <- 2L
+OP.REVERSE <- 3L
+
+## apply a single (op, u, v) move to 'dag' and return the resulting DAG.
+## 'vnames' is nodes(dag), taken as an argument so a caller inside the
+## search loop passes the copy it already holds instead of re-fetching it.
+
+#' @importFrom graph addEdge removeEdge nodes
+apply.move <- function(dag, op, u, v, vnames=nodes(dag)) {
+    switch(op,
+           addEdge(vnames[u], vnames[v], dag),                  ## OP.ADD
+           removeEdge(vnames[u], vnames[v], dag),               ## OP.REMOVE
+           addEdge(vnames[v], vnames[u],                        ## OP.REVERSE
+                   removeEdge(vnames[u], vnames[v], dag)))
+}
+
+## build the parent sets of 'dag' as a list of p integer vectors of vertex
+## indices, from the child lists that edgeL() already returns, avoiding a
+## second traversal of the graph through edgeMatrix()
+.pasets.from.edgeL <- function(e, p) {
+    ch <- lapply(e, `[[`, "edges")
+    to <- unlist(ch, use.names=FALSE)
+    if (is.null(to))
+        return(replicate(p, integer(0), simplify=FALSE))
+    from <- rep(seq_len(p), lengths(ch))
+    unname(split(from, factor(to, levels=seq_len(p))))
+}
 
 ## NR: non-reversals neighborhood (addition and removal only)
-## each returned entry is a list(graph=, op=, u=, v=) describing the move
 
-#' @importFrom graph edgeL removeEdge addEdge nodes
+#' @importFrom graph edgeL nodes
 nr.nh <- function(dag, anc) {
-    v <- nodes(dag)
+    p <- length(nodes(dag))
     e <- edgeL(dag)
-    nr <- list()
-    nr.i <- 0
-    for (i in seq_along(e)) {
-        a <- v[e[[i]]$edges]
-        na <- setdiff(v, c(a, names(e)[i])) ## exclude i itself (no self-loops)
-        for (j in seq_along(na)) { ## go through non-adjacent vertices
-            if (!anc[na[j], names(e)[i]]) {
-                tmp.g <- addEdge(names(e)[i], na[j], dag)
-                nr.i <- nr.i + 1
-                nr[[nr.i]] <- list(graph=tmp.g, op="add", u=names(e)[i], v=na[j])
-            }
+    kmax <- p * (p - 1L) ## p-1 additions + at most p-1 removals per vertex
+    op <- integer(kmax)
+    uu <- integer(kmax)
+    vv <- integer(kmax)
+    k <- 0L
+    for (i in seq_len(p)) {
+        a <- e[[i]]$edges                ## children of i
+        na <- seq_len(p)[-c(a, i)]       ## non-adjacent, i excluded (no self-loops)
+        ## i -> na[j] closes a cycle iff na[j] is already an ancestor of i
+        na <- na[!anc[na, i]]
+        if (length(na) > 0L) {           ## additions
+            idx <- k + seq_along(na)
+            op[idx] <- OP.ADD
+            uu[idx] <- i
+            vv[idx] <- na
+            k <- k + length(na)
         }
-        for (j in seq_along(a)) { ## go through adjacent vertices
-            tmp.g <- removeEdge(names(e)[i], a[j], dag)
-            nr.i <- nr.i + 1
-            nr[[nr.i]] <- list(graph=tmp.g, op="remove", u=names(e)[i], v=a[j])
+        if (length(a) > 0L) {            ## removals
+            idx <- k + seq_along(a)
+            op[idx] <- OP.REMOVE
+            uu[idx] <- i
+            vv[idx] <- a
+            k <- k + length(a)
         }
     }
-    nr
+    idx <- seq_len(k)
+
+    list(op=op[idx], u=uu[idx], v=vv[idx])
+}
+
+## which of the arcs i -> a[j] can be reversed without closing a cycle: the
+## reversal a[j] -> i creates a cycle iff some other child of i is a
+## descendant of a[j], i.e. iff any(anc[a[-j], a[j]]). computed for all j at
+## once off the |a| x |a| submatrix of 'anc', as colSums() minus the
+## diagonal, rather than one any() call per j
+.reversible <- function(anc, a) {
+    M <- anc[a, a, drop=FALSE]
+
+    (colSums(M) - diag(M)) == 0
+}
+
+## append the reversals of the arcs i -> a[keep] to the move vectors held in
+## the 'acc' accumulator environment
+.add.reversals <- function(acc, i, a, keep) {
+    if (!any(keep))
+        return(invisible(NULL))
+    a <- a[keep]
+    acc$n <- acc$n + 1L
+    acc$u[[acc$n]] <- rep(i, length(a))
+    acc$v[[acc$n]] <- a
+    invisible(NULL)
+}
+
+## combine an NR neighborhood with the reversals gathered in 'acc'
+.bind.reversals <- function(nr, acc) {
+    if (acc$n == 0L)
+        return(nr)
+    ru <- unlist(acc$u[seq_len(acc$n)], use.names=FALSE)
+    rv <- unlist(acc$v[seq_len(acc$n)], use.names=FALSE)
+
+    list(op=c(nr$op, rep(OP.REVERSE, length(ru))),
+         u=c(nr$u, ru),
+         v=c(nr$v, rv))
 }
 
 ## AR: all-reversals neighborhood (NR + all-arc-reversals)
 
-#' @importFrom graph edgeL removeEdge addEdge nodes
+#' @importFrom graph edgeL nodes
 ar.nh <- function(dag, anc) {
-    v <- nodes(dag)
+    p <- length(nodes(dag))
     e <- edgeL(dag)
-    ar <- nr.nh(dag, anc)
-    ar.i <- length(ar)
-    for (i in seq_along(e)) { ## reverse edges
-        a <- v[e[[i]]$edges]
-        for (j in seq_along(a)) { ## go through adjacent vertices
-            if (!any(anc[a[-j], a[j]])) {
-                tmp.g <- removeEdge(names(e)[i], a[j], dag)
-                tmp.g <- addEdge(a[j], names(e)[i], tmp.g)
-                ar.i <- ar.i + 1
-                ar[[ar.i]] <- list(graph=tmp.g, op="reverse", u=names(e)[i], v=a[j])
-            }
-        }
+    nr <- nr.nh(dag, anc)
+    acc <- new.env(parent=emptyenv())
+    acc$n <- 0L
+    acc$u <- vector("list", p)
+    acc$v <- vector("list", p)
+    for (i in seq_len(p)) {
+        a <- e[[i]]$edges
+        if (length(a) == 0L)
+            next
+        .add.reversals(acc, i, a, .reversible(anc, a))
     }
-    ar
+
+    .bind.reversals(nr, acc)
 }
 
 ## NCR: non-covered arc reversals neighborhood (NR + non-covered-arc-reversals)
 
-#' @importFrom graph edgeL removeEdge addEdge edgeMatrix nodes
+#' @importFrom graph edgeL nodes
 ncr.nh <- function(dag, anc, utargets=integer(0)) {
-    v <- nodes(dag)
+    p <- length(nodes(dag))
     e <- edgeL(dag)
-    ncr <- nr.nh(dag, anc)
-    ncr.i <- length(ncr)
-    em <- edgeMatrix(dag)
-    pasets <- split(v[em["from", ]], factor(v[em["to", ]], levels=v))
-    for (i in seq_along(e)) { ## reverse edges
-        a <- v[e[[i]]$edges]
-        for (j in seq_along(a)) { ## go through adjacent vertices
-            ced <- identical(sort(pasets[[names(e)[i]]]), sort(setdiff(pasets[[a[j]]], names(e)[i])))
-            if (!ced || any(c(e[[i]]$edges[j], i) %in% utargets)) { ## NCR including not interventionally covered
-                if (!any(anc[a[-j], a[j]])) {
-                    tmp.g <- removeEdge(names(e)[i], a[j], dag)
-                    tmp.g <- addEdge(a[j], names(e)[i], tmp.g)
-                    ncr.i <- ncr.i + 1
-                    ncr[[ncr.i]] <- list(graph=tmp.g, op="reverse", u=names(e)[i], v=a[j])
-                }
-            }
+    nr <- nr.nh(dag, anc)
+    pasets <- .pasets.from.edgeL(e, p)
+    acc <- new.env(parent=emptyenv())
+    acc$n <- 0L
+    acc$u <- vector("list", p)
+    acc$v <- vector("list", p)
+    for (i in seq_len(p)) {
+        a <- e[[i]]$edges
+        if (length(a) == 0L)
+            next
+        ## arc i -> a[j] is covered iff pa(i) == pa(a[j]) \ {i}; sort pa(i)
+        ## once for all j rather than once per j
+        pa.i <- sort.int(pasets[[i]])
+        ced <- vapply(a,
+                      function(w) identical(pa.i,
+                                            sort.int(setdiff(pasets[[w]], i))),
+                      logical(1))
+        ## an I-covered arc is one that is covered AND has no target vertex
+        ## at either endpoint, so a covered arc touching a target stays in
+        ## the neighborhood
+        tgt <- (i %in% utargets) | (a %in% utargets)
+        .add.reversals(acc, i, a, (!ced | tgt) & .reversible(anc, a))
+    }
+
+    .bind.reversals(nr, acc)
+}
+
+## score every candidate move of a neighborhood 'ne' against the DAG it was
+## generated from, returning a numeric vector of length |ne| in neighborhood
+## order. when 'scorefun' declares that it accepts a 'pasets' argument
+## (attr "supports.pasets"), the move's parent-set delta is applied to
+## 'pasets' and the *current* 'dag' is passed as 'g': the score functions
+## read 'g' only to validate the vertex count and the cached-scores list,
+## and every neighbor shares both with 'dag', so no candidate graph is
+## needed. a custom scorefun without that attribute still gets a real
+## neighbor graph, built here on demand. 'vidx.nodes' maps a nodes(dag)
+## position to the dat-column index that 'pasets' is keyed by.
+score.nh <- function(ne, dag, dat, targets, target.index, cached.scores,
+                     global.sufstats, pasets, vidx.nodes, supports.pasets,
+                     scorefun) {
+    k <- length(ne$op)
+    sco <- numeric(k)
+    vnames <- if (supports.pasets) NULL else nodes(dag)
+    for (m in seq_len(k)) {
+        if (supports.pasets) {
+            pu <- vidx.nodes[ne$u[m]]
+            pv <- vidx.nodes[ne$v[m]]
+            pas <- switch(ne$op[m],
+                          add.pasets(pasets, pu, pv),
+                          remove.pasets(pasets, pu, pv),
+                          reverse.pasets(pasets, pu, pv))
+            sco[m] <- scorefun(g=dag, dat=dat, targets=targets,
+                               target.index=target.index,
+                               cached.scores=cached.scores,
+                               global.sufstats=global.sufstats, pasets=pas)
+        } else {
+            g <- apply.move(dag, ne$op[m], ne$u[m], ne$v[m], vnames)
+            sco[m] <- scorefun(g=g, dat=dat, targets=targets,
+                               target.index=target.index,
+                               cached.scores=cached.scores,
+                               global.sufstats=global.sufstats)
         }
     }
-    ncr
+
+    sco
 }
 
 ##
@@ -315,6 +443,11 @@ hillclimbing <- function(dat, targets=list(integer(0)),
 
     anc <- init.ancestors(colnames(dat))
     vidx <- setNames(seq_len(ncol(dat)), colnames(dat))
+    ## nodes(dag) never changes during the search, only its edges do, so the
+    ## vertex names and the nodes(dag)-position -> dat-column map that
+    ## translate a move's integer u/v are built once here
+    vnames <- nodes(dag)
+    vidx.nodes <- unname(vidx[vnames])
     pasets <- init.pasets(ncol(dat))
 
     s0 <- -Inf
@@ -332,31 +465,26 @@ hillclimbing <- function(dat, targets=list(integer(0)),
     while (s1 > s0) {
         s0 <- s1
         ne <- ar.nh(dag, anc)
-        s1 <- sapply(ne, function(nb, d, tgts, tgt.idx, chd.sco, gbl.sst,
-                                  pas, vix, use.pas) {
-                          args <- list(g=nb$graph, dat=d, targets=tgts,
-                                       target.index=tgt.idx, cached.scores=chd.sco,
-                                       global.sufstats=gbl.sst)
-                          if (use.pas)
-                              args$pasets <- switch(nb$op,
-                                                    add     = add.pasets(pas, vix[[nb$u]], vix[[nb$v]]),
-                                                    remove  = remove.pasets(pas, vix[[nb$u]], vix[[nb$v]]),
-                                                    reverse = reverse.pasets(pas, vix[[nb$u]], vix[[nb$v]]))
-                          do.call(scorefun, args)
-                      },
-                     dat, targets, target.index, cached.scores, global.sufstats,
-                     pasets, vidx, supports.pasets)
-        best <- ne[[which.max(s1)]]
-        anc <- switch(best$op,
-                      add     = add.ancestors(anc, best$u, best$v),
-                      remove  = remove.ancestors(anc, dag, best$u, best$v),
-                      reverse = reverse.ancestors(anc, dag, best$u, best$v))
-        pasets <- switch(best$op,
-                         add     = add.pasets(pasets, vidx[[best$u]], vidx[[best$v]]),
-                         remove  = remove.pasets(pasets, vidx[[best$u]], vidx[[best$v]]),
-                         reverse = reverse.pasets(pasets, vidx[[best$u]], vidx[[best$v]]))
-        dag <- best$graph
-        s1 <- max(s1)
+        sco <- score.nh(ne, dag, dat, targets, target.index, cached.scores,
+                        global.sufstats, pasets, vidx.nodes, supports.pasets,
+                        scorefun)
+        b <- which.max(sco)
+        b.op <- ne$op[b]
+        b.u <- ne$u[b]
+        b.v <- ne$v[b]
+        ## 'anc' and 'pasets' are updated before 'dag', since
+        ## remove.ancestors()/reverse.ancestors() read the DAG as it stood
+        ## BEFORE the move
+        anc <- switch(b.op,
+                      add.ancestors(anc, vnames[b.u], vnames[b.v]),
+                      remove.ancestors(anc, dag, vnames[b.u], vnames[b.v]),
+                      reverse.ancestors(anc, dag, vnames[b.u], vnames[b.v]))
+        pasets <- switch(b.op,
+                         add.pasets(pasets, vidx.nodes[b.u], vidx.nodes[b.v]),
+                         remove.pasets(pasets, vidx.nodes[b.u], vidx.nodes[b.v]),
+                         reverse.pasets(pasets, vidx.nodes[b.u], vidx.nodes[b.v]))
+        dag <- apply.move(dag, b.op, b.u, b.v, vnames)
+        s1 <- sco[b]
 
         if (isTRUE(getOption("idlBNs.debug.pasets", FALSE)))
             stopifnot(identical(unname(lapply(pasets, function(x) unname(sort.int(x)))),
