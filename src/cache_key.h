@@ -36,8 +36,13 @@ cmp_int(const void *a, const void *b) {
  */
 static inline char *
 build_cache_key(const int *pa, int lp) {
-    if (lp == 0)
-        return ":";
+    if (lp == 0) {
+        char* buf = (char *) R_alloc(2, sizeof(char));
+        buf[0] = ':';
+        buf[1] = '\0';
+
+        return buf; 
+    }
 
     int *sorted = (int *) R_alloc(lp, sizeof(int));
     memcpy(sorted, pa, (size_t) lp * sizeof(int));

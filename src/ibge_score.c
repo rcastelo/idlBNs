@@ -187,9 +187,28 @@ iBGe_node_score(const double* TNj, int p, const int* pa, int lp, int node,
 SEXP
 C_iBGe_score(SEXP TN_R, SEXP pasets_R, SEXP awpN_R, SEXP gsP_R,
              SEXP scoreconstvec_R, SEXP cached_scores_R) {
+    if (TYPEOF(pasets_R) != VECSXP)
+        error("C_iBGe_score: 'pasets' must be a list");
+
     int p = LENGTH(pasets_R);
+
+    if (TYPEOF(TN_R) != VECSXP || LENGTH(TN_R) != p)
+        error("C_iBGe_score: 'TN' must be a list of length %d", p);
+    if (TYPEOF(scoreconstvec_R) != VECSXP || LENGTH(scoreconstvec_R) != p)
+        error("C_iBGe_score: 'scoreconstvec' must be a list of length %d", p);
+    if (TYPEOF(awpN_R) != REALSXP || LENGTH(awpN_R) != p)
+        error("C_iBGe_score: 'awpN' must be a numeric vector of length %d", p);
+    if (TYPEOF(gsP_R) != REALSXP || LENGTH(gsP_R) != 1)
+        error("C_iBGe_score: 'gsP' must be a numeric scalar");
+
     double gsP = REAL(gsP_R)[0];
     int has_cache = (cached_scores_R != R_NilValue);
+
+    if (has_cache) {
+        if (TYPEOF(cached_scores_R) != VECSXP || LENGTH(cached_scores_R) != p)
+            error("C_iBGe_score: 'cached_scores' must be either NULL or a list of length %d",
+                  p);
+    }
     double total = 0.0;
 
     for (int i = 0; i < p; i++) {

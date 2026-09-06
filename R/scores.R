@@ -134,8 +134,9 @@ iBIC <- function(g, dat, targets=list(integer(0)),
 
     if (is.null(pasets))
         pasets <- .build_pasets(g, dat)
-    else
-        stopifnot(length(pasets) == numNodes(g))
+    else if (!is.list(pasets) || length(pasets) != numNodes(g) ||
+            any(vapply(pasets, function(x) !is.integer(x), logical(1))))
+            cli_abort(c("x"="'pasets' must be a list of integer vectors"))
     .check_cached_scores(g, cached.scores)
 
     if (is.null(global.sufstats))
@@ -144,7 +145,7 @@ iBIC <- function(g, dat, targets=list(integer(0)),
     if (engine == "C")
         return(.Call(C_iBIC_score,
                      global.sufstats$S,
-                     lapply(pasets, as.integer),
+                     pasets,
                      as.double(global.sufstats$data.count),
                      as.double(global.sufstats$n),
                      cached.scores))
@@ -193,6 +194,7 @@ attr(iBIC, "scorefun.name") <- "iBIC"
 .build_pasets <- function(g, dat) {
     v <- match(nodes(g), colnames(dat))
     em <- edgeMatrix(g)
+    stopifnot(is.integer(em), nrow(em) == 2L, ncol(em) >= 0L) ## QC
     pasets <- split(em["from", ], factor(v[em["to", ]], levels=v))
     stopifnot(identical(names(pasets), as.character(v)))
     pasets
@@ -474,8 +476,9 @@ iBGe <- function(g, dat, targets=list(integer(0)),
 
     if (is.null(pasets))
         pasets <- .build_pasets(g, dat)
-    else
-        stopifnot(length(pasets) == numNodes(g))
+    else if (!is.list(pasets) || length(pasets) != numNodes(g) ||
+            any(vapply(pasets, function(x) !is.integer(x), logical(1))))
+            cli_abort(c("x"="'pasets' must be a list of integer vectors"))
     .check_cached_scores(g, cached.scores)
 
     if (is.null(global.sufstats))
@@ -484,7 +487,7 @@ iBGe <- function(g, dat, targets=list(integer(0)),
     if (engine == "C")
         return(.Call(C_iBGe_score,
                      global.sufstats$TN,
-                     lapply(pasets, as.integer),
+                     pasets,
                      as.double(global.sufstats$awpN),
                      as.double(global.sufstats$p),
                      global.sufstats$scoreconstvec,
