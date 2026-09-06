@@ -39,7 +39,6 @@ C_iBIC_node_score(SEXP Sj_R, SEXP pa_R, SEXP node_R, SEXP Nj_R, SEXP n_R) {
     /* dimensions */
     int p1     = (int)sqrt((double)LENGTH(Sj_R)); /* p+1, dim of square S     */
     int lp     = LENGTH(pa_R);                    /* number of parents        */
-    int m      = lp + 1;                          /* intercept + parents      */
     int node_C = INTEGER(node_R)[0];              /* 0-based response column  */
     double Nj  = REAL(Nj_R)[0];
     double n   = REAL(n_R)[0];
@@ -87,9 +86,18 @@ iBIC_node_score(const double* Sj, int p1, const int* pa, int lp, int node,
     /* build 0-based index array: [0, pa[0], pa[1], ...] */
     int* idx = (int *) R_alloc(m, sizeof(int));
     idx[0] = 0;
-    for (int k = 0; k < lp; k++)
-        idx[k + 1] = pa[k];   /* pa[k] is 1-based R variable index;
-                                  equals correct 0-based S column (see note) */
+    if (node <= 0 || node >= p1)
+        error("iBIC_node_score: node index %d out of range [1,%d]", node, p1-1);
+
+    for (int k = 0; k < lp; k++) {
+        int pk = pa[k];
+
+        if (pk == NA_INTEGER || pk <= 0 || pk >= p1 || pk == node)
+            error("iBIC_node_score: invalid parent index (%d) for node %d and p1=%d",
+                  pk, node, p1);
+        idx[k + 1] = pk;   /* pa[k] is 1-based R variable index, it equals correct
+                              0-based S column */
+    }
 
     /* extract ZtZ (mxm), column-major */
     double* ZtZ = (double *) R_alloc((size_t) m * m, sizeof(double));

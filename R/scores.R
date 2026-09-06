@@ -306,7 +306,9 @@ attr(iBIC, "global.sufstats.fun") <- .iBIC.global.sufstats
     ## (a reference object in R), so it persists across calls even though
     ## the 'cached.scores' list argument itself is a fresh local binding
     ## on every call.
-    if (is.list(cached.scores) && length(cached.scores) > 0L &&
+    if (is.list(cached.scores) &&
+        length(cached.scores) == numNodes(g) &&
+        length(cached.scores) > 0L &&
         is.environment(cached.scores[[1L]]) &&
         isTRUE(cached.scores[[1L]]$.validated))
         return(invisible(NULL))

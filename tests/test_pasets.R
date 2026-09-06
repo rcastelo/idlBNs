@@ -133,6 +133,7 @@ stopifnot(identical(res, "error"))
 ################################################################################
 
 old_opt <- getOption("idlBNs.debug.pasets", FALSE)
+on.exit(options(idlBNs.debug.pasets=old_opt), add=TRUE)
 options(idlBNs.debug.pasets=TRUE)
 
 set.seed(1)
