@@ -10,7 +10,8 @@ iBGe(
   targets = list(integer(0)),
   target.index = rep(1L, nrow(dat)),
   cached.scores = NULL,
-  global.sufstats = NULL
+  global.sufstats = NULL,
+  pasets = NULL
 )
 }
 \arguments{
@@ -50,6 +51,13 @@ indices (\code{target.index}) of the interventions. If \code{NULL} (default), th
 not implemented for the iBGe score, but it is included as an API placeholder
 for future versions of the package that will enable this feature for the
 iBGe score.}
+
+\item{pasets}{(Default \code{NULL}) An optional list of parent sets, one per
+vertex in \code{g} in the order given by \code{colnames(dat)}, as internally built
+by \code{iBGe()} from the structure of \code{g}. If \code{NULL} (default), it is
+internally computed from \code{g}. Search algorithms that maintain \code{pasets}
+incrementally across many calls (e.g. \code{\link[=hcmc]{hcmc()}}, \code{\link[=hillclimbing]{hillclimbing()}}) can
+pass it in directly to skip rebuilding it from \code{g} on every call.}
 }
 \value{
 A single numeric value corresponding to the interventional BGe score

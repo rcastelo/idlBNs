@@ -106,6 +106,7 @@
 #' @importClassesFrom graph graphNEL
 #' @importFrom cli cli_alert_info cli_progress_bar cli_progress_done
 #' @importFrom cli cli_alert_success cli_alert_warning
+#' @importFrom stats setNames
 #' @export
 #' @rdname hcmc
 hcmc <- function(dat, r=20, targets=list(integer(0)),
@@ -133,8 +134,11 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
     scorefun.name <- NULL
     if (!is.null(attr(scorefun, "scorefun.name")))
         scorefun.name <- attr(scorefun, "scorefun.name")
+    supports.pasets <- isTRUE(attr(scorefun, "supports.pasets"))
 
     anc <- init.ancestors(colnames(dat))
+    vidx <- setNames(seq_len(ncol(dat)), colnames(dat))
+    pasets <- init.pasets(ncol(dat))
     utargets <- sort(unique(unlist(targets)))
     s0 <- -Inf
     s1 <- scorefun(g=dag, dat=dat, targets=targets, target.index=target.index,
@@ -154,15 +158,31 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
 
     while (!local_maximum) {
         s0 <- s1
-        rcar.out <- rcar(dag, r, utargets, anc)
+        rcar.out <- rcar(dag, r, utargets, anc, pasets, vidx)
         dag <- rcar.out$dag
         anc <- rcar.out$anc
+        pasets <- rcar.out$pasets
         ne <- ncr.nh(dag, anc, utargets)
-        s1 <- sapply(ne, function(nb, d, tgts, tgt.idx, chd.sco, gbl.sst)
-                           scorefun(g=nb$graph, dat=d, targets=tgts,
-                                    target.index=tgt.idx, cached.scores=chd.sco,
-                                    global.sufstats=gbl.sst),
-                     dat, targets, target.index, cached.scores, global.sufstats)
+        s1 <- sapply(ne, function(nb, d, tgts, tgt.idx, chd.sco, gbl.sst,
+                                  pas, vix, use.pas) {
+                          args <- list(g=nb$graph, dat=d, targets=tgts,
+                                       target.index=tgt.idx, cached.scores=chd.sco,
+                                       global.sufstats=gbl.sst)
+                          if (use.pas)
+                              args$pasets <- switch(nb$op,
+                                                    add     = add.pasets(pas,
+                                                                         vix[[nb$u]],
+                                                                         vix[[nb$v]]),
+                                                    remove  = remove.pasets(pas,
+                                                                            vix[[nb$u]],
+                                                                            vix[[nb$v]]),
+                                                    reverse = reverse.pasets(pas,
+                                                                             vix[[nb$u]],
+                                                                             vix[[nb$v]]))
+                          do.call(scorefun, args)
+                      },
+                     dat, targets, target.index, cached.scores, global.sufstats,
+                     pasets, vidx, supports.pasets)
         best <- ne[[which.max(s1)]]
         s1 <- max(s1)
         local_maximum <- s1 <= s0
@@ -171,6 +191,10 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                         add     = add.ancestors(anc, best$u, best$v),
                         remove  = remove.ancestors(anc, dag, best$u, best$v),
                         reverse = reverse.ancestors(anc, dag, best$u, best$v))
+          pasets <- switch(best$op,
+                           add     = add.pasets(pasets, vidx[[best$u]], vidx[[best$v]]),
+                           remove  = remove.pasets(pasets, vidx[[best$u]], vidx[[best$v]]),
+                           reverse = reverse.pasets(pasets, vidx[[best$u]], vidx[[best$v]]))
           dag <- best$graph
           if (was_in_local_maximum) {
               escapes <- escapes + 1
@@ -181,14 +205,21 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
           trials <- 0
         } else if (trials < MAXTRIALS) {
           s1 <- s0
-          rcar.out <- rcar(dag, r, utargets, anc)
+          rcar.out <- rcar(dag, r, utargets, anc, pasets, vidx)
           dag <- rcar.out$dag
           anc <- rcar.out$anc
+          pasets <- rcar.out$pasets
           local_maximum <- FALSE
           was_in_local_maximum <- TRUE
           trials <- trials + 1
         } else
           s1 <- s0
+
+        if (isTRUE(getOption("idlBNs.debug.pasets", FALSE)))
+            stopifnot(identical(unname(lapply(pasets,
+                                              function(x) unname(sort.int(x)))),
+                                unname(lapply(.build_pasets(dag, dat),
+                                              function(x) unname(sort.int(x))))))
 
         if (verbose)
             cli_progress_update()

@@ -63,6 +63,48 @@ reverse.ancestors <- function(anc, dag, u, v) {
 }
 
 ##
+## PARENT-SET MAINTENANCE
+##
+## a pasets structure is a list of length p, one element per vertex in
+## dat-column order, where pasets[[i]] is an integer vector of the
+## dat-column-index parents of vertex i (the same representation iBIC()/
+## iBGe() build internally from a graph via .build_pasets()). It is
+## maintained incrementally across the whole search, instead of being
+## recomputed from scratch (match()+edgeMatrix()+split()) on every call to
+## a score function. Unlike the ancestor matrix, parent-set membership is
+## NOT transitive, so an edge operation between u and v only ever touches
+## the 1-2 list elements for u and/or v directly -- no cascading
+## recomputation of other vertices, no topological order needed. 'u'/'v'
+## here are integer dat-column indices, not vertex names; callers translate
+## a neighbor's (character) u/v via a name -> index lookup built once per
+## search (see hillclimbing()/hcmc()).
+
+## build an all-empty pasets list for an edgeless DAG on p vertices
+init.pasets <- function(p) replicate(p, integer(0), simplify=FALSE)
+
+## incremental update of 'pasets' after adding edge u -> v
+add.pasets <- function(pasets, u, v) {
+    stopifnot(!(u %in% pasets[[v]]))
+    pasets[[v]] <- c(pasets[[v]], u)
+    pasets
+}
+
+## incremental update of 'pasets' after removing edge u -> v
+remove.pasets <- function(pasets, u, v) {
+    stopifnot(u %in% pasets[[v]])
+    pasets[[v]] <- setdiff(pasets[[v]], u)
+    pasets
+}
+
+## incremental update of 'pasets' after reversing edge u -> v into v -> u
+reverse.pasets <- function(pasets, u, v) {
+    stopifnot(u %in% pasets[[v]])
+    pasets[[v]] <- setdiff(pasets[[v]], u)
+    pasets[[u]] <- c(pasets[[u]], v)
+    pasets
+}
+
+##
 ## NEIGHBORHOODS (Castelo and Kocka, JMLR, 2003)
 ##
 
@@ -170,18 +212,21 @@ resample <- function(x, ...) x[sample.int(length(x), ...)]
 
 ## RCAR: repeated covered arc reversal algorithm
 ## utargets should be a vector of unique target vertices
-## returns a list(dag=, anc=) since every reversal it performs, although
-## always cycle-safe by construction (a covered edge cannot introduce a
-## cycle), still changes true ancestor relationships and must keep 'anc'
-## in sync for subsequent neighborhood generation to remain correct
+## returns a list(dag=, anc=, pasets=) since every reversal it performs,
+## although always cycle-safe by construction (a covered edge cannot
+## introduce a cycle), still changes true ancestor relationships and parent
+## sets, and must keep both 'anc' and 'pasets' in sync for subsequent
+## neighborhood generation and scoring to remain correct. 'vidx' is a named
+## integer vector mapping vertex name -> dat-column index (as used by
+## 'pasets'), built once per search by the caller.
 
 #' @importFrom graph removeEdge addEdge numEdges edgeMatrix nodes
-rcar <- function(dag, r, utargets, anc) {
+rcar <- function(dag, r, utargets, anc, pasets, vidx) {
     if (numEdges(dag) == 0)
-        return(list(dag=dag, anc=anc))
+        return(list(dag=dag, anc=anc, pasets=pasets))
     cemask <- cedges(dag, utargets)
     if (!any(cemask))
-        return(list(dag=dag, anc=anc))
+        return(list(dag=dag, anc=anc, pasets=pasets))
 
     tmp.g <- dag
     v <- nodes(tmp.g)
@@ -193,10 +238,11 @@ rcar <- function(dag, r, utargets, anc) {
         u <- v[em["from", rndce]]
         w <- v[em["to", rndce]]
         anc <- reverse.ancestors(anc, tmp.g, u, w) ## a covered edge cannot introduce a cycle
+        pasets <- reverse.pasets(pasets, vidx[[u]], vidx[[w]])
         tmp.g <- removeEdge(u, w, tmp.g)
         tmp.g <- addEdge(w, u, tmp.g)
     }
-    list(dag=tmp.g, anc=anc)
+    list(dag=tmp.g, anc=anc, pasets=pasets)
 }
 
 
@@ -238,6 +284,7 @@ rcar <- function(dag, r, utargets, anc) {
 #' @importFrom graph graphNEL
 #' @importClassesFrom graph graphNEL
 #' @importFrom cli cli_progress_step cli_progress_update
+#' @importFrom stats setNames
 #' @export
 hillclimbing <- function(dat, targets=list(integer(0)),
                          target.index=rep(1L, nrow(dat)),  scorefun=iBIC,
@@ -264,8 +311,11 @@ hillclimbing <- function(dat, targets=list(integer(0)),
     scorefun.name <- NULL
     if (!is.null(attr(scorefun, "scorefun.name")))
         scorefun.name <- attr(scorefun, "scorefun.name")
+    supports.pasets <- isTRUE(attr(scorefun, "supports.pasets"))
 
     anc <- init.ancestors(colnames(dat))
+    vidx <- setNames(seq_len(ncol(dat)), colnames(dat))
+    pasets <- init.pasets(ncol(dat))
 
     s0 <- -Inf
     s1 <- scorefun(g=dag, dat=dat, targets=targets, target.index=target.index,
@@ -282,18 +332,35 @@ hillclimbing <- function(dat, targets=list(integer(0)),
     while (s1 > s0) {
         s0 <- s1
         ne <- ar.nh(dag, anc)
-        s1 <- sapply(ne, function(nb, d, tgts, tgt.idx, chd.sco, gbl.sst)
-                           scorefun(g=nb$graph, dat=d, targets=tgts,
-                                    target.index=tgt.idx, cached.scores=chd.sco,
-                                    global.sufstats=gbl.sst),
-                     dat, targets, target.index, cached.scores, global.sufstats)
+        s1 <- sapply(ne, function(nb, d, tgts, tgt.idx, chd.sco, gbl.sst,
+                                  pas, vix, use.pas) {
+                          args <- list(g=nb$graph, dat=d, targets=tgts,
+                                       target.index=tgt.idx, cached.scores=chd.sco,
+                                       global.sufstats=gbl.sst)
+                          if (use.pas)
+                              args$pasets <- switch(nb$op,
+                                                    add     = add.pasets(pas, vix[[nb$u]], vix[[nb$v]]),
+                                                    remove  = remove.pasets(pas, vix[[nb$u]], vix[[nb$v]]),
+                                                    reverse = reverse.pasets(pas, vix[[nb$u]], vix[[nb$v]]))
+                          do.call(scorefun, args)
+                      },
+                     dat, targets, target.index, cached.scores, global.sufstats,
+                     pasets, vidx, supports.pasets)
         best <- ne[[which.max(s1)]]
         anc <- switch(best$op,
                       add     = add.ancestors(anc, best$u, best$v),
                       remove  = remove.ancestors(anc, dag, best$u, best$v),
                       reverse = reverse.ancestors(anc, dag, best$u, best$v))
+        pasets <- switch(best$op,
+                         add     = add.pasets(pasets, vidx[[best$u]], vidx[[best$v]]),
+                         remove  = remove.pasets(pasets, vidx[[best$u]], vidx[[best$v]]),
+                         reverse = reverse.pasets(pasets, vidx[[best$u]], vidx[[best$v]]))
         dag <- best$graph
         s1 <- max(s1)
+
+        if (isTRUE(getOption("idlBNs.debug.pasets", FALSE)))
+            stopifnot(identical(unname(lapply(pasets, function(x) unname(sort.int(x)))),
+                                unname(lapply(.build_pasets(dag, dat), function(x) unname(sort.int(x))))))
 
         if (verbose)
           cli_progress_update()

@@ -1,5 +1,7 @@
 .Rproj.user
 .Rhistory
+.Ruserdata
+.Renviron
 .DS_Store
 .RData
 doc
@@ -7,3 +9,8 @@ Meta
 /doc/
 /Meta/
 docs
+src/*.o
+src/*.so
+*~
+*.swp
+*.swo
