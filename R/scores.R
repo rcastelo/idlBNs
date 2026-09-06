@@ -375,19 +375,14 @@ attr(iBIC, "global.sufstats.fun") <- .iBIC.global.sufstats
 #' this argument, first create an empty environment object with
 #' `csco <- replicate(numNodes(g), new.env(hash=TRUE, parent=emptyenv()), simplify=FALSE)`
 #' and then pass it to this `cached.scores` parameter, i.e.,
-#' `cached.scores=csco`. This is currently not implemented for the iBGe score,
-#' but it is included as an API placeholder for future versions of the package
-#' that will enable this feature for the iBGe score.
+#' `cached.scores=csco`.
 #'
 #' @param global.sufstats (Default `NULL`) An optional list of global sufficient
 #' statistics for the iBGe score, as returned by the `.iBGe.global.sufstats()`
 #' function, which do not depend on the structure of a specific DAG, but only
 #' on the input data (`dat`), the target vertices (`targets`) and the target
 #' indices (`target.index`) of the interventions. If `NULL` (default), the
-#' `.iBGe.global.sufstats()` function is internally called. This is currently
-#' not implemented for the iBGe score, but it is included as an API placeholder
-#' for future versions of the package that will enable this feature for the
-#' iBGe score.
+#' `.iBGe.global.sufstats()` function is internally called.
 #'
 #' @param pasets (Default `NULL`) An optional list of parent sets, one per
 #' vertex in `g` in the order given by `colnames(dat)`, as internally built
@@ -395,6 +390,10 @@ attr(iBIC, "global.sufstats.fun") <- .iBIC.global.sufstats
 #' internally computed from `g`. Search algorithms that maintain `pasets`
 #' incrementally across many calls (e.g. [hcmc()], [hillclimbing()]) can
 #' pass it in directly to skip rebuilding it from `g` on every call.
+#'
+#' @param engine (Default `"C"`) A character string selecting the computation
+#' engine: `"C"` (default) uses a compiled C routine for speed; `"R"` uses the
+#' pure-R implementation and is provided for testing and verification.
 #'
 #' @return A single numeric value corresponding to the interventional BGe score
 #' of the given structure of the Bayesian network for the given data set.
@@ -464,7 +463,9 @@ attr(iBIC, "global.sufstats.fun") <- .iBIC.global.sufstats
 iBGe <- function(g, dat, targets=list(integer(0)),
                  target.index=rep(1L, nrow(dat)),
                  cached.scores=NULL, global.sufstats=NULL,
-                 pasets=NULL) {
+                 pasets=NULL, engine=c("C", "R")) {
+
+    engine <- match.arg(engine)
 
     if (is.null(attr(dat, "sanitycheck"))) {
         dat <- .check_input_data(dat)
@@ -479,6 +480,15 @@ iBGe <- function(g, dat, targets=list(integer(0)),
 
     if (is.null(global.sufstats))
         global.sufstats <- .iBGe.global.sufstats(dat, targets, target.index)
+
+    if (engine == "C")
+        return(.Call(C_iBGe_score,
+                     global.sufstats$TN,
+                     lapply(pasets, as.integer),
+                     as.double(global.sufstats$awpN),
+                     as.double(global.sufstats$p),
+                     global.sufstats$scoreconstvec,
+                     cached.scores))
 
     sco <- numeric(length(pasets))
     for (i in seq_along(pasets)) {
