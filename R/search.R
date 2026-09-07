@@ -314,6 +314,10 @@ move.pasets <- function(pasets, op, pu, pv) {
 ## needed. a custom scorefun with neither attribute still gets a real
 ## neighbor graph, built here on demand. 'vidx.nodes' maps a nodes(dag)
 ## position to the dat-column index that 'pasets' is keyed by.
+##
+## 'dag' may be NULL, but only when 'nh.scores.fun' is supplied: that branch
+## returns before 'dag' is read. The C search engine relies on this, because
+## it holds no graphNEL while the search is running.
 score.nh <- function(ne, dag, dat, targets, target.index, cached.scores,
                      global.sufstats, pasets, vidx.nodes, supports.pasets,
                      scorefun, nh.scores.fun=NULL) {
@@ -342,6 +346,84 @@ score.nh <- function(ne, dag, dat, targets, target.index, cached.scores,
     }
 
     sco
+}
+
+## rebuild a graphNEL from an edge matrix, replaying the arcs in column
+## order. graph::addEdge appends, so this reproduces the @edgeL slot of the
+## graph the edge matrix came from, element for element -- which matters,
+## because a vertex's child order is what nr.nh() emits its removals in.
+## Used to turn the C search state back into the graphNEL that hcmc() and
+## hillclimbing() return, and to materialise it for the debug assertions.
+
+#' @importFrom graph graphNEL addEdge
+.graphNEL_from_edgeM <- function(vnames, em) {
+    g <- graphNEL(vnames, edgemode="directed")
+    for (k in seq_len(ncol(em)))
+        g <- addEdge(vnames[em["from", k]], vnames[em["to", k]], g)
+
+    g
+}
+
+## the in-loop debug assertions, shared by both engines and by both search
+## algorithms. 'st' is the C state when the C engine is running, NULL
+## otherwise; 'dag'/'anc'/'pasets' are the R state.
+##
+## idlBNs.debug.pasets keeps exactly the semantics it had when the search was
+## pure R: the incrementally maintained parent sets must equal a from-scratch
+## rebuild off the graph. Note it sorts both sides, so it is deliberately
+## blind to parent ORDER -- which is why the C engine's parent order is
+## pinned by tests/test_c_dag.R with identical() instead.
+##
+## idlBNs.debug.anc and idlBNs.debug.dag are new, and close the gap that
+## remove.ancestors()/reverse.ancestors() had no in-loop assertion at all:
+## the first compares the ancestor matrix against a from-scratch transitive
+## closure, the second runs the C structure's own full self-consistency pass.
+.debug_assertions <- function(st, dag, anc, pasets, dat, vnames) {
+    if (isTRUE(getOption("idlBNs.debug.pasets", FALSE))) {
+        g <- if (is.null(dag))
+                 .graphNEL_from_edgeM(vnames, .Call(C_dag_edgeM, st))
+             else dag
+        pas <- if (is.null(pasets)) .Call(C_dag_pasets, st) else pasets
+        stopifnot(identical(unname(lapply(pas,
+                                          function(x) unname(sort.int(x)))),
+                            unname(lapply(.build_pasets(g, dat),
+                                          function(x) unname(sort.int(x))))))
+    }
+    if (isTRUE(getOption("idlBNs.debug.anc", FALSE))) {
+        g <- if (is.null(dag))
+                 .graphNEL_from_edgeM(vnames, .Call(C_dag_edgeM, st))
+             else dag
+        a <- if (is.null(anc)) .Call(C_dag_anc, st) else unname(anc)
+        stopifnot(identical(a, .anc_closure(g)))
+    }
+    if (isTRUE(getOption("idlBNs.debug.dag", FALSE)) && !is.null(st))
+        .Call(C_dag_check, st)
+
+    invisible(NULL)
+}
+
+## the ancestor matrix computed from scratch: the transitive closure of the
+## adjacency matrix by repeated boolean squaring. shares no machinery with
+## add.ancestors()/remove.ancestors(), which is what makes it a usable
+## reference for them.
+
+#' @importFrom graph nodes edgeMatrix
+.anc_closure <- function(g) {
+    v <- nodes(g)
+    p <- length(v)
+    A <- matrix(FALSE, p, p)
+    em <- edgeMatrix(g)
+    if (ncol(em) > 0)
+        A[cbind(em["from", ], em["to", ])] <- TRUE
+    R <- A
+    repeat {
+        N <- R | ((R %*% A) > 0)
+        if (identical(N, R))
+            break
+        R <- N
+    }
+
+    R
 }
 
 ##
@@ -460,6 +542,14 @@ rcar <- function(dag, r, utargets, anc, pasets, vidx) {
 #'
 #' @param verbose (Default TRUE) Show progress in the calculations.
 #'
+#' @param engine (Default `"C"`) A character string selecting the search
+#' engine: `"C"` (default) maintains the DAG, its ancestor relation and its
+#' parent sets in compiled code; `"R"` uses the pure-R implementation and is
+#' provided for testing and verification. Both follow the same trajectory and
+#' return the same result. `"C"` requires a `scorefun` able to score a whole
+#' neighbourhood at once, which [`iBIC`] and [`iBGe`] are; with any other
+#' score function the `"R"` engine is used regardless.
+#'
 #' @return A list containing a [`graphNEL`][graph::graphNEL-class] object with
 #' the structure of the learned DAG, and its corresponding score.
 #'
@@ -472,7 +562,9 @@ rcar <- function(dag, r, utargets, anc, pasets, vidx) {
 #' @export
 hillclimbing <- function(dat, targets=list(integer(0)),
                          target.index=rep(1L, nrow(dat)),  scorefun=iBIC,
-                         verbose=TRUE) {
+                         verbose=TRUE, engine=c("C", "R")) {
+
+    engine <- match.arg(engine)
 
     dat <- .check_input_data(dat)
     dag <- graphNEL(colnames(dat), edgemode="directed")
@@ -519,33 +611,66 @@ hillclimbing <- function(dat, targets=list(integer(0)),
         cli_progress_step("Score {s1}", spinner=TRUE)
     }
 
-    while (s1 > s0) {
-        s0 <- s1
-        ne <- ar.nh(dag, anc)
-        sco <- score.nh(ne, dag, dat, targets, target.index, cached.scores,
-                        global.sufstats, pasets, vidx.nodes, supports.pasets,
-                        scorefun, nh.scores.fun)
-        b <- which.max(sco)
-        b.op <- ne$op[b]
-        b.u <- ne$u[b]
-        b.v <- ne$v[b]
-        ## 'anc' and 'pasets' are updated before 'dag', since
-        ## remove.ancestors()/reverse.ancestors() read the DAG as it stood
-        ## BEFORE the move
-        anc <- switch(b.op,
-                      add.ancestors(anc, vnames[b.u], vnames[b.v]),
-                      remove.ancestors(anc, dag, vnames[b.u], vnames[b.v]),
-                      reverse.ancestors(anc, dag, vnames[b.u], vnames[b.v]))
-        pasets <- move.pasets(pasets, b.op, vidx.nodes[b.u], vidx.nodes[b.v])
-        dag <- apply.move(dag, b.op, b.u, b.v, vnames)
-        s1 <- sco[b]
+    ## the C engine keeps the DAG, its ancestor relation and its parent sets
+    ## in compiled state behind an external pointer, and enumerates the
+    ## neighbourhood there too; the R engine is the reference implementation
+    ## the differential tests score it against. Scoring is identical in both:
+    ## it goes through score.nh() either way.
+    ##
+    ## The C engine needs a scorefun that can score a whole neighbourhood in
+    ## one call, because it holds no graphNEL during the search and so cannot
+    ## serve score.nh()'s per-candidate fallback. iBIC() and iBGe() qualify;
+    ## anything else falls back to R rather than failing.
+    use.c <- engine == "C" && !is.null(nh.scores.fun)
 
-        if (isTRUE(getOption("idlBNs.debug.pasets", FALSE)))
-            stopifnot(identical(unname(lapply(pasets, function(x) unname(sort.int(x)))),
-                                unname(lapply(.build_pasets(dag, dat), function(x) unname(sort.int(x))))))
+    if (use.c) {
+        st <- .Call(C_dag_new, ncol(dat))
+        while (s1 > s0) {
+            s0 <- s1
+            ne <- .Call(C_dag_nh, st, 2L, integer(0))    ## 2 = ar
+            pasets <- .Call(C_dag_pasets, st)
+            sco <- score.nh(ne, NULL, dat, targets, target.index,
+                            cached.scores, global.sufstats, pasets,
+                            vidx.nodes, supports.pasets, scorefun,
+                            nh.scores.fun)
+            b <- which.max(sco)
+            .Call(C_dag_apply_move, st, ne$op[b], ne$u[b], ne$v[b])
+            s1 <- sco[b]
 
-        if (verbose)
-          cli_progress_update()
+            .debug_assertions(st, NULL, NULL, NULL, dat, vnames)
+
+            if (verbose)
+                cli_progress_update()
+        }
+        dag <- .graphNEL_from_edgeM(vnames, .Call(C_dag_edgeM, st))
+    } else {
+        while (s1 > s0) {
+            s0 <- s1
+            ne <- ar.nh(dag, anc)
+            sco <- score.nh(ne, dag, dat, targets, target.index, cached.scores,
+                            global.sufstats, pasets, vidx.nodes,
+                            supports.pasets, scorefun, nh.scores.fun)
+            b <- which.max(sco)
+            b.op <- ne$op[b]
+            b.u <- ne$u[b]
+            b.v <- ne$v[b]
+            ## 'anc' and 'pasets' are updated before 'dag', since
+            ## remove.ancestors()/reverse.ancestors() read the DAG as it stood
+            ## BEFORE the move
+            anc <- switch(b.op,
+                          add.ancestors(anc, vnames[b.u], vnames[b.v]),
+                          remove.ancestors(anc, dag, vnames[b.u], vnames[b.v]),
+                          reverse.ancestors(anc, dag, vnames[b.u], vnames[b.v]))
+            pasets <- move.pasets(pasets, b.op, vidx.nodes[b.u],
+                                  vidx.nodes[b.v])
+            dag <- apply.move(dag, b.op, b.u, b.v, vnames)
+            s1 <- sco[b]
+
+            .debug_assertions(NULL, dag, anc, pasets, dat, vnames)
+
+            if (verbose)
+                cli_progress_update()
+        }
     }
 
     if (verbose)
