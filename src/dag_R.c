@@ -1,6 +1,7 @@
 #include <R.h>
 #include <Rinternals.h>
 #include "dag.h"
+#include "dag_R.h"
 #include "nh_scores.h"          /* IDLBNS_OP_ADD / _REMOVE / _REVERSE */
 
 /*
@@ -38,8 +39,9 @@ idl_dag_R_init(void) {
     idl_dag_tag = Rf_install("idlBNs_dag");
 }
 
-static idl_dag *
-dag_from_extptr(SEXP x) {
+/* declared in dag_R.h; not static, because src/nbhd.c uses it too */
+idl_dag *
+idlBNs_dag_from_extptr(SEXP x) {
     if (TYPEOF(x) != EXTPTRSXP || R_ExternalPtrTag(x) != idl_dag_tag)
         error("not an idlBNs DAG state object");
     idl_dag *d = (idl_dag *) R_ExternalPtrAddr(x);
@@ -87,7 +89,7 @@ C_dag_new(SEXP p_R) {
  */
 SEXP
 C_dag_apply_move(SEXP st, SEXP op_R, SEXP u_R, SEXP v_R) {
-    idl_dag *d = dag_from_extptr(st);
+    idl_dag *d = idlBNs_dag_from_extptr(st);
     int op = asInteger(op_R);
     int u = asInteger(u_R);
     int v = asInteger(v_R);
@@ -136,7 +138,7 @@ C_dag_apply_move(SEXP st, SEXP op_R, SEXP u_R, SEXP v_R) {
    order the score functions must see */
 SEXP
 C_dag_pasets(SEXP st) {
-    idl_dag *d = dag_from_extptr(st);
+    idl_dag *d = idlBNs_dag_from_extptr(st);
     SEXP ans = PROTECT(allocVector(VECSXP, d->p));
     for (int v = 0; v < d->p; v++) {
         const idl_ivec *pav = &d->pa[v];
@@ -155,7 +157,7 @@ C_dag_pasets(SEXP st) {
 /* the same parent sets ascending -- the canonical cache-key form */
 SEXP
 C_dag_pasets_sorted(SEXP st) {
-    idl_dag *d = dag_from_extptr(st);
+    idl_dag *d = idlBNs_dag_from_extptr(st);
     SEXP ans = PROTECT(allocVector(VECSXP, d->p));
     for (int v = 0; v < d->p; v++) {
         const idl_ivec *pv = &d->pas[v];
@@ -182,7 +184,7 @@ C_dag_pasets_sorted(SEXP st) {
  */
 SEXP
 C_dag_edgeM(SEXP st) {
-    idl_dag *d = dag_from_extptr(st);
+    idl_dag *d = idlBNs_dag_from_extptr(st);
     SEXP ans = PROTECT(allocMatrix(INTSXP, 2, d->nedges));
     int *a = INTEGER(ans);
     int k = 0;
@@ -208,7 +210,7 @@ C_dag_edgeM(SEXP st) {
 
 SEXP
 C_dag_nedges(SEXP st) {
-    idl_dag *d = dag_from_extptr(st);
+    idl_dag *d = idlBNs_dag_from_extptr(st);
 
     return ScalarInteger(d->nedges);
 }
@@ -217,7 +219,7 @@ C_dag_nedges(SEXP st) {
    of v, so column v of the result is the ancestor set of v */
 SEXP
 C_dag_anc(SEXP st) {
-    idl_dag *d = dag_from_extptr(st);
+    idl_dag *d = idlBNs_dag_from_extptr(st);
     int p = d->p;
     SEXP ans = PROTECT(allocMatrix(LGLSXP, p, p));
     int *a = LOGICAL(ans);
@@ -245,7 +247,7 @@ C_dag_anc(SEXP st) {
  */
 SEXP
 C_dag_desc(SEXP st) {
-    idl_dag *d = dag_from_extptr(st);
+    idl_dag *d = idlBNs_dag_from_extptr(st);
     int p = d->p;
     SEXP ans = PROTECT(allocMatrix(LGLSXP, p, p));
     int *a = LOGICAL(ans);
@@ -263,7 +265,7 @@ C_dag_desc(SEXP st) {
    inconsistency, returns NULL otherwise */
 SEXP
 C_dag_check(SEXP st) {
-    idl_dag *d = dag_from_extptr(st);
+    idl_dag *d = idlBNs_dag_from_extptr(st);
     char msg[512];
 
     if (idl_dag_check(d, msg, sizeof(msg)) != 0)

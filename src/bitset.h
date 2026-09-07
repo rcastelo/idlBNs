@@ -133,4 +133,37 @@ idl_bs_to_ints(const idl_word *b, size_t W, int *out) {
     return n;
 }
 
+/*
+ * idl_bs_absent_to_ints
+ *
+ * The complement of idl_bs_to_ints(): writes the indices below 'p' whose
+ * bit is CLEAR, in ASCENDING order, into out[] (room for p entries), and
+ * returns how many. Bits at or above p are ignored, so the caller need not
+ * keep the tail of the last word clean.
+ *
+ * This is what enumerates candidate arc heads: nr.nh() adds i -> w for every
+ * w that is neither i, nor already a child of i, nor an ancestor of i, and
+ * it emits them in ascending w. Taking the complement of one combined mask
+ * makes that a single pass, and the ascending order is a requirement rather
+ * than a convenience -- which.max() breaks score ties by position, so the
+ * emission order decides the trajectory.
+ */
+static inline int
+idl_bs_absent_to_ints(const idl_word *b, size_t W, int p, int *out) {
+    int n = 0;
+    for (size_t k = 0; k < W; k++) {
+        idl_word x = ~b[k];
+        int base = (int) (k * IDL_WBITS);
+        while (x) {
+            int i = base + idl_ctz64(x);
+            x &= x - 1;
+            if (i >= p)
+                return n;          /* words are filled in ascending order */
+            out[n++] = i;
+        }
+    }
+
+    return n;
+}
+
 #endif /* IDLBNS_BITSET_H */
