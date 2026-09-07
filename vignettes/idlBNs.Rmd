@@ -281,15 +281,14 @@ library(kableExtra)
 
 fname <- system.file("extdata", "benchmark_results.csv", package="idlBNs")
 if (file.exists(fname)) {
-    prevbmdat <- tibble(read.csv(fname))
+    prevbmdat <- as_tibble(read.csv(fname))
     prevbmdat$version <- package_version(prevbmdat$version)
     prevbmdat$median <- as_bench_time(prevbmdat$median)
     prevbmdat$mem_alloc <- as_bench_bytes(prevbmdat$mem_alloc)
     if (Sys.getenv("IDLBNS_BENCHMARK") == "TRUE") {
-      if (!bmdat$version[1] %in% prevbmdat$version)
-          bmdat <- rbind(prevbmdat, bmdat)
-      else
-          bmdat <- prevbmdat
+      if (bmdat$version[1] %in% prevbmdat$version)
+          prevbmdat <- prevbmdat |> filter(version != bmdat$version[1])
+      bmdat <- rbind(prevbmdat, bmdat)
     }
 
     bmdat <- bmdat |> arrange(desc(version), p, score_function)
