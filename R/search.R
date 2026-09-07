@@ -273,30 +273,50 @@ ncr.nh <- function(dag, anc, utargets=integer(0)) {
     .bind.reversals(nr, acc)
 }
 
+## apply a move's parent-set delta to 'pasets'. 'pu'/'pv' are the move's
+## endpoints already translated to the dat-column indices 'pasets' is keyed
+## by (see vidx.nodes in hcmc()/hillclimbing()).
+move.pasets <- function(pasets, op, pu, pv) {
+    switch(op,
+           add.pasets(pasets, pu, pv),
+           remove.pasets(pasets, pu, pv),
+           reverse.pasets(pasets, pu, pv))
+}
+
 ## score every candidate move of a neighborhood 'ne' against the DAG it was
 ## generated from, returning a numeric vector of length |ne| in neighborhood
-## order. when 'scorefun' declares that it accepts a 'pasets' argument
-## (attr "supports.pasets"), the move's parent-set delta is applied to
-## 'pasets' and the *current* 'dag' is passed as 'g': the score functions
+## order.
+##
+## when 'scorefun' carries a neighborhood scorer (attr "nh.scores.fun"), the
+## whole neighborhood is scored in a single call that rescores only the one
+## or two vertices whose parent set each move changes, reusing the current
+## DAG's terms for the other p-1 or p-2 (see .iBIC.nh.scores() and
+## src/nh_scores.c). each candidate's terms are still summed over all p
+## vertices, so the totals are bit-identical to scoring every candidate
+## from scratch and the search follows exactly the same trajectory.
+##
+## failing that, when 'scorefun' declares that it accepts a 'pasets'
+## argument (attr "supports.pasets"), the move's parent-set delta is applied
+## to 'pasets' and the *current* 'dag' is passed as 'g': the score functions
 ## read 'g' only to validate the vertex count and the cached-scores list,
 ## and every neighbor shares both with 'dag', so no candidate graph is
-## needed. a custom scorefun without that attribute still gets a real
+## needed. a custom scorefun with neither attribute still gets a real
 ## neighbor graph, built here on demand. 'vidx.nodes' maps a nodes(dag)
 ## position to the dat-column index that 'pasets' is keyed by.
 score.nh <- function(ne, dag, dat, targets, target.index, cached.scores,
                      global.sufstats, pasets, vidx.nodes, supports.pasets,
-                     scorefun) {
+                     scorefun, nh.scores.fun=NULL) {
+    if (!is.null(nh.scores.fun))
+        return(nh.scores.fun(ne$op, vidx.nodes[ne$u], vidx.nodes[ne$v],
+                             pasets, global.sufstats, cached.scores))
+
     k <- length(ne$op)
     sco <- numeric(k)
     vnames <- if (supports.pasets) NULL else nodes(dag)
     for (m in seq_len(k)) {
         if (supports.pasets) {
-            pu <- vidx.nodes[ne$u[m]]
-            pv <- vidx.nodes[ne$v[m]]
-            pas <- switch(ne$op[m],
-                          add.pasets(pasets, pu, pv),
-                          remove.pasets(pasets, pu, pv),
-                          reverse.pasets(pasets, pu, pv))
+            pas <- move.pasets(pasets, ne$op[m], vidx.nodes[ne$u[m]],
+                               vidx.nodes[ne$v[m]])
             sco[m] <- scorefun(g=dag, dat=dat, targets=targets,
                                target.index=target.index,
                                cached.scores=cached.scores,
@@ -440,6 +460,7 @@ hillclimbing <- function(dat, targets=list(integer(0)),
     if (!is.null(attr(scorefun, "scorefun.name")))
         scorefun.name <- attr(scorefun, "scorefun.name")
     supports.pasets <- isTRUE(attr(scorefun, "supports.pasets"))
+    nh.scores.fun <- attr(scorefun, "nh.scores.fun")
 
     anc <- init.ancestors(colnames(dat))
     vidx <- setNames(seq_len(ncol(dat)), colnames(dat))
@@ -467,7 +488,7 @@ hillclimbing <- function(dat, targets=list(integer(0)),
         ne <- ar.nh(dag, anc)
         sco <- score.nh(ne, dag, dat, targets, target.index, cached.scores,
                         global.sufstats, pasets, vidx.nodes, supports.pasets,
-                        scorefun)
+                        scorefun, nh.scores.fun)
         b <- which.max(sco)
         b.op <- ne$op[b]
         b.u <- ne$u[b]
@@ -479,10 +500,7 @@ hillclimbing <- function(dat, targets=list(integer(0)),
                       add.ancestors(anc, vnames[b.u], vnames[b.v]),
                       remove.ancestors(anc, dag, vnames[b.u], vnames[b.v]),
                       reverse.ancestors(anc, dag, vnames[b.u], vnames[b.v]))
-        pasets <- switch(b.op,
-                         add.pasets(pasets, vidx.nodes[b.u], vidx.nodes[b.v]),
-                         remove.pasets(pasets, vidx.nodes[b.u], vidx.nodes[b.v]),
-                         reverse.pasets(pasets, vidx.nodes[b.u], vidx.nodes[b.v]))
+        pasets <- move.pasets(pasets, b.op, vidx.nodes[b.u], vidx.nodes[b.v])
         dag <- apply.move(dag, b.op, b.u, b.v, vnames)
         s1 <- sco[b]
 

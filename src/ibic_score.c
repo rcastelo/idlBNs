@@ -3,6 +3,7 @@
 #include <Rinternals.h>
 #include <R_ext/Lapack.h>
 #include "cache_key.h"
+#include "nh_scores.h"
 
 /* prototypes */
 
@@ -186,19 +187,7 @@ C_iBIC_score(SEXP S_R, SEXP pasets_R, SEXP data_count_R, SEXP n_R,
 
         if (has_cache) {
             env = VECTOR_ELT(cached_scores_R, i);
-            char *key = build_cache_key(pa, lp);
-            sym = Rf_install(key); /* symbols are GC-safe unprotected */
-            /* R_existsVarInFrame()/R_getVar() (envir.c), not the
-               legacy-only Rf_findVarInFrame() (declared in Rinternals.h
-               only under #ifdef ENABLE_LEGACY_NONAPI_FUNS, not part of
-               the default package-facing C API); inherits=FALSE matches
-               cached.scores[[i]]'s single-frame (parent=emptyenv()) R
-               "[[" lookup semantics */
-            if (R_existsVarInFrame(env, sym)) {
-                SEXP val = R_getVar(sym, env, FALSE);
-                s = REAL(val)[0];
-                found = 1;
-            }
+            found = cache_lookup(env, pa, lp, &sym, &s);
         }
 
         if (!found) {
@@ -206,17 +195,8 @@ C_iBIC_score(SEXP S_R, SEXP pasets_R, SEXP data_count_R, SEXP n_R,
             int p1 = (int) sqrt((double) LENGTH(Sj_R));
             double Nj = REAL(data_count_R)[i];
             s = iBIC_node_score(REAL(Sj_R), p1, pa, lp, i + 1, Nj, n);
-            if (has_cache) {
-                /* Rf_install() above and Rf_ScalarReal() here are kept as
-                   separate statements, and the ScalarReal() result is
-                   protected before defineVar(): nesting both allocating
-                   calls as sibling arguments to defineVar() would leave
-                   the unprotected ScalarReal() result exposed to GC under
-                   C's unspecified argument-evaluation order */
-                SEXP val = PROTECT(Rf_ScalarReal(s));
-                Rf_defineVar(sym, val, env);
-                UNPROTECT(1);
-            }
+            if (has_cache)
+                cache_store(env, sym, s);
         }
         total += s;
 
@@ -225,4 +205,76 @@ C_iBIC_score(SEXP S_R, SEXP pasets_R, SEXP data_count_R, SEXP n_R,
     }
 
     return Rf_ScalarReal(total);
+}
+
+/*
+ * iBIC_ctx / iBIC_node_score_thunk
+ *
+ * Binds the iBIC global sufficient statistics to the generic
+ * node_score_fn signature that nh_scores_driver() calls back into, so
+ * that the delta-scoring driver stays score-function agnostic.
+ */
+typedef struct {
+    SEXP          S_R;        /* global.sufstats$S, a list of p matrices  */
+    const double *data_count; /* global.sufstats$data.count, length p     */
+    double        n;          /* global.sufstats$n                        */
+} iBIC_ctx;
+
+static double
+iBIC_node_score_thunk(void *ctxv, const int *pa, int lp, int node) {
+    iBIC_ctx *ctx = (iBIC_ctx *) ctxv;
+    SEXP Sj_R = VECTOR_ELT(ctx->S_R, node - 1);
+    int p1 = (int) sqrt((double) LENGTH(Sj_R));
+
+    return iBIC_node_score(REAL(Sj_R), p1, pa, lp, node,
+                           ctx->data_count[node - 1], ctx->n);
+}
+
+/*
+ * C_iBIC_nh_scores
+ *
+ * Scores a whole neighborhood of candidate moves against the current DAG
+ * in a single .Call(), returning one total iBIC score per candidate. See
+ * nh_scores.c for how the per-candidate totals are derived from the
+ * current DAG's per-vertex terms.
+ *
+ * Arguments
+ * ---------
+ * S_R             VECSXP   global.sufstats$S, a list of p (p+1)x(p+1)
+ *                          sufficient-statistics matrices
+ * pasets_R        VECSXP   a list of p integer vectors, the 1-based
+ *                          parent indices of each vertex in the current
+ *                          DAG
+ * data_count_R    REALSXP  global.sufstats$data.count, length p
+ * n_R             REALSXP  scalar: global.sufstats$n
+ * cached_scores_R VECSXP   a list of p environments, or R_NilValue
+ * op_R            INTSXP   move operation codes, length k
+ * u_R             INTSXP   move tail vertices, 1-based, length k
+ * v_R             INTSXP   move head vertices, 1-based, length k
+ *
+ * Returns a REALSXP of length k.
+ */
+SEXP
+C_iBIC_nh_scores(SEXP S_R, SEXP pasets_R, SEXP data_count_R, SEXP n_R,
+                 SEXP cached_scores_R, SEXP op_R, SEXP u_R, SEXP v_R) {
+    if (TYPEOF(pasets_R) != VECSXP)
+        error("C_iBIC_nh_scores: 'pasets' must be a list");
+
+    int p = LENGTH(pasets_R);
+
+    if (TYPEOF(S_R) != VECSXP || LENGTH(S_R) != p)
+        error("C_iBIC_nh_scores: 'S' must be a list of length %d", p);
+    if (TYPEOF(data_count_R) != REALSXP || LENGTH(data_count_R) != p)
+        error("C_iBIC_nh_scores: 'data_count' must be a numeric vector of length %d",
+              p);
+    if (TYPEOF(n_R) != REALSXP || LENGTH(n_R) != 1)
+        error("C_iBIC_nh_scores: 'n' must be a numeric scalar");
+
+    iBIC_ctx ctx;
+    ctx.S_R        = S_R;
+    ctx.data_count = REAL(data_count_R);
+    ctx.n          = REAL(n_R)[0];
+
+    return nh_scores_driver(pasets_R, cached_scores_R, op_R, u_R, v_R,
+                            iBIC_node_score_thunk, &ctx);
 }

@@ -60,4 +60,48 @@ build_cache_key(const int *pa, int lp) {
     return buf;
 }
 
+/*
+ * cache_lookup
+ *
+ * Looks up the cached score of one node for the parent set pa[0..lp-1] in
+ * the per-node environment 'env'. On a hit, writes the score to *out and
+ * returns 1; on a miss, returns 0. Either way *sym receives the interned
+ * symbol for the parent set's key, so a following cache_store() reuses it
+ * instead of rebuilding and re-interning the key.
+ *
+ * R_existsVarInFrame()/R_getVar() (envir.c) are used rather than the
+ * legacy-only Rf_findVarInFrame() (declared in Rinternals.h only under
+ * ENABLE_LEGACY_NONAPI_FUNS, and not part of the default package-facing C
+ * API); inherits=FALSE matches the single-frame (parent=emptyenv())
+ * semantics of the R-level cached.scores[[i]][[k]] lookup.
+ */
+static inline int
+cache_lookup(SEXP env, const int *pa, int lp, SEXP *sym, double *out) {
+    char *key = build_cache_key(pa, lp);
+    *sym = Rf_install(key); /* symbols are GC-safe unprotected */
+    if (R_existsVarInFrame(env, *sym)) {
+        *out = REAL(R_getVar(*sym, env, FALSE))[0];
+
+        return 1;
+    }
+
+    return 0;
+}
+
+/*
+ * cache_store
+ *
+ * Writes the score 's' into the per-node environment 'env' under the
+ * symbol 'sym' returned by a preceding cache_lookup(). The Rf_ScalarReal()
+ * result is protected before Rf_defineVar(): nesting an allocating call as
+ * a sibling argument to another would leave it exposed to GC under C's
+ * unspecified argument-evaluation order.
+ */
+static inline void
+cache_store(SEXP env, SEXP sym, double s) {
+    SEXP val = PROTECT(Rf_ScalarReal(s));
+    Rf_defineVar(sym, val, env);
+    UNPROTECT(1);
+}
+
 #endif /* IDLBNS_CACHE_KEY_H */
