@@ -74,7 +74,57 @@ stopifnot(ncase >= 48L)
 cat(sprintf("hillclimbing: %d cases, C and R engines bit-identical\n", ncase))
 
 ################################################################################
-## 2. a scorefun that cannot score a whole neighbourhood falls back to R
+## 2. hcmc(): stochastic, so the engines must agree on the RANDOM STREAM as
+## well as the result. The assertion on .Random.seed after the run is the
+## load-bearing one -- rcar() draws a data-dependent number of unif_rand()
+## values per call and is called once or twice per iteration, so two
+## implementations could agree on every arc they reverse and still leave the
+## generator in different places, which would make every later step diverge.
+################################################################################
+
+nhcmc <- 0L
+for (p in c(5, 8, 12, 20))
+  for (seed in 1:3) {
+    x <- mkdata(p, seed = seed)
+    for (sf in list(iBIC, iBGe))
+      for (r in c(0L, 20L))
+        for (tg in list(list(targets = list(integer(0)),
+                             target.index = rep(1L, nrow(x$dat))),
+                        list(targets = x$targets,
+                             target.index = x$target.index))) {
+          set.seed(4242L)
+          rC <- hcmc(x$dat, r = r, targets = tg$targets,
+                     target.index = tg$target.index, scorefun = sf,
+                     verbose = FALSE, engine = "C")
+          seedC <- .Random.seed
+          set.seed(4242L)
+          rR <- hcmc(x$dat, r = r, targets = tg$targets,
+                     target.index = tg$target.index, scorefun = sf,
+                     verbose = FALSE, engine = "R")
+          seedR <- .Random.seed
+
+          stopifnot(same_result(rC, rR))
+          stopifnot(identical(seedC, seedR))        ## the same stream
+          stopifnot(abs(rC$sco - sf(rC$dag, x$dat, tg$targets,
+                                    tg$target.index)) < 1e-9)
+          nhcmc <- nhcmc + 1L
+        }
+  }
+stopifnot(nhcmc >= 96L)
+cat(sprintf("hcmc: %d cases, C and R engines bit-identical including .Random.seed\n",
+            nhcmc))
+
+## r = 0 exercises the branch where rcar() still consumes exactly one draw
+## per call but never reverses anything
+x <- mkdata(8, seed = 9L)
+set.seed(7L); z0 <- hcmc(x$dat, r = 0L, verbose = FALSE, engine = "C")
+s0 <- .Random.seed
+set.seed(7L); z1 <- hcmc(x$dat, r = 0L, verbose = FALSE, engine = "R")
+stopifnot(same_result(z0, z1), identical(s0, .Random.seed))
+cat("hcmc at r = 0: engines agree on result and stream\n")
+
+################################################################################
+## 3. a scorefun that cannot score a whole neighbourhood falls back to R
 ## rather than failing. tests/test_delta_scores.R already drives that path;
 ## here we check the fallback is transparent -- asking for engine = "C" with
 ## such a scorefun gives the same answer as asking for "R".
@@ -93,10 +143,18 @@ stopifnot(same_result(aC, aR))
 ## and it reaches the same DAG the fast path does
 fast <- hillclimbing(x$dat, scorefun = iBIC, verbose = FALSE)
 stopifnot(same_result(aC, fast))
+
+## hcmc() too, including the random stream
+set.seed(3L); hC <- hcmc(x$dat, scorefun = plain_iBIC, verbose = FALSE,
+                         engine = "C")
+sC <- .Random.seed
+set.seed(3L); hR <- hcmc(x$dat, scorefun = plain_iBIC, verbose = FALSE,
+                         engine = "R")
+stopifnot(same_result(hC, hR), identical(sC, .Random.seed))
 cat("attribute-less scorefun: engine='C' falls back to R transparently\n")
 
 ################################################################################
-## 3. the engine argument itself
+## 4. the engine argument itself
 ################################################################################
 
 stopifnot(inherits(tryCatch(hillclimbing(x$dat, verbose = FALSE,
@@ -105,10 +163,15 @@ stopifnot(inherits(tryCatch(hillclimbing(x$dat, verbose = FALSE,
 ## partial matching, as match.arg gives
 stopifnot(same_result(hillclimbing(x$dat, verbose = FALSE, engine = "C"),
                       hillclimbing(x$dat, verbose = FALSE)))
+stopifnot(inherits(tryCatch(hcmc(x$dat, verbose = FALSE, engine = "nonsense"),
+                            error = function(e) e), "error"))
+set.seed(2L); e1 <- hcmc(x$dat, verbose = FALSE, engine = "C")
+set.seed(2L); e2 <- hcmc(x$dat, verbose = FALSE)
+stopifnot(same_result(e1, e2))
 cat("engine argument validated and defaults to C\n")
 
 ################################################################################
-## 4. the in-loop debug assertions, on both engines.
+## 5. the in-loop debug assertions, on both engines.
 ##
 ## idlBNs.debug.pasets existed before the port; idlBNs.debug.anc and
 ## idlBNs.debug.dag are new and close a real gap -- remove.ancestors() and
@@ -132,6 +195,15 @@ for (sf in list(iBIC, iBGe))
                       target.index = x$target.index, scorefun = sf,
                       verbose = FALSE, engine = eng)
     stopifnot(is.finite(r$sco))
+    ## and hcmc(), at both r = 0 and the default, so that rcar()'s two call
+    ## sites run with every assertion enabled
+    for (rr in c(0L, 20L)) {
+      set.seed(6L)
+      h <- hcmc(x$dat, r = rr, targets = x$targets,
+                target.index = x$target.index, scorefun = sf,
+                verbose = FALSE, engine = eng)
+      stopifnot(is.finite(h$sco))
+    }
   }
 ## with the assertions on, the two engines still agree
 rC <- hillclimbing(x$dat, targets = x$targets, target.index = x$target.index,
@@ -139,13 +211,21 @@ rC <- hillclimbing(x$dat, targets = x$targets, target.index = x$target.index,
 rR <- hillclimbing(x$dat, targets = x$targets, target.index = x$target.index,
                    verbose = FALSE, engine = "R")
 stopifnot(same_result(rC, rR))
+set.seed(8L); hC <- hcmc(x$dat, targets = x$targets,
+                         target.index = x$target.index, verbose = FALSE,
+                         engine = "C")
+sC <- .Random.seed
+set.seed(8L); hR <- hcmc(x$dat, targets = x$targets,
+                         target.index = x$target.index, verbose = FALSE,
+                         engine = "R")
+stopifnot(same_result(hC, hR), identical(sC, .Random.seed))
 
 options(idlBNs.debug.pasets = old$p, idlBNs.debug.anc = old$a,
         idlBNs.debug.dag = old$d)
 cat("debug.pasets, debug.anc and debug.dag all pass on both engines\n")
 
 ################################################################################
-## 5. the debug assertions are not vacuous: idlBNs.debug.anc must reject a
+## 6. the debug assertions are not vacuous: idlBNs.debug.anc must reject a
 ## deliberately wrong ancestor matrix
 ################################################################################
 

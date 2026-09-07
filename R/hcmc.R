@@ -29,6 +29,16 @@
 #'
 #' @param verbose (Default TRUE) Show progress in the calculations.
 #'
+#' @param engine (Default `"C"`) A character string selecting the search
+#' engine: `"C"` (default) maintains the DAG, its ancestor relation and its
+#' parent sets in compiled code, and performs the (\emph{I}-)covered arc
+#' reversals there too; `"R"` uses the pure-R implementation and is provided
+#' for testing and verification. Both consume the random number stream
+#' identically and so follow the same trajectory from the same seed, and both
+#' return the same result. `"C"` requires a `scorefun` able to score a whole
+#' neighbourhood at once, which [`iBIC`] and [`iBGe`] are; with any other
+#' score function the `"R"` engine is used regardless.
+#'
 #' @return A list containing a [`graphNEL`][graph::graphNEL-class] object with
 #' the structure of the learned DAG, and its corresponding score.
 #' 
@@ -111,8 +121,10 @@
 #' @rdname hcmc
 hcmc <- function(dat, r=20, targets=list(integer(0)),
                  target.index=rep(1L, nrow(dat)),
-                 scorefun=iBIC, MAXTRIALS=5, verbose=TRUE) {
+                 scorefun=iBIC, MAXTRIALS=5, verbose=TRUE,
+                 engine=c("C", "R")) {
 
+    engine <- match.arg(engine)
     dat <- .check_input_data(dat)
     dag <- graphNEL(colnames(dat), edgemode="directed")
     attr(dat, "sanitycheck") <- TRUE
@@ -146,6 +158,13 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
     vidx.nodes <- unname(vidx[vnames])
     pasets <- init.pasets(ncol(dat))
     utargets <- sort(unique(unlist(targets)))
+    ## the C entry points take an INTSXP, and utargets comes out numeric if
+    ## the caller wrote targets=list(integer(0), 2) rather than 2L
+    utargets.i <- as.integer(utargets)
+    ## length(0:r) is computed here, not as r + 1 in C: 0:r for a
+    ## non-integer r is 0:floor(r) and for a negative r counts down, so the
+    ## coercion stays where it already behaves correctly (see src/rcar.c)
+    rlen <- length(0:r)
     s0 <- -Inf
     s1 <- scorefun(g=dag, dat=dat, targets=targets, target.index=target.index,
                    cached.scores=cached.scores, global.sufstats=global.sufstats)
@@ -162,60 +181,109 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
       cli_progress_step(msg, spinner=TRUE)
     }
 
-    while (!local_maximum) {
-        s0 <- s1
-        rcar.out <- rcar(dag, r, utargets, anc, pasets, vidx)
-        dag <- rcar.out$dag
-        anc <- rcar.out$anc
-        pasets <- rcar.out$pasets
-        ne <- ncr.nh(dag, anc, utargets)
-        sco <- score.nh(ne, dag, dat, targets, target.index, cached.scores,
-                        global.sufstats, pasets, vidx.nodes, supports.pasets,
-                        scorefun, nh.scores.fun)
-        b <- which.max(sco)
-        b.op <- ne$op[b]
-        b.u <- ne$u[b]
-        b.v <- ne$v[b]
-        s1 <- sco[b]
-        local_maximum <- s1 <= s0
-        if (!local_maximum) {
-          ## 'anc' and 'pasets' are updated before 'dag', since
-          ## remove.ancestors()/reverse.ancestors() read the DAG as it stood
-          ## BEFORE the move
-          anc <- switch(b.op,
-                        add.ancestors(anc, vnames[b.u], vnames[b.v]),
-                        remove.ancestors(anc, dag, vnames[b.u], vnames[b.v]),
-                        reverse.ancestors(anc, dag, vnames[b.u], vnames[b.v]))
-          pasets <- move.pasets(pasets, b.op, vidx.nodes[b.u],
-                                vidx.nodes[b.v])
-          dag <- apply.move(dag, b.op, b.u, b.v, vnames)
-          if (was_in_local_maximum) {
-              escapes <- escapes + 1
-              avg_trials_per_escape <- (avg_trials_per_escape *
-                                        (escapes-1) + trials) / escapes
-              was_in_local_maximum <- FALSE
-          }
-          trials <- 0
-        } else if (trials < MAXTRIALS) {
-          s1 <- s0
-          rcar.out <- rcar(dag, r, utargets, anc, pasets, vidx)
-          dag <- rcar.out$dag
-          anc <- rcar.out$anc
-          pasets <- rcar.out$pasets
-          local_maximum <- FALSE
-          was_in_local_maximum <- TRUE
-          trials <- trials + 1
-        } else
-          s1 <- s0
+    ## the C engine keeps the DAG, its ancestor relation and its parent sets
+    ## in compiled state behind an external pointer, enumerates the NCR
+    ## neighbourhood there, and performs the covered arc reversals there --
+    ## reproducing R's random stream draw for draw, so both engines follow
+    ## the same trajectory from the same seed. The R engine is the reference
+    ## implementation the differential tests score it against.
+    ##
+    ## The escape bookkeeping (trials, escapes, avg_trials_per_escape) is
+    ## identical in both and stays in R.
+    use.c <- engine == "C" && !is.null(nh.scores.fun)
 
-        if (isTRUE(getOption("idlBNs.debug.pasets", FALSE)))
-            stopifnot(identical(unname(lapply(pasets,
-                                              function(x) unname(sort.int(x)))),
-                                unname(lapply(.build_pasets(dag, dat),
-                                              function(x) unname(sort.int(x))))))
+    if (use.c) {
+        st <- .Call(C_dag_new, ncol(dat))
+        while (!local_maximum) {
+            s0 <- s1
+            .Call(C_dag_rcar, st, rlen, utargets.i)
+            ne <- .Call(C_dag_nh, st, 3L, utargets.i)    ## 3 = ncr
+            pasets <- .Call(C_dag_pasets, st)
+            sco <- score.nh(ne, NULL, dat, targets, target.index,
+                            cached.scores, global.sufstats, pasets,
+                            vidx.nodes, supports.pasets, scorefun,
+                            nh.scores.fun)
+            b <- which.max(sco)
+            s1 <- sco[b]
+            local_maximum <- s1 <= s0
+            if (!local_maximum) {
+                .Call(C_dag_apply_move, st, ne$op[b], ne$u[b], ne$v[b])
+                if (was_in_local_maximum) {
+                    escapes <- escapes + 1
+                    avg_trials_per_escape <- (avg_trials_per_escape *
+                                              (escapes-1) + trials) / escapes
+                    was_in_local_maximum <- FALSE
+                }
+                trials <- 0
+            } else if (trials < MAXTRIALS) {
+                s1 <- s0
+                .Call(C_dag_rcar, st, rlen, utargets.i)
+                local_maximum <- FALSE
+                was_in_local_maximum <- TRUE
+                trials <- trials + 1
+            } else
+                s1 <- s0
 
-        if (verbose)
-            cli_progress_update()
+            .debug_assertions(st, NULL, NULL, NULL, dat, vnames)
+
+            if (verbose)
+                cli_progress_update()
+        }
+        dag <- .graphNEL_from_edgeM(vnames, .Call(C_dag_edgeM, st))
+    } else {
+        while (!local_maximum) {
+            s0 <- s1
+            rcar.out <- rcar(dag, r, utargets, anc, pasets, vidx)
+            dag <- rcar.out$dag
+            anc <- rcar.out$anc
+            pasets <- rcar.out$pasets
+            ne <- ncr.nh(dag, anc, utargets)
+            sco <- score.nh(ne, dag, dat, targets, target.index, cached.scores,
+                            global.sufstats, pasets, vidx.nodes,
+                            supports.pasets, scorefun, nh.scores.fun)
+            b <- which.max(sco)
+            b.op <- ne$op[b]
+            b.u <- ne$u[b]
+            b.v <- ne$v[b]
+            s1 <- sco[b]
+            local_maximum <- s1 <= s0
+            if (!local_maximum) {
+                ## 'anc' and 'pasets' are updated before 'dag', since
+                ## remove.ancestors()/reverse.ancestors() read the DAG as it
+                ## stood BEFORE the move
+                anc <- switch(b.op,
+                              add.ancestors(anc, vnames[b.u], vnames[b.v]),
+                              remove.ancestors(anc, dag, vnames[b.u],
+                                               vnames[b.v]),
+                              reverse.ancestors(anc, dag, vnames[b.u],
+                                                vnames[b.v]))
+                pasets <- move.pasets(pasets, b.op, vidx.nodes[b.u],
+                                      vidx.nodes[b.v])
+                dag <- apply.move(dag, b.op, b.u, b.v, vnames)
+                if (was_in_local_maximum) {
+                    escapes <- escapes + 1
+                    avg_trials_per_escape <- (avg_trials_per_escape *
+                                              (escapes-1) + trials) / escapes
+                    was_in_local_maximum <- FALSE
+                }
+                trials <- 0
+            } else if (trials < MAXTRIALS) {
+                s1 <- s0
+                rcar.out <- rcar(dag, r, utargets, anc, pasets, vidx)
+                dag <- rcar.out$dag
+                anc <- rcar.out$anc
+                pasets <- rcar.out$pasets
+                local_maximum <- FALSE
+                was_in_local_maximum <- TRUE
+                trials <- trials + 1
+            } else
+                s1 <- s0
+
+            .debug_assertions(NULL, dag, anc, pasets, dat, vnames)
+
+            if (verbose)
+                cli_progress_update()
+        }
     }
 
     if (verbose) {
