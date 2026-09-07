@@ -357,6 +357,14 @@ score.nh <- function(ne, dag, dat, targets, target.index, cached.scores,
 cedges <- function(dag, utargets) {
     v <- nodes(dag)
     em <- edgeMatrix(dag)
+    ## an edgeless DAG has no covered arcs. the early return is needed
+    ## because mapply() over zero-length inputs returns list(), not
+    ## logical(0), and the '&' below would then fail on a list. rcar(), the
+    ## only caller, guards numEdges(dag) == 0 before it gets here, so this
+    ## never fired in the search -- but the function should be total, and
+    ## the regression tests call it directly.
+    if (ncol(em) == 0L)
+        return(logical(0))
     pasets <- split(v[em["from", ]], factor(v[em["to", ]], levels=v))
     cemask <- mapply(function(pafrom, pato, from) identical(sort(pafrom), sort(setdiff(pato, from))),
                      pasets[em["from", ]], pasets[em["to", ]], v[em["from", ]])
@@ -368,6 +376,23 @@ cedges <- function(dag, utargets) {
 
 ## resample helper function
 resample <- function(x, ...) x[sample.int(length(x), ...)]
+
+## one draw of R's own R_unif_index(), the function sample.int() uses
+## internally, exposed from C. rcar() is the only RNG consumer in the
+## search, and a C port of it has to reproduce R's stream draw for draw --
+## which means calling R_unif_index() rather than scaling a uniform, since
+## under the default sample.kind="Rejection" the number of unif_rand() calls
+## per draw is data dependent (1 to 3 for a size-1 draw). This wrapper
+## exists so tests/test_rng_equivalence.R can pin the three identities the
+## port relies on, on both the value and the resulting .Random.seed:
+##
+##   sample.int(n, 1)      == .unif_index(n) + 1
+##   sample(0:r, size=1)   == .unif_index(length(0:r))
+##   resample(x, size=1)   == x[.unif_index(length(x)) + 1]
+##
+## 'n' is the population size, and the result lies in 0:(n-1) -- 0-based, as
+## C wants it. See src/rng.c.
+.unif_index <- function(n) .Call(C_unif_index, as.double(n))
 
 ## RCAR: repeated covered arc reversal algorithm
 ## utargets should be a vector of unique target vertices

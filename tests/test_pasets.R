@@ -31,6 +31,18 @@ pasets_equal <- function(a, b) {
 ## rather than against the incrementally maintained ancestor matrix, so it
 ## does not share any machinery with the functions under test. returns a
 ## character vector of "op:u:v" move descriptors.
+##
+## ORDER MATTERS, and getting it from the right place matters. Additions are
+## emitted in ascending head order, which this function derives itself. But
+## removals and reversals are emitted in the order the GRAPH stores vertex
+## i's children -- graph::addEdge appends and graph::removeEdge compacts, so
+## a child list is in edge-insertion order and is routinely NOT ascending.
+## That order is part of the specification, because which.max() breaks score
+## ties by position and so the emission order decides the trajectory.
+## Reading it off edgeL() is therefore correct; deriving it as
+## which(adj[i, ]) -- as this reference originally did -- silently assumes
+## ascending, and coincided with the truth only because the DAG generator
+## below used to insert edges in ascending order too. It no longer does.
 nh_reference <- function(dag, kind=c("nr", "ar", "ncr"), utargets=integer(0)) {
   kind <- match.arg(kind)
   v <- nodes(dag)
@@ -39,6 +51,17 @@ nh_reference <- function(dag, kind=c("nr", "ar", "ncr"), utargets=integer(0)) {
   em <- edgeMatrix(dag)
   if (ncol(em) > 0)
     adj[cbind(em["from", ], em["to", ])] <- TRUE
+  ## children of each vertex, in the graph's own storage order
+  el <- edgeL(dag)
+  ch <- lapply(seq_len(p), function(i) {
+                 e <- el[[i]]$edges
+                 if (is.null(e)) integer(0) else as.integer(e)
+               })
+  ## the stored order must at least agree with adjacency as a set, or the
+  ## reference is reading the graph wrongly rather than testing anything
+  for (i in seq_len(p))
+    stopifnot(setequal(ch[[i]], which(adj[i, ])),
+              !anyDuplicated(ch[[i]]))
   ## transitive closure by repeated squaring (reach[a, b]: a path a -> b)
   reach <- adj
   repeat {
@@ -69,12 +92,12 @@ nh_reference <- function(dag, kind=c("nr", "ar", "ncr"), utargets=integer(0)) {
   mv2 <- character(0)
   for (i in seq_len(p)) {
     mv2 <- c(mv2, grep(paste0("^1:", i, ":"), mv, value=TRUE))
-    for (j in which(adj[i, ])) mv2 <- c(mv2, paste("2", i, j, sep=":"))
+    for (j in ch[[i]]) mv2 <- c(mv2, paste("2", i, j, sep=":"))
   }
   mv <- mv2
   if (kind == "nr") return(mv)
   for (i in seq_len(p)) {          ## reversals
-    for (j in which(adj[i, ])) {
+    for (j in ch[[i]]) {
       A <- adj; A[i, j] <- FALSE; A[j, i] <- TRUE
       if (!acyclic(A)) next
       if (kind == "ncr") {
@@ -96,14 +119,31 @@ for (p in c(4, 6, 8)) {
   n <- 50
   dat <- matrix(rnorm(n * p), nrow=n, ncol=p, dimnames=list(NULL, varnames))
 
-  ## build a handful of random DAGs (in topological order, no cycles) with a
-  ## moderate edge density, and for each one check every candidate neighbor
+  ## build a handful of random DAGs (all arcs point from a lower to a higher
+  ## index, so acyclicity is automatic) with a moderate edge density, and for
+  ## each one check every candidate neighbor.
+  ##
+  ## the arcs are INSERTED IN SHUFFLED ORDER, and then a few are removed and
+  ## re-added, so that the graph's child lists are genuinely not ascending.
+  ## with ascending insertion the child lists come out ascending too, and the
+  ## ordering assertion below cannot tell a correct implementation from one
+  ## that emits removals in ascending order -- which is a different
+  ## trajectory. see the note on nh_reference() above.
   for (rep in 1:5) {
     dag <- new("graphNEL", nodes=varnames, edgemode="directed")
-    for (i in seq_len(p - 1))
-      for (j in (i + 1):p)
-        if (runif(1) < 0.3)
-          dag <- addEdge(varnames[i], varnames[j], dag)
+    cand <- which(upper.tri(matrix(0, p, p)), arr.ind=TRUE)
+    cand <- cand[runif(nrow(cand)) < 0.3, , drop=FALSE]
+    if (nrow(cand) > 0) {
+      cand <- cand[sample.int(nrow(cand)), , drop=FALSE]   ## shuffle
+      for (k in seq_len(nrow(cand)))
+        dag <- addEdge(varnames[cand[k, 1]], varnames[cand[k, 2]], dag)
+      ## churn: drop and re-append a couple of arcs, which moves them to the
+      ## end of their tail vertex's child list
+      for (k in unique(sample.int(nrow(cand), size=min(2L, nrow(cand))))) {
+        dag <- removeEdge(varnames[cand[k, 1]], varnames[cand[k, 2]], dag)
+        dag <- addEdge(varnames[cand[k, 1]], varnames[cand[k, 2]], dag)
+      }
+    }
 
     anc <- idlBNs:::init.ancestors(varnames)
     ## rebuild anc consistent with dag's actual edges via repeated add.ancestors

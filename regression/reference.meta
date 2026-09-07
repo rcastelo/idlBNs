@@ -1,0 +1,10 @@
+# Provenance of regression/reference.csv -- the golden trajectory baseline.
+# Regenerating it invalidates every gate that compares against it, so this
+# records what it was captured on.
+idlBNs.version: 1.0.9
+git.commit:     1c3b7224e0b5590cbbded9d87870da9a3fa97f4d
+git.branch:     16-port-search-loop-and-rcar-into-c
+R.version:      R version 4.6.1 (2026-06-24)
+BLAS:           /Library/Frameworks/R.framework/Versions/4.6/Resources/lib/libRblas.0.dylib
+LAPACK:         /Library/Frameworks/R.framework/Versions/4.6/Resources/lib/libRlapack.dylib
+captured:       2026-09-07T05:41:21Z
