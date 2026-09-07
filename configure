@@ -1,0 +1,75 @@
+#!/bin/sh
+# Generate src/Makevars from src/Makevars.in.
+#
+# There is exactly one decision to make: whether $(FLIBS) can be linked.
+#
+# Writing R Extensions asks for $(BLAS_LIBS) to be followed by $(FLIBS), and
+# R CMD check enforces that by reading src/Makevars.in. But on macOS $(FLIBS)
+# names a gfortran runtime under a fixed path (/opt/gfortran/... for the CRAN
+# toolchain) and asks for -lemutls_w and -lheapt_w, which are absent unless
+# that toolchain is installed -- so a build that includes it fails outright
+# on a machine that can otherwise build this package.
+#
+# Dropping it is safe for THIS package: there are no Fortran sources, and R's
+# own libRlapack links libgfortran and libquadmath, so the Fortran runtime is
+# satisfied transitively. It changes nothing about WHICH LAPACK is used, only
+# whether the runtime is named again on the link line.
+#
+# So: try it, and fall back if it does not work.
+
+set -e
+
+: ${R_HOME=$(R RHOME)}
+if test -z "${R_HOME}"; then
+    echo "configure: could not determine R_HOME" >&2
+    exit 1
+fi
+
+RBIN="${R_HOME}/bin/R"
+CC=$("${RBIN}" CMD config CC)
+CFLAGS=$("${RBIN}" CMD config CFLAGS)
+LDFLAGS=$("${RBIN}" CMD config LDFLAGS)
+BLAS_LIBS=$("${RBIN}" CMD config BLAS_LIBS)
+LAPACK_LIBS=$("${RBIN}" CMD config LAPACK_LIBS)
+FLIBS=$("${RBIN}" CMD config FLIBS)
+
+DROP_FLIBS=no
+
+tmpd=$(mktemp -d 2>/dev/null || echo "./conftest.$$")
+mkdir -p "${tmpd}"
+cat > "${tmpd}/conftest.c" <<'CEOF'
+int main(void) { return 0; }
+CEOF
+
+# shellcheck disable=SC2086
+if ${CC} ${CFLAGS} ${LDFLAGS} "${tmpd}/conftest.c" -o "${tmpd}/conftest" \
+        ${LAPACK_LIBS} ${BLAS_LIBS} ${FLIBS} >/dev/null 2>&1; then
+    echo "configure: \$(FLIBS) links; using it"
+else
+    if ${CC} ${CFLAGS} ${LDFLAGS} "${tmpd}/conftest.c" -o "${tmpd}/conftest" \
+            ${LAPACK_LIBS} ${BLAS_LIBS} >/dev/null 2>&1; then
+        DROP_FLIBS=yes
+        echo "configure: \$(FLIBS) does not link here; dropping it."
+        echo "configure:   This is safe: idlBNs has no Fortran sources, and R's"
+        echo "configure:   LAPACK links the Fortran runtime itself. To use \$(FLIBS),"
+        echo "configure:   install the gfortran runtime R was built against"
+        echo "configure:   (see https://mac.r-project.org/tools/ on macOS)."
+    else
+        echo "configure: cannot link against R's LAPACK and BLAS at all." >&2
+        echo "configure:   tried: ${LAPACK_LIBS} ${BLAS_LIBS}" >&2
+        rm -rf "${tmpd}"
+        exit 1
+    fi
+fi
+rm -rf "${tmpd}"
+
+# Remove the reference from the PKG_LIBS line only, leaving the commentary
+# above it intact. Overriding FLIBS to empty instead does NOT work: R passes
+# it to make on the command line, and command-line assignments beat makefile
+# ones, so the reference has to be removed rather than neutralised.
+if test "${DROP_FLIBS}" = yes; then
+    sed '/^PKG_LIBS/s/[[:space:]]*[$](FLIBS)//' src/Makevars.in > src/Makevars
+else
+    cp src/Makevars.in src/Makevars
+fi
+echo "configure: wrote src/Makevars"
