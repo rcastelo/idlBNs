@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">idlBNs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.9</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -213,11 +213,7 @@ the DAG structure.</p>
 <h2 id="computational-performance-benchmark">
 <span class="header-section-number">5</span> Computational performance benchmark<a class="anchor" aria-label="anchor" href="#computational-performance-benchmark"></a>
 </h2>
-<p>Currently, the iBIC and iBGe scores, as well as the iHCMC algorithm, are
-implemented using only the R language without any kind of optimization. In
-practice, this means the iHCMC algorithm can only be applied to a handful of
-vertices and this implementation is currently only useful for research
-prototyping and educational purposes. Using the CRAN package
+<p>Using the CRAN package
 <a href="https://cran.r-project.org/package=bench" class="external-link">bench</a> <span class="citation">(<a href="#ref-HesVau25">Hester and Vaughan 2025</a>)</span>, here we
 benchmark the computational performance of the iHCMC algorithm for two
 different numbers of vertices, a given sample size and two randomly selected
@@ -253,9 +249,10 @@ optimize its implementation through the next versions of the <code>idlBNs</code>
 <span><span class="va">bmdat</span> <span class="op">&lt;-</span> <span class="va">bmdat</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://tibble.tidyverse.org/reference/add_column.html" class="external-link">add_column</a></span><span class="op">(</span>p<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="va">p</span>, each<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">p</span><span class="op">)</span><span class="op">)</span>, .before<span class="op">=</span><span class="st">"score_function"</span><span class="op">)</span></span>
 <span><span class="va">bmdat</span> <span class="op">&lt;-</span> <span class="va">bmdat</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://tibble.tidyverse.org/reference/add_column.html" class="external-link">add_column</a></span><span class="op">(</span>version<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/utils/packageDescription.html" class="external-link">packageVersion</a></span><span class="op">(</span><span class="st">"idlBNs"</span><span class="op">)</span>, .before<span class="op">=</span><span class="st">"p"</span><span class="op">)</span></span></code></pre></div>
 <p>Table <a href="#tab:benchmark-results">5.1</a> below shows the benchmarking results of this
-version of the <code>idlBNs</code> package, jointly with the results of previous versions,
-if available, for comparison purposes. Actually, if you want to run the benchmark
-when building the vignette, you should set the environment variable
+version of the <code>idlBNs</code> package at the top, jointly with the results of previous
+versions, if available, in the following rows for comparison purposes. Actually,
+if you want to run the benchmark with the installed version of the package when
+building the vignette, you should set the environment variable
 <code>IDLBNS_BENCHMARK=TRUE</code> before building it, and if you want to save the results
 of the benchmark, you should set the environment variable
 <code>IDLBNS_BENCHMARK_RESULTS_PATH</code> to a valid path where the results will be saved
@@ -284,24 +281,7 @@ Memory Consumption
 <tbody>
 <tr>
 <td style="text-align:left;">
-1.0.2
-</td>
-<td style="text-align:right;">
-10
-</td>
-<td style="text-align:left;">
-iBIC
-</td>
-<td style="text-align:right;">
-665.38ms
-</td>
-<td style="text-align:right;">
-283.93MB
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1.0.2
+1.1.0
 </td>
 <td style="text-align:right;">
 10
@@ -310,49 +290,15 @@ iBIC
 iBGe
 </td>
 <td style="text-align:right;">
-1.15s
+928.81µs
 </td>
 <td style="text-align:right;">
-367.96MB
+142.59KB
 </td>
 </tr>
 <tr>
 <td style="text-align:left;">
-1.0.2
-</td>
-<td style="text-align:right;">
-20
-</td>
-<td style="text-align:left;">
-iBIC
-</td>
-<td style="text-align:right;">
-11.46s
-</td>
-<td style="text-align:right;">
-7.38GB
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1.0.2
-</td>
-<td style="text-align:right;">
-20
-</td>
-<td style="text-align:left;">
-iBGe
-</td>
-<td style="text-align:right;">
-23.25s
-</td>
-<td style="text-align:right;">
-16.03GB
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1.0.3
+1.1.0
 </td>
 <td style="text-align:right;">
 10
@@ -361,49 +307,15 @@ iBGe
 iBIC
 </td>
 <td style="text-align:right;">
-537.31ms
+854.36µs
 </td>
 <td style="text-align:right;">
-50.45MB
+145.66KB
 </td>
 </tr>
 <tr>
 <td style="text-align:left;">
-1.0.3
-</td>
-<td style="text-align:right;">
-10
-</td>
-<td style="text-align:left;">
-iBGe
-</td>
-<td style="text-align:right;">
-1.18s
-</td>
-<td style="text-align:right;">
-367.96MB
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1.0.3
-</td>
-<td style="text-align:right;">
-20
-</td>
-<td style="text-align:left;">
-iBIC
-</td>
-<td style="text-align:right;">
-5.73s
-</td>
-<td style="text-align:right;">
-1.07GB
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1.0.3
+1.1.0
 </td>
 <td style="text-align:right;">
 20
@@ -412,49 +324,15 @@ iBIC
 iBGe
 </td>
 <td style="text-align:right;">
-18.45s
+2.24ms
 </td>
 <td style="text-align:right;">
-11.75GB
+860.69KB
 </td>
 </tr>
 <tr>
 <td style="text-align:left;">
-1.0.4
-</td>
-<td style="text-align:right;">
-10
-</td>
-<td style="text-align:left;">
-iBIC
-</td>
-<td style="text-align:right;">
-490.59ms
-</td>
-<td style="text-align:right;">
-536.47KB
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1.0.4
-</td>
-<td style="text-align:right;">
-10
-</td>
-<td style="text-align:left;">
-iBGe
-</td>
-<td style="text-align:right;">
-481.68ms
-</td>
-<td style="text-align:right;">
-498.12KB
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1.0.4
+1.1.0
 </td>
 <td style="text-align:right;">
 20
@@ -463,316 +341,10 @@ iBGe
 iBIC
 </td>
 <td style="text-align:right;">
-5.82s
+2.4ms
 </td>
 <td style="text-align:right;">
-302.69MB
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1.0.4
-</td>
-<td style="text-align:right;">
-20
-</td>
-<td style="text-align:left;">
-iBGe
-</td>
-<td style="text-align:right;">
-5.23s
-</td>
-<td style="text-align:right;">
-196.38MB
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1.0.5
-</td>
-<td style="text-align:right;">
-10
-</td>
-<td style="text-align:left;">
-iBIC
-</td>
-<td style="text-align:right;">
-255.21ms
-</td>
-<td style="text-align:right;">
-449.64KB
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1.0.5
-</td>
-<td style="text-align:right;">
-10
-</td>
-<td style="text-align:left;">
-iBGe
-</td>
-<td style="text-align:right;">
-263.04ms
-</td>
-<td style="text-align:right;">
-409.61KB
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1.0.5
-</td>
-<td style="text-align:right;">
-20
-</td>
-<td style="text-align:left;">
-iBIC
-</td>
-<td style="text-align:right;">
-3.4s
-</td>
-<td style="text-align:right;">
-86.11MB
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1.0.5
-</td>
-<td style="text-align:right;">
-20
-</td>
-<td style="text-align:left;">
-iBGe
-</td>
-<td style="text-align:right;">
-3.06s
-</td>
-<td style="text-align:right;">
-61.48MB
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1.0.6
-</td>
-<td style="text-align:right;">
-10
-</td>
-<td style="text-align:left;">
-iBIC
-</td>
-<td style="text-align:right;">
-129.84ms
-</td>
-<td style="text-align:right;">
-452.91KB
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1.0.6
-</td>
-<td style="text-align:right;">
-10
-</td>
-<td style="text-align:left;">
-iBGe
-</td>
-<td style="text-align:right;">
-204.24ms
-</td>
-<td style="text-align:right;">
-409.61KB
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1.0.6
-</td>
-<td style="text-align:right;">
-20
-</td>
-<td style="text-align:left;">
-iBIC
-</td>
-<td style="text-align:right;">
-1.33s
-</td>
-<td style="text-align:right;">
-37.75MB
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1.0.6
-</td>
-<td style="text-align:right;">
-20
-</td>
-<td style="text-align:left;">
-iBGe
-</td>
-<td style="text-align:right;">
-2.94s
-</td>
-<td style="text-align:right;">
-27.78MB
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1.0.7
-</td>
-<td style="text-align:right;">
-10
-</td>
-<td style="text-align:left;">
-iBIC
-</td>
-<td style="text-align:right;">
-131.97ms
-</td>
-<td style="text-align:right;">
-452.91KB
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1.0.7
-</td>
-<td style="text-align:right;">
-10
-</td>
-<td style="text-align:left;">
-iBGe
-</td>
-<td style="text-align:right;">
-130.95ms
-</td>
-<td style="text-align:right;">
-410.69KB
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1.0.7
-</td>
-<td style="text-align:right;">
-20
-</td>
-<td style="text-align:left;">
-iBIC
-</td>
-<td style="text-align:right;">
-1.46s
-</td>
-<td style="text-align:right;">
-37.75MB
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1.0.7
-</td>
-<td style="text-align:right;">
-20
-</td>
-<td style="text-align:left;">
-iBGe
-</td>
-<td style="text-align:right;">
-1.06s
-</td>
-<td style="text-align:right;">
-27.61MB
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1.0.8
-</td>
-<td style="text-align:right;">
-10
-</td>
-<td style="text-align:left;">
-iBIC
-</td>
-<td style="text-align:right;">
-54.05ms
-</td>
-<td style="text-align:right;">
-264.47KB
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1.0.8
-</td>
-<td style="text-align:right;">
-10
-</td>
-<td style="text-align:left;">
-iBGe
-</td>
-<td style="text-align:right;">
-57.78ms
-</td>
-<td style="text-align:right;">
-230.02KB
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1.0.8
-</td>
-<td style="text-align:right;">
-20
-</td>
-<td style="text-align:left;">
-iBIC
-</td>
-<td style="text-align:right;">
-553.27ms
-</td>
-<td style="text-align:right;">
-14.3MB
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1.0.8
-</td>
-<td style="text-align:right;">
-20
-</td>
-<td style="text-align:left;">
-iBGe
-</td>
-<td style="text-align:right;">
-461.39ms
-</td>
-<td style="text-align:right;">
-9.6MB
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-1.0.9
-</td>
-<td style="text-align:right;">
-10
-</td>
-<td style="text-align:left;">
-iBIC
-</td>
-<td style="text-align:right;">
-37.78ms
-</td>
-<td style="text-align:right;">
-278.81KB
+904.84KB
 </td>
 </tr>
 <tr>
@@ -797,16 +369,16 @@ iBGe
 1.0.9
 </td>
 <td style="text-align:right;">
-20
+10
 </td>
 <td style="text-align:left;">
 iBIC
 </td>
 <td style="text-align:right;">
-372.83ms
+37.78ms
 </td>
 <td style="text-align:right;">
-11.58MB
+278.81KB
 </td>
 </tr>
 <tr>
@@ -824,6 +396,499 @@ iBGe
 </td>
 <td style="text-align:right;">
 7.48MB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.9
+</td>
+<td style="text-align:right;">
+20
+</td>
+<td style="text-align:left;">
+iBIC
+</td>
+<td style="text-align:right;">
+372.83ms
+</td>
+<td style="text-align:right;">
+11.58MB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.8
+</td>
+<td style="text-align:right;">
+10
+</td>
+<td style="text-align:left;">
+iBGe
+</td>
+<td style="text-align:right;">
+57.78ms
+</td>
+<td style="text-align:right;">
+230.02KB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.8
+</td>
+<td style="text-align:right;">
+10
+</td>
+<td style="text-align:left;">
+iBIC
+</td>
+<td style="text-align:right;">
+54.05ms
+</td>
+<td style="text-align:right;">
+264.47KB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.8
+</td>
+<td style="text-align:right;">
+20
+</td>
+<td style="text-align:left;">
+iBGe
+</td>
+<td style="text-align:right;">
+461.39ms
+</td>
+<td style="text-align:right;">
+9.6MB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.8
+</td>
+<td style="text-align:right;">
+20
+</td>
+<td style="text-align:left;">
+iBIC
+</td>
+<td style="text-align:right;">
+553.27ms
+</td>
+<td style="text-align:right;">
+14.3MB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.7
+</td>
+<td style="text-align:right;">
+10
+</td>
+<td style="text-align:left;">
+iBGe
+</td>
+<td style="text-align:right;">
+130.95ms
+</td>
+<td style="text-align:right;">
+410.69KB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.7
+</td>
+<td style="text-align:right;">
+10
+</td>
+<td style="text-align:left;">
+iBIC
+</td>
+<td style="text-align:right;">
+131.97ms
+</td>
+<td style="text-align:right;">
+452.91KB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.7
+</td>
+<td style="text-align:right;">
+20
+</td>
+<td style="text-align:left;">
+iBGe
+</td>
+<td style="text-align:right;">
+1.06s
+</td>
+<td style="text-align:right;">
+27.61MB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.7
+</td>
+<td style="text-align:right;">
+20
+</td>
+<td style="text-align:left;">
+iBIC
+</td>
+<td style="text-align:right;">
+1.46s
+</td>
+<td style="text-align:right;">
+37.75MB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.6
+</td>
+<td style="text-align:right;">
+10
+</td>
+<td style="text-align:left;">
+iBGe
+</td>
+<td style="text-align:right;">
+204.24ms
+</td>
+<td style="text-align:right;">
+409.61KB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.6
+</td>
+<td style="text-align:right;">
+10
+</td>
+<td style="text-align:left;">
+iBIC
+</td>
+<td style="text-align:right;">
+129.84ms
+</td>
+<td style="text-align:right;">
+452.91KB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.6
+</td>
+<td style="text-align:right;">
+20
+</td>
+<td style="text-align:left;">
+iBGe
+</td>
+<td style="text-align:right;">
+2.94s
+</td>
+<td style="text-align:right;">
+27.78MB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.6
+</td>
+<td style="text-align:right;">
+20
+</td>
+<td style="text-align:left;">
+iBIC
+</td>
+<td style="text-align:right;">
+1.33s
+</td>
+<td style="text-align:right;">
+37.75MB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.5
+</td>
+<td style="text-align:right;">
+10
+</td>
+<td style="text-align:left;">
+iBGe
+</td>
+<td style="text-align:right;">
+263.04ms
+</td>
+<td style="text-align:right;">
+409.61KB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.5
+</td>
+<td style="text-align:right;">
+10
+</td>
+<td style="text-align:left;">
+iBIC
+</td>
+<td style="text-align:right;">
+255.21ms
+</td>
+<td style="text-align:right;">
+449.64KB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.5
+</td>
+<td style="text-align:right;">
+20
+</td>
+<td style="text-align:left;">
+iBGe
+</td>
+<td style="text-align:right;">
+3.06s
+</td>
+<td style="text-align:right;">
+61.48MB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.5
+</td>
+<td style="text-align:right;">
+20
+</td>
+<td style="text-align:left;">
+iBIC
+</td>
+<td style="text-align:right;">
+3.4s
+</td>
+<td style="text-align:right;">
+86.11MB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.4
+</td>
+<td style="text-align:right;">
+10
+</td>
+<td style="text-align:left;">
+iBGe
+</td>
+<td style="text-align:right;">
+481.68ms
+</td>
+<td style="text-align:right;">
+498.12KB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.4
+</td>
+<td style="text-align:right;">
+10
+</td>
+<td style="text-align:left;">
+iBIC
+</td>
+<td style="text-align:right;">
+490.59ms
+</td>
+<td style="text-align:right;">
+536.47KB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.4
+</td>
+<td style="text-align:right;">
+20
+</td>
+<td style="text-align:left;">
+iBGe
+</td>
+<td style="text-align:right;">
+5.23s
+</td>
+<td style="text-align:right;">
+196.38MB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.4
+</td>
+<td style="text-align:right;">
+20
+</td>
+<td style="text-align:left;">
+iBIC
+</td>
+<td style="text-align:right;">
+5.82s
+</td>
+<td style="text-align:right;">
+302.69MB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.3
+</td>
+<td style="text-align:right;">
+10
+</td>
+<td style="text-align:left;">
+iBGe
+</td>
+<td style="text-align:right;">
+1.18s
+</td>
+<td style="text-align:right;">
+367.96MB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.3
+</td>
+<td style="text-align:right;">
+10
+</td>
+<td style="text-align:left;">
+iBIC
+</td>
+<td style="text-align:right;">
+537.31ms
+</td>
+<td style="text-align:right;">
+50.45MB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.3
+</td>
+<td style="text-align:right;">
+20
+</td>
+<td style="text-align:left;">
+iBGe
+</td>
+<td style="text-align:right;">
+18.45s
+</td>
+<td style="text-align:right;">
+11.75GB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.3
+</td>
+<td style="text-align:right;">
+20
+</td>
+<td style="text-align:left;">
+iBIC
+</td>
+<td style="text-align:right;">
+5.73s
+</td>
+<td style="text-align:right;">
+1.07GB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.2
+</td>
+<td style="text-align:right;">
+10
+</td>
+<td style="text-align:left;">
+iBGe
+</td>
+<td style="text-align:right;">
+1.15s
+</td>
+<td style="text-align:right;">
+367.96MB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.2
+</td>
+<td style="text-align:right;">
+10
+</td>
+<td style="text-align:left;">
+iBIC
+</td>
+<td style="text-align:right;">
+665.38ms
+</td>
+<td style="text-align:right;">
+283.93MB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.2
+</td>
+<td style="text-align:right;">
+20
+</td>
+<td style="text-align:left;">
+iBGe
+</td>
+<td style="text-align:right;">
+23.25s
+</td>
+<td style="text-align:right;">
+16.03GB
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1.0.2
+</td>
+<td style="text-align:right;">
+20
+</td>
+<td style="text-align:left;">
+iBIC
+</td>
+<td style="text-align:right;">
+11.46s
+</td>
+<td style="text-align:right;">
+7.38GB
 </td>
 </tr>
 </tbody>
@@ -856,7 +921,7 @@ iBGe
 <span id="cb11-21"><a href="#cb11-21" tabindex="-1"></a></span>
 <span id="cb11-22"><a href="#cb11-22" tabindex="-1"></a>other attached packages<span class="sc">:</span></span>
 <span id="cb11-23"><a href="#cb11-23" tabindex="-1"></a> [<span class="dv">1</span>] kableExtra_1.<span class="fl">4.1</span>    cli_3.<span class="fl">6.6</span>           bench_1.<span class="fl">1.4</span>        </span>
-<span id="cb11-24"><a href="#cb11-24" tabindex="-1"></a> [<span class="dv">4</span>] tibble_3.<span class="fl">3.1</span>        dplyr_1.<span class="fl">2.1</span>         idlBNs_1.<span class="fl">0.9</span>       </span>
+<span id="cb11-24"><a href="#cb11-24" tabindex="-1"></a> [<span class="dv">4</span>] tibble_3.<span class="fl">3.1</span>        dplyr_1.<span class="fl">2.1</span>         idlBNs_1.<span class="fl">1.0</span>       </span>
 <span id="cb11-25"><a href="#cb11-25" tabindex="-1"></a> [<span class="dv">7</span>] pcalg_2<span class="fl">.7</span><span class="dv">-12</span>        graph_1.<span class="fl">90.0</span>        BiocGenerics_0.<span class="fl">58.1</span></span>
 <span id="cb11-26"><a href="#cb11-26" tabindex="-1"></a>[<span class="dv">10</span>] generics_0.<span class="fl">1.4</span>      knitr_1<span class="fl">.52</span>         </span>
 <span id="cb11-27"><a href="#cb11-27" tabindex="-1"></a></span>

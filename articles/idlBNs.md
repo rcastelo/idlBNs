@@ -204,17 +204,13 @@ estimates of the DAG structure.
 
 ## 5 Computational performance benchmark
 
-Currently, the iBIC and iBGe scores, as well as the iHCMC algorithm, are
-implemented using only the R language without any kind of optimization.
-In practice, this means the iHCMC algorithm can only be applied to a
-handful of vertices and this implementation is currently only useful for
-research prototyping and educational purposes. Using the CRAN package
-[bench](https://cran.r-project.org/package=bench) ([Hester and Vaughan
-2025](#ref-HesVau25)), here we benchmark the computational performance
-of the iHCMC algorithm for two different numbers of vertices, a given
-sample size and two randomly selected intervention targets, to keep
-track of how its performance improves as we optimize its implementation
-through the next versions of the `idlBNs` package.
+Using the CRAN package [bench](https://cran.r-project.org/package=bench)
+([Hester and Vaughan 2025](#ref-HesVau25)), here we benchmark the
+computational performance of the iHCMC algorithm for two different
+numbers of vertices, a given sample size and two randomly selected
+intervention targets, to keep track of how its performance improves as
+we optimize its implementation through the next versions of the `idlBNs`
+package.
 
 ``` r
 
@@ -249,49 +245,54 @@ bmdat <- bmdat |> add_column(version=packageVersion("idlBNs"), .before="p")
 ```
 
 Table [5.1](#tab:benchmark-results) below shows the benchmarking results
-of this version of the `idlBNs` package, jointly with the results of
-previous versions, if available, for comparison purposes. Actually, if
-you want to run the benchmark when building the vignette, you should set
-the environment variable `IDLBNS_BENCHMARK=TRUE` before building it, and
-if you want to save the results of the benchmark, you should set the
+of this version of the `idlBNs` package at the top, jointly with the
+results of previous versions, if available, in the following rows for
+comparison purposes. Actually, if you want to run the benchmark with the
+installed version of the package when building the vignette, you should
+set the environment variable `IDLBNS_BENCHMARK=TRUE` before building it,
+and if you want to save the results of the benchmark, you should set the
 environment variable `IDLBNS_BENCHMARK_RESULTS_PATH` to a valid path
 where the results will be saved in a CSV file named
 `benchmark_results.csv`.
 
 | Version | Vertices | Score Function | Median Time | Memory Consumption |
 |:--------|---------:|:---------------|------------:|-------------------:|
-| 1.0.2   |       10 | iBIC           |    665.38ms |           283.93MB |
-| 1.0.2   |       10 | iBGe           |       1.15s |           367.96MB |
-| 1.0.2   |       20 | iBIC           |      11.46s |             7.38GB |
-| 1.0.2   |       20 | iBGe           |      23.25s |            16.03GB |
-| 1.0.3   |       10 | iBIC           |    537.31ms |            50.45MB |
-| 1.0.3   |       10 | iBGe           |       1.18s |           367.96MB |
-| 1.0.3   |       20 | iBIC           |       5.73s |             1.07GB |
-| 1.0.3   |       20 | iBGe           |      18.45s |            11.75GB |
-| 1.0.4   |       10 | iBIC           |    490.59ms |           536.47KB |
-| 1.0.4   |       10 | iBGe           |    481.68ms |           498.12KB |
-| 1.0.4   |       20 | iBIC           |       5.82s |           302.69MB |
-| 1.0.4   |       20 | iBGe           |       5.23s |           196.38MB |
-| 1.0.5   |       10 | iBIC           |    255.21ms |           449.64KB |
-| 1.0.5   |       10 | iBGe           |    263.04ms |           409.61KB |
-| 1.0.5   |       20 | iBIC           |        3.4s |            86.11MB |
-| 1.0.5   |       20 | iBGe           |       3.06s |            61.48MB |
-| 1.0.6   |       10 | iBIC           |    129.84ms |           452.91KB |
-| 1.0.6   |       10 | iBGe           |    204.24ms |           409.61KB |
-| 1.0.6   |       20 | iBIC           |       1.33s |            37.75MB |
-| 1.0.6   |       20 | iBGe           |       2.94s |            27.78MB |
-| 1.0.7   |       10 | iBIC           |    131.97ms |           452.91KB |
-| 1.0.7   |       10 | iBGe           |    130.95ms |           410.69KB |
-| 1.0.7   |       20 | iBIC           |       1.46s |            37.75MB |
-| 1.0.7   |       20 | iBGe           |       1.06s |            27.61MB |
-| 1.0.8   |       10 | iBIC           |     54.05ms |           264.47KB |
-| 1.0.8   |       10 | iBGe           |     57.78ms |           230.02KB |
-| 1.0.8   |       20 | iBIC           |    553.27ms |             14.3MB |
-| 1.0.8   |       20 | iBGe           |    461.39ms |              9.6MB |
-| 1.0.9   |       10 | iBIC           |     37.78ms |           278.81KB |
+| 1.1.0   |       10 | iBGe           |    928.81µs |           142.59KB |
+| 1.1.0   |       10 | iBIC           |    854.36µs |           145.66KB |
+| 1.1.0   |       20 | iBGe           |      2.24ms |           860.69KB |
+| 1.1.0   |       20 | iBIC           |       2.4ms |           904.84KB |
 | 1.0.9   |       10 | iBGe           |     41.68ms |           243.79KB |
-| 1.0.9   |       20 | iBIC           |    372.83ms |            11.58MB |
+| 1.0.9   |       10 | iBIC           |     37.78ms |           278.81KB |
 | 1.0.9   |       20 | iBGe           |    266.52ms |             7.48MB |
+| 1.0.9   |       20 | iBIC           |    372.83ms |            11.58MB |
+| 1.0.8   |       10 | iBGe           |     57.78ms |           230.02KB |
+| 1.0.8   |       10 | iBIC           |     54.05ms |           264.47KB |
+| 1.0.8   |       20 | iBGe           |    461.39ms |              9.6MB |
+| 1.0.8   |       20 | iBIC           |    553.27ms |             14.3MB |
+| 1.0.7   |       10 | iBGe           |    130.95ms |           410.69KB |
+| 1.0.7   |       10 | iBIC           |    131.97ms |           452.91KB |
+| 1.0.7   |       20 | iBGe           |       1.06s |            27.61MB |
+| 1.0.7   |       20 | iBIC           |       1.46s |            37.75MB |
+| 1.0.6   |       10 | iBGe           |    204.24ms |           409.61KB |
+| 1.0.6   |       10 | iBIC           |    129.84ms |           452.91KB |
+| 1.0.6   |       20 | iBGe           |       2.94s |            27.78MB |
+| 1.0.6   |       20 | iBIC           |       1.33s |            37.75MB |
+| 1.0.5   |       10 | iBGe           |    263.04ms |           409.61KB |
+| 1.0.5   |       10 | iBIC           |    255.21ms |           449.64KB |
+| 1.0.5   |       20 | iBGe           |       3.06s |            61.48MB |
+| 1.0.5   |       20 | iBIC           |        3.4s |            86.11MB |
+| 1.0.4   |       10 | iBGe           |    481.68ms |           498.12KB |
+| 1.0.4   |       10 | iBIC           |    490.59ms |           536.47KB |
+| 1.0.4   |       20 | iBGe           |       5.23s |           196.38MB |
+| 1.0.4   |       20 | iBIC           |       5.82s |           302.69MB |
+| 1.0.3   |       10 | iBGe           |       1.18s |           367.96MB |
+| 1.0.3   |       10 | iBIC           |    537.31ms |            50.45MB |
+| 1.0.3   |       20 | iBGe           |      18.45s |            11.75GB |
+| 1.0.3   |       20 | iBIC           |       5.73s |             1.07GB |
+| 1.0.2   |       10 | iBGe           |       1.15s |           367.96MB |
+| 1.0.2   |       10 | iBIC           |    665.38ms |           283.93MB |
+| 1.0.2   |       20 | iBGe           |      23.25s |            16.03GB |
+| 1.0.2   |       20 | iBIC           |      11.46s |             7.38GB |
 
 Table 5.1: Benchmark of computational performance of the iHCMC algorithm
 implemented in
@@ -328,7 +329,7 @@ attached base packages:
 
 other attached packages:
  [1] kableExtra_1.4.1    cli_3.6.6           bench_1.1.4        
- [4] tibble_3.3.1        dplyr_1.2.1         idlBNs_1.0.9       
+ [4] tibble_3.3.1        dplyr_1.2.1         idlBNs_1.1.0       
  [7] pcalg_2.7-12        graph_1.90.0        BiocGenerics_0.58.1
 [10] generics_0.1.4      knitr_1.52         
 

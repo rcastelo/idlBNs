@@ -13,7 +13,8 @@ hillclimbing(
   targets = list(integer(0)),
   target.index = rep(1L, nrow(dat)),
   scorefun = iBIC,
-  verbose = TRUE
+  verbose = TRUE,
+  engine = c("C", "R")
 )
 ```
 
@@ -48,6 +49,18 @@ hillclimbing(
 - verbose:
 
   (Default TRUE) Show progress in the calculations.
+
+- engine:
+
+  (Default `"C"`) A character string selecting the search engine: `"C"`
+  (default) maintains the DAG, its ancestor relation and its parent sets
+  in compiled code; `"R"` uses the pure-R implementation and is provided
+  for testing and verification. Both follow the same trajectory and
+  return the same result. `"C"` requires a `scorefun` able to score a
+  whole neighbourhood at once, which
+  [`iBIC`](https://rcastelo.github.io/idlBNs/reference/iBIC.md) and
+  [`iBGe`](https://rcastelo.github.io/idlBNs/reference/iBGe.md) are;
+  with any other score function the `"R"` engine is used regardless.
 
 ## Value
 

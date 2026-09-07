@@ -13,7 +13,7 @@ possible arcs."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">idlBNs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.9</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -53,7 +53,8 @@ possible arcs.</p>
 <span>  targets <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">integer</a></span><span class="op">(</span><span class="fl">0</span><span class="op">)</span><span class="op">)</span>,</span>
 <span>  target.index <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1L</span>, <span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">dat</span><span class="op">)</span><span class="op">)</span>,</span>
 <span>  scorefun <span class="op">=</span> <span class="va">iBIC</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  engine <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"C"</span>, <span class="st">"R"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -87,6 +88,16 @@ of fit (GoF) score of a DAG on a given data set.</p></dd>
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
 <dd><p>(Default TRUE) Show progress in the calculations.</p></dd>
+
+
+<dt id="arg-engine">engine<a class="anchor" aria-label="anchor" href="#arg-engine"></a></dt>
+<dd><p>(Default <code>"C"</code>) A character string selecting the search
+engine: <code>"C"</code> (default) maintains the DAG, its ancestor relation and its
+parent sets in compiled code; <code>"R"</code> uses the pure-R implementation and is
+provided for testing and verification. Both follow the same trajectory and
+return the same result. <code>"C"</code> requires a <code>scorefun</code> able to score a whole
+neighbourhood at once, which <code><a href="iBIC.html">iBIC</a></code> and <code><a href="iBGe.html">iBGe</a></code> are; with any other
+score function the <code>"R"</code> engine is used regardless.</p></dd>
 
 </dl></div>
     <div class="section level2">

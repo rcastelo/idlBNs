@@ -15,7 +15,8 @@ hcmc(
   target.index = rep(1L, nrow(dat)),
   scorefun = iBIC,
   MAXTRIALS = 5,
-  verbose = TRUE
+  verbose = TRUE,
+  engine = c("C", "R")
 )
 ```
 
@@ -60,6 +61,20 @@ hcmc(
 - verbose:
 
   (Default TRUE) Show progress in the calculations.
+
+- engine:
+
+  (Default `"C"`) A character string selecting the search engine: `"C"`
+  (default) maintains the DAG, its ancestor relation and its parent sets
+  in compiled code, and performs the (*I*-)covered arc reversals there
+  too; `"R"` uses the pure-R implementation and is provided for testing
+  and verification. Both consume the random number stream identically
+  and so follow the same trajectory from the same seed, and both return
+  the same result. `"C"` requires a `scorefun` able to score a whole
+  neighbourhood at once, which
+  [`iBIC`](https://rcastelo.github.io/idlBNs/reference/iBIC.md) and
+  [`iBGe`](https://rcastelo.github.io/idlBNs/reference/iBGe.md) are;
+  with any other score function the `"R"` engine is used regardless.
 
 ## Value
 
@@ -124,7 +139,7 @@ tindex <- rep(1:length(nbytgts), nbytgts)
 dhat.hcmc <- hcmc(dat)
 #> ℹ Calculating global sufficient statistics
 #> ⠙ Score -87.004214222737 Escapes 0 Trials 0
-#> ✔ Score -83.2933160642061 Escapes 0 Trials 0 [171ms]
+#> ✔ Score -83.2933160642061 Escapes 0 Trials 0 [46ms]
 #> 
 dhat.hcmc
 #> $dag
@@ -147,7 +162,7 @@ shd(e, dag2essgraph(dhat.hcmc$dag))
 dhat.ihcmc <- hcmc(dat, targets=I, target.index=tindex)
 #> ℹ Calculating global sufficient statistics
 #> ⠙ Score -59.3908043567074 Escapes 0 Trials 0
-#> ✔ Score -50.0166049861733 Escapes 0 Trials 0 [52ms]
+#> ✔ Score -50.0166049861733 Escapes 0 Trials 0 [11ms]
 #> 
 dhat.ihcmc
 #> $dag
@@ -170,7 +185,7 @@ shd(e, dag2essgraph(dhat.ihcmc$dag))
 dhat.ihcmc2 <- hcmc(dat, targets=I, target.index=tindex, scorefun=iBGe)
 #> ℹ Calculating global sufficient statistics
 #> ⠙ Score -189.956899563879 Escapes 0 Trials 0
-#> ✔ Score -181.640790427507 Escapes 0 Trials 0 [200ms]
+#> ✔ Score -181.640790427507 Escapes 0 Trials 0 [14ms]
 #> 
 shd(e, dag2essgraph(dhat.ihcmc2$dag))
 #> [1] 2
