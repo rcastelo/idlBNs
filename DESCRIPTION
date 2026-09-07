@@ -11,8 +11,7 @@ Depends:
 Imports: 
     methods,
     cli,
-    graph,
-    RBGL
+    graph
 Suggests:
     knitr,
     rmarkdown,
@@ -23,7 +22,8 @@ Suggests:
     dplyr,
     tibble,
     bench,
-    kableExtra
+    kableExtra,
+    RBGL
 VignetteBuilder: knitr
 Roxygen: list(markdown=TRUE)
 URL: https://rcastelo.github.io/idlBNs/

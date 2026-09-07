@@ -164,6 +164,11 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
     if (use.c)
         cached.scores <- .Call(C_sccache_new, ncol(dat))
     else {
+        if (!.load_suggested_package("RBGL")) {
+            msg <- paste("The R engine requires the Bioconductor package",
+                         "RBGL and it cannot be loaded.")
+            cli_abort(c=("x"=msg))
+        }
         cached.scores <- list()
         for (i in seq_len(ncol(dat)))
             cached.scores[[i]] <- new.env(hash=TRUE, parent=emptyenv())

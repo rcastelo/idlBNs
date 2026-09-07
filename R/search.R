@@ -30,7 +30,6 @@ add.ancestors <- function(anc, u, v) {
 ## sets and a topological order)
 
 #' @importFrom graph nodes edgeMatrix
-#' @importFrom RBGL tsort
 remove.ancestors <- function(anc, dag, u, v) {
     vnodes <- nodes(dag)
     em <- edgeMatrix(dag)
@@ -38,7 +37,7 @@ remove.ancestors <- function(anc, dag, u, v) {
                                                  levels=vnodes))
     D <- c(v, rownames(anc)[anc[v, ]]) ## v and its descendants
     ## any topological order of 'dag' remains valid after removing an edge
-    to <- tsort(dag)
+    to <- RBGL::tsort(dag)
     D <- to[to %in% D]
     for (k in D) {
         pa.k <- pasets[[k]]
@@ -605,6 +604,11 @@ hillclimbing <- function(dat, targets=list(integer(0)),
     if (use.c)
         cached.scores <- .Call(C_sccache_new, ncol(dat))
     else {
+        if (!.load_suggested_package("RBGL")) {
+            msg <- paste("The R engine requires the Bioconductor package",
+                         "RBGL and it cannot be loaded.")
+            cli_abort(c=("x"=msg))
+        }
         cached.scores <- list()
         for (i in seq_len(ncol(dat)))
             cached.scores[[i]] <- new.env(hash=TRUE, parent=emptyenv())
