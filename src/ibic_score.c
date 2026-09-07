@@ -241,3 +241,30 @@ C_iBIC_nh_scores(SEXP S_R, SEXP pasets_R, SEXP data_count_R, SEXP n_R,
     return nh_scores_driver(pasets_R, cached_scores_R, op_R, u_R, v_R,
                             iBIC_node_score_thunk, &ctx);
 }
+
+/*
+ * C_iBIC_nh_argmax
+ *
+ * As C_iBIC_nh_scores(), but returns only the winning candidate --
+ * list(index=, total=, band=, worst=) -- found through the error-bounded
+ * candidate band rather than by summing all p vertex terms for every
+ * candidate. See the band commentary in nh_scores.c.
+ *
+ * verify_R  LGLSXP  when TRUE, additionally scores every candidate exactly
+ *                   and checks the band against it. O(p * k), for testing.
+ */
+SEXP
+C_iBIC_nh_argmax(SEXP S_R, SEXP pasets_R, SEXP data_count_R, SEXP n_R,
+                  SEXP cached_scores_R, SEXP op_R, SEXP u_R, SEXP v_R,
+                  SEXP verify_R) {
+    if (TYPEOF(pasets_R) != VECSXP)
+        error("C_iBIC_nh_argmax: 'pasets' must be a list");
+
+    iBIC_ctx ctx;
+    ctx.S_R        = S_R;
+    ctx.data_count = REAL(data_count_R);
+    ctx.n          = REAL(n_R)[0];
+
+    return nh_argmax_driver(pasets_R, cached_scores_R, op_R, u_R, v_R,
+                            asLogical(verify_R) == TRUE, iBIC_node_score_thunk, &ctx);
+}

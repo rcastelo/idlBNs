@@ -578,6 +578,7 @@ hillclimbing <- function(dat, targets=list(integer(0)),
     scorefun.name <- attr(scorefun, "scorefun.name")
     supports.pasets <- isTRUE(attr(scorefun, "supports.pasets"))
     nh.scores.fun <- attr(scorefun, "nh.scores.fun")
+    nh.argmax.fun <- attr(scorefun, "nh.argmax.fun")
 
     ## the C engine keeps the DAG, its ancestor relation and its parent sets
     ## in compiled state, and enumerates the neighbourhood there. It needs a
@@ -585,7 +586,13 @@ hillclimbing <- function(dat, targets=list(integer(0)),
     ## holds no graphNEL during the search and so cannot serve score.nh()'s
     ## per-candidate fallback. iBIC() and iBGe() qualify; anything else falls
     ## back to R rather than failing.
-    use.c <- engine == "C" && !is.null(nh.scores.fun)
+    use.c <- engine == "C" && !is.null(nh.argmax.fun)
+    ## idlBNs.debug.band makes the C engine additionally score every
+    ## candidate exactly and check the error-bounded band against it, so the
+    ## band's argmax, its reported total and its bound are all verified at
+    ## every step. O(p * |NH|) per step, i.e. it gives back exactly what the
+    ## band saves, so it is for testing only.
+    verify.band <- isTRUE(getOption("idlBNs.debug.band", FALSE))
 
     ## the score cache. The C engine uses a compiled open-addressing table
     ## keyed on the parent set's integers; the R engine uses the documented
@@ -648,13 +655,15 @@ hillclimbing <- function(dat, targets=list(integer(0)),
             s0 <- s1
             ne <- .Call(C_dag_nh, st, 2L, integer(0))    ## 2 = ar
             pasets <- .Call(C_dag_pasets, st)
-            sco <- score.nh(ne, NULL, dat, targets, target.index,
-                            cached.scores, global.sufstats, pasets,
-                            vidx.nodes, supports.pasets, scorefun,
-                            nh.scores.fun)
-            b <- which.max(sco)
+            ## only the winner is needed, so the O(p) exact summation is
+            ## paid for the provable handful of candidates that could still
+            ## be the maximum rather than for all O(p^2) of them
+            am <- nh.argmax.fun(ne$op, vidx.nodes[ne$u], vidx.nodes[ne$v],
+                                pasets, global.sufstats, cached.scores,
+                                verify.band)
+            b <- am$index
             .Call(C_dag_apply_move, st, ne$op[b], ne$u[b], ne$v[b])
-            s1 <- sco[b]
+            s1 <- am$total
 
             .debug_assertions(st, NULL, NULL, NULL, dat, vnames)
 

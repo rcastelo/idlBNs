@@ -1,3 +1,4 @@
+#include <math.h>
 #include <R.h>
 #include <Rinternals.h>
 #include "cache_key.h"
@@ -174,6 +175,92 @@ total_with(double *base, int p, int c1, double s1, int c2, double s2) {
     return total;
 }
 
+/*
+ * PER-CANDIDATE SCORING, SHARED BY THE TWO DRIVERS
+ *
+ * nh_scores_driver() returns every candidate's exact total;
+ * nh_argmax_driver() returns only the winner, via the band below. Both must
+ * issue exactly the same cache lookups in exactly the same order, because
+ * the cache stores whichever order-variant of a parent set missed first --
+ * so the per-candidate work lives here, once, rather than being written
+ * twice and drifting.
+ */
+typedef struct {
+    SEXP           pasets_R;
+    idl_cache_ref *cr;
+    node_score_fn  fn;
+    void          *ctx;
+    const int     *sarena;      /* ascending parent sets, flat            */
+    const int     *soff;
+    int           *buf;         /* scratch: modified set, scoring order   */
+    int           *kbuf;        /* scratch: modified set, ascending        */
+    int            p;
+} idl_cand_ctx;
+
+/* the vertices a move changes, and their new terms */
+typedef struct {
+    int    c1;                  /* head, always changed                    */
+    double s1;
+    int    c2;                  /* tail, changed only by a reversal, or -1 */
+    double s2;
+} idl_cand;
+
+/* score the one or two vertices whose parent set move (op, u, v) changes.
+   'u' and 'v' are 1-based. */
+static idl_cand
+score_candidate(const idl_cand_ctx *cc, int op, int u, int v) {
+    int u0 = u - 1, v0 = v - 1;
+    idl_cand out;
+    out.c2 = -1;
+    out.s2 = 0.0;
+
+    if (u0 < 0 || u0 >= cc->p || v0 < 0 || v0 >= cc->p || u0 == v0)
+        error("nh_scores: invalid move (u=%d, v=%d) for p=%d", u, v, cc->p);
+
+    SEXP pav_R = VECTOR_ELT(cc->pasets_R, v0);
+    const int *pav = INTEGER(pav_R);
+    int lpv = LENGTH(pav_R);
+    int lp;
+
+    switch (op) {
+    case IDLBNS_OP_ADD:
+        lp = paset_with(pav, lpv, u, cc->buf);
+        key_with(cc->sarena + cc->soff[v0], lpv, u, cc->kbuf);
+        out.c1 = v0;
+        out.s1 = cached_node_score(cc->fn, cc->ctx, cc->cr, v0, cc->buf, lp,
+                                   cc->kbuf, lp);
+        break;
+    case IDLBNS_OP_REMOVE:
+        lp = paset_without(pav, lpv, u, cc->buf);
+        key_without(cc->sarena + cc->soff[v0], lpv, u, cc->kbuf);
+        out.c1 = v0;
+        out.s1 = cached_node_score(cc->fn, cc->ctx, cc->cr, v0, cc->buf, lp,
+                                   cc->kbuf, lp);
+        break;
+    case IDLBNS_OP_REVERSE: {
+        /* the head first, then the tail: the cache is order sensitive, so
+           the sequence of lookups is part of the contract */
+        lp = paset_without(pav, lpv, u, cc->buf);
+        key_without(cc->sarena + cc->soff[v0], lpv, u, cc->kbuf);
+        out.c1 = v0;
+        out.s1 = cached_node_score(cc->fn, cc->ctx, cc->cr, v0, cc->buf, lp,
+                                   cc->kbuf, lp);
+        SEXP pau_R = VECTOR_ELT(cc->pasets_R, u0);
+        int lpu = LENGTH(pau_R);
+        lp = paset_with(INTEGER(pau_R), lpu, v, cc->buf);
+        key_with(cc->sarena + cc->soff[u0], lpu, v, cc->kbuf);
+        out.c2 = u0;
+        out.s2 = cached_node_score(cc->fn, cc->ctx, cc->cr, u0, cc->buf, lp,
+                                   cc->kbuf, lp);
+        break;
+    }
+    default:
+        error("nh_scores: unknown move operation code %d", op);
+    }
+
+    return out;
+}
+
 SEXP
 nh_scores_driver(SEXP pasets_R, SEXP cached_scores_R, SEXP op_R, SEXP u_R,
                  SEXP v_R, node_score_fn fn, void *ctx) {
@@ -238,51 +325,16 @@ nh_scores_driver(SEXP pasets_R, SEXP cached_scores_R, SEXP op_R, SEXP u_R,
     int *buf = (int *) R_alloc((size_t) p, sizeof(int));
     int *kbuf = (int *) R_alloc((size_t) p, sizeof(int));
 
+    idl_cand_ctx cc;
+    cc.pasets_R = pasets_R; cc.cr = &cr; cc.fn = fn; cc.ctx = ctx;
+    cc.sarena = sarena; cc.soff = soff; cc.buf = buf; cc.kbuf = kbuf;
+    cc.p = p;
+
     for (R_xlen_t m = 0; m < k; m++) {
         void *vmax = vmaxget();
-        int u0 = uu[m] - 1;
-        int v0 = vv[m] - 1;
 
-        if (u0 < 0 || u0 >= p || v0 < 0 || v0 >= p || u0 == v0)
-            error("nh_scores_driver: invalid move (u=%d, v=%d) for p=%d",
-                  uu[m], vv[m], p);
-
-        SEXP pav_R = VECTOR_ELT(pasets_R, v0);
-        const int *pav = INTEGER(pav_R);
-        int lpv = LENGTH(pav_R);
-        int lp;
-        double s;
-
-        switch (op[m]) {
-        case IDLBNS_OP_ADD:
-            lp = paset_with(pav, lpv, uu[m], buf);
-            key_with(sarena + soff[v0], lpv, uu[m], kbuf);
-            s = cached_node_score(fn, ctx, &cr, v0, buf, lp, kbuf, lp);
-            res[m] = total_with(base, p, v0, s, -1, 0.0);
-            break;
-        case IDLBNS_OP_REMOVE:
-            lp = paset_without(pav, lpv, uu[m], buf);
-            key_without(sarena + soff[v0], lpv, uu[m], kbuf);
-            s = cached_node_score(fn, ctx, &cr, v0, buf, lp, kbuf, lp);
-            res[m] = total_with(base, p, v0, s, -1, 0.0);
-            break;
-        case IDLBNS_OP_REVERSE: {
-            /* the head first, then the tail: the cache is order sensitive,
-               so the sequence of lookups is part of the contract */
-            lp = paset_without(pav, lpv, uu[m], buf);
-            key_without(sarena + soff[v0], lpv, uu[m], kbuf);
-            double sv = cached_node_score(fn, ctx, &cr, v0, buf, lp, kbuf, lp);
-            SEXP pau_R = VECTOR_ELT(pasets_R, u0);
-            int lpu = LENGTH(pau_R);
-            lp = paset_with(INTEGER(pau_R), lpu, vv[m], buf);
-            key_with(sarena + soff[u0], lpu, vv[m], kbuf);
-            double su = cached_node_score(fn, ctx, &cr, u0, buf, lp, kbuf, lp);
-            res[m] = total_with(base, p, v0, sv, u0, su);
-            break;
-        }
-        default:
-            error("nh_scores_driver: unknown move operation code %d", op[m]);
-        }
+        idl_cand c = score_candidate(&cc, op[m], uu[m], vv[m]);
+        res[m] = total_with(base, p, c.c1, c.s1, c.c2, c.s2);
 
         vmaxset(vmax); /* reclaim this move's cache-key and score scratch */
     }
@@ -291,4 +343,284 @@ nh_scores_driver(SEXP pasets_R, SEXP cached_scores_R, SEXP op_R, SEXP u_R,
     UNPROTECT(1);
 
     return res_R;
+}
+
+/*
+ * THE ARGMAX BAND: FINDING THE WINNER WITHOUT SUMMING EVERY CANDIDATE
+ *
+ * total_with() sums all p per-vertex terms for one candidate, and that is
+ * what makes each candidate's total bit-identical to a full re-score. But
+ * the neighbourhood holds O(p^2) candidates, so a step costs O(p^3)
+ * additions: 1.0M at p = 100, 8.0M at p = 200, 125M at p = 500 -- about
+ * 125 ms per step there, which would dominate everything else the port
+ * saves.
+ *
+ * There is no exact shortcut. Recursive summation is not decomposable:
+ * prefix sums let the fold start at the changed position (a factor of two)
+ * but the tail depends on the running accumulator, so it stays O(p).
+ *
+ * So filter instead. For each candidate form the cheap estimate
+ *
+ *     est_m = fl(T_base + fl(delta1 + delta2))
+ *
+ * bound the error |T_m - est_m| rigorously, and compute the exact
+ * total_with() only for the candidates whose error interval could still
+ * contain the maximum. Everything else is PROVABLY worse, so the winner is
+ * exactly the winner a full exact ranking would pick -- including its
+ * position, since the band is scanned in ascending m with a strict '>',
+ * which is what reproduces which.max()'s first-index tie-breaking.
+ *
+ * THE BOUND. With u = 2^-53 the unit roundoff and gamma_n = n*u/(1 - n*u),
+ * recursive summation of n doubles satisfies |fl(sum) - sum| <= gamma_{n-1}
+ * * sum|x_i|. Three error sources have to appear, and a bound that keeps
+ * only the first is not a bound:
+ *
+ *   1. T_base and T_m are BOTH rounded sums, so both contribute; and the
+ *      term-magnitude sum for candidate m is A_m, not A, because one or two
+ *      terms have been swapped.
+ *   2. the deltas are themselves rounded subtractions and one rounded
+ *      addition.
+ *   3. fl(T_base + d_m) rounds once more.
+ *
+ * giving
+ *
+ *   A'   = A * (1 + 2*p*u)                       covers A's own summation
+ *   A_m  = A' - |e1| + |s1| - |e2| + |s2| + 4*u*A'
+ *   B_m  = gamma_{p-1} * (A_m + A') + 2*u*(|d1| + |d2|) + u*|est_m|
+ *
+ * Per-candidate intervals are then strictly tighter than one global width,
+ * and cost nothing extra:
+ *
+ *   L_m = nextafter(est_m - SAFETY*B_m, -inf)
+ *   U_m = nextafter(est_m + SAFETY*B_m, +inf)
+ *   M   = max_m L_m,   band = { m : U_m >= M }
+ *
+ * If m is outside the band then T_m <= U_m < M <= L_{m*} <= T_{m*} for the
+ * m* attaining M, and m* is itself in the band since U >= L. So the true
+ * maximum lies inside. SAFETY = 4 plus the outward nextafter covers the
+ * rounding of the bound arithmetic itself; the band size is insensitive to
+ * SAFETY over 1..16, so being generous costs nothing.
+ *
+ * At p = 500 with per-vertex terms of order 1e3 the band is about 5e-8
+ * wide, against genuine inter-move score gaps of order 1e-1 to 1e2. What
+ * lands inside it are the exactly-tied score-equivalence classes -- both
+ * iBIC and iBGe score Markov equivalent DAGs alike on observational data --
+ * so expect a handful, and the O(p^3) term collapses to O(p * |band|).
+ *
+ * TWO THINGS THIS MUST NOT DO. It must not change the cache-lookup sequence
+ * -- every candidate still gets its node scores computed, in the same order,
+ * through the same score_candidate() the exact driver uses; only the
+ * p-term summation is skipped. And it must not be used where a caller wants
+ * every candidate's total: tests/test_delta_scores.R asserts identical() on
+ * the whole vector nh_scores_driver() returns, so that function is left
+ * exactly as it was and this is a separate entry point.
+ *
+ * There is no correctness cliff. If the band degenerates to all k
+ * candidates the answer is still exactly right and the cost is exactly what
+ * it was before; only the speedup is lost. 'band' is returned so that can
+ * be watched.
+ */
+
+#define IDL_UROUND  0x1p-53
+#define IDL_SAFETY  4.0
+
+static inline double
+idl_gamma(double n) {
+    double x = n * IDL_UROUND;
+
+    return x / (1.0 - x);
+}
+
+SEXP
+nh_argmax_driver(SEXP pasets_R, SEXP cached_scores_R, SEXP op_R, SEXP u_R,
+                 SEXP v_R, int verify, node_score_fn fn, void *ctx) {
+    if (TYPEOF(pasets_R) != VECSXP)
+        error("nh_argmax_driver: 'pasets' must be a list");
+    if (TYPEOF(op_R) != INTSXP || TYPEOF(u_R) != INTSXP ||
+        TYPEOF(v_R) != INTSXP)
+        error("nh_argmax_driver: 'op', 'u' and 'v' must be integer vectors");
+
+    int p = LENGTH(pasets_R);
+    R_xlen_t k = XLENGTH(op_R);
+
+    if (XLENGTH(u_R) != k || XLENGTH(v_R) != k)
+        error("nh_argmax_driver: 'op', 'u' and 'v' must have the same length");
+    if (k == 0)
+        error("nh_argmax_driver: the neighbourhood is empty");
+    idl_cache_ref cr = idl_cache_resolve(cached_scores_R, p,
+                                        "nh_argmax_driver");
+
+    const int *op = INTEGER(op_R);
+    const int *uu = INTEGER(u_R);
+    const int *vv = INTEGER(v_R);
+
+    void *vmax0 = vmaxget();
+
+    /* the ascending form of every parent set, exactly as the exact driver
+       builds it, so the cache keys are identical */
+    size_t tot = 0;
+    for (int i = 0; i < p; i++)
+        tot += (size_t) LENGTH(VECTOR_ELT(pasets_R, i));
+    int *sarena = (int *) R_alloc(tot + 1, sizeof(int));
+    int *soff = (int *) R_alloc((size_t) p, sizeof(int));
+    {
+        size_t at = 0;
+        for (int i = 0; i < p; i++) {
+            SEXP pa_R = VECTOR_ELT(pasets_R, i);
+            int lp = LENGTH(pa_R);
+            soff[i] = (int) at;
+            if (lp > 0) {
+                memcpy(sarena + at, INTEGER(pa_R), (size_t) lp * sizeof(int));
+                qsort(sarena + at, (size_t) lp, sizeof(int), cmp_int);
+            }
+            at += (size_t) lp;
+        }
+    }
+
+    /* the current DAG's per-vertex terms, and their sum in vertex order */
+    double *base = (double *) R_alloc((size_t) p, sizeof(double));
+    for (int i = 0; i < p; i++) {
+        void *vm = vmaxget();
+        SEXP pa_R = VECTOR_ELT(pasets_R, i);
+        base[i] = cached_node_score(fn, ctx, &cr, i, INTEGER(pa_R),
+                                    LENGTH(pa_R), sarena + soff[i],
+                                    LENGTH(pa_R));
+        vmaxset(vm);
+    }
+    double total = 0.0, absA = 0.0;
+    int finite_base = 1;
+    for (int i = 0; i < p; i++) {
+        total += base[i];
+        absA += fabs(base[i]);
+        if (!R_FINITE(base[i]))
+            finite_base = 0;
+    }
+
+    int *buf = (int *) R_alloc((size_t) p, sizeof(int));
+    int *kbuf = (int *) R_alloc((size_t) p, sizeof(int));
+    idl_cand_ctx cc;
+    cc.pasets_R = pasets_R; cc.cr = &cr; cc.fn = fn; cc.ctx = ctx;
+    cc.sarena = sarena; cc.soff = soff; cc.buf = buf; cc.kbuf = kbuf;
+    cc.p = p;
+
+    double *est = (double *) R_alloc((size_t) k, sizeof(double));
+    double *lo  = (double *) R_alloc((size_t) k, sizeof(double));
+    double *hi  = (double *) R_alloc((size_t) k, sizeof(double));
+    int *c1 = (int *) R_alloc((size_t) k, sizeof(int));
+    int *c2 = (int *) R_alloc((size_t) k, sizeof(int));
+    double *s1 = (double *) R_alloc((size_t) k, sizeof(double));
+    double *s2 = (double *) R_alloc((size_t) k, sizeof(double));
+
+    double Ap = absA * (1.0 + 2.0 * (double) p * IDL_UROUND);
+    double gam = idl_gamma((double) (p > 1 ? p - 1 : 1));
+    int all_finite = finite_base;
+
+    /* pass 1: score every candidate (same lookups, same order as the exact
+       driver) and bound its estimate */
+    for (R_xlen_t m = 0; m < k; m++) {
+        void *vm = vmaxget();
+        idl_cand c = score_candidate(&cc, op[m], uu[m], vv[m]);
+        vmaxset(vm);
+
+        c1[m] = c.c1; s1[m] = c.s1;
+        c2[m] = c.c2; s2[m] = c.s2;
+
+        double e1 = base[c.c1];
+        double d1 = c.s1 - e1;
+        double d2 = 0.0, e2 = 0.0;
+        if (c.c2 >= 0) {
+            e2 = base[c.c2];
+            d2 = c.s2 - e2;
+        }
+        double d = d1 + d2;
+        est[m] = total + d;
+
+        double Am = Ap - fabs(e1) + fabs(c.s1);
+        if (c.c2 >= 0)
+            Am += fabs(c.s2) - fabs(e2);
+        Am += 4.0 * IDL_UROUND * Ap;
+
+        double B = gam * (Am + Ap) + 2.0 * IDL_UROUND * (fabs(d1) + fabs(d2))
+                   + IDL_UROUND * fabs(est[m]);
+        double w = IDL_SAFETY * B;
+        lo[m] = nextafter(est[m] - w, R_NegInf);
+        hi[m] = nextafter(est[m] + w, R_PosInf);
+
+        if (!R_FINITE(est[m]) || !R_FINITE(B))
+            all_finite = 0;
+    }
+
+    /* if anything is non-finite the interval arithmetic is meaningless, so
+       fall back to scoring every candidate exactly. unreachable in practice
+       -- the node score functions error on a failed Cholesky rather than
+       returning a NaN -- but a two-line guard against a silent wrong answer
+       is worth having */
+    R_xlen_t bidx = 0;
+    double btot = 0.0;
+    R_xlen_t nband = 0;
+    double worst = 0.0;
+
+    if (!all_finite) {
+        for (R_xlen_t m = 0; m < k; m++) {
+            double t = total_with(base, p, c1[m], s1[m], c2[m], s2[m]);
+            if (m == 0 || t > btot) { btot = t; bidx = m; }
+        }
+        nband = k;
+    } else {
+        double M = lo[0];
+        for (R_xlen_t m = 1; m < k; m++)
+            if (lo[m] > M)
+                M = lo[m];
+
+        int first = 1;
+        for (R_xlen_t m = 0; m < k; m++) {
+            if (hi[m] < M)
+                continue;                       /* provably not the maximum */
+            nband++;
+            double t = total_with(base, p, c1[m], s1[m], c2[m], s2[m]);
+            /* ascending m with a strict '>' is what reproduces which.max() */
+            if (first || t > btot) { btot = t; bidx = m; first = 0; }
+        }
+        if (first)                              /* cannot happen: M = lo[j]
+                                                   implies hi[j] >= M */
+            error("nh_argmax_driver: the candidate band came out empty");
+    }
+
+    /* verify mode: score every candidate exactly and check the band */
+    if (verify) {
+        double bestt = 0.0;
+        R_xlen_t besti = 0;
+        for (R_xlen_t m = 0; m < k; m++) {
+            double t = total_with(base, p, c1[m], s1[m], c2[m], s2[m]);
+            if (m == 0 || t > bestt) { bestt = t; besti = m; }
+            if (all_finite) {
+                double B = (hi[m] - est[m]) / IDL_SAFETY;
+                double dev = fabs(t - est[m]);
+                if (B > 0.0 && dev / B > worst)
+                    worst = dev / B;
+                if (dev > IDL_SAFETY * B)
+                    error("nh_argmax_driver: bound violated at candidate %lld: |T - est| = %g > %g",
+                          (long long) (m + 1), dev, IDL_SAFETY * B);
+            }
+        }
+        if (besti != bidx || bestt != btot)
+            error("nh_argmax_driver: band picked candidate %lld (%.17g) but the exact maximum is %lld (%.17g)",
+                  (long long) (bidx + 1), btot, (long long) (besti + 1), bestt);
+    }
+
+    SEXP ans = PROTECT(allocVector(VECSXP, 4));
+    SET_VECTOR_ELT(ans, 0, ScalarInteger((int) (bidx + 1)));   /* 1-based */
+    SET_VECTOR_ELT(ans, 1, ScalarReal(btot));
+    SET_VECTOR_ELT(ans, 2, ScalarReal((double) nband));
+    SET_VECTOR_ELT(ans, 3, ScalarReal(worst));
+    SEXP nms = PROTECT(allocVector(STRSXP, 4));
+    SET_STRING_ELT(nms, 0, mkChar("index"));
+    SET_STRING_ELT(nms, 1, mkChar("total"));
+    SET_STRING_ELT(nms, 2, mkChar("band"));
+    SET_STRING_ELT(nms, 3, mkChar("worst"));
+    setAttrib(ans, R_NamesSymbol, nms);
+    UNPROTECT(2);
+    vmaxset(vmax0);
+
+    return ans;
 }

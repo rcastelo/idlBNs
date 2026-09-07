@@ -12,7 +12,13 @@ extern SEXP
 C_iBIC_nh_scores(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
 
 extern SEXP
+C_iBIC_nh_argmax(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
+
+extern SEXP
 C_iBGe_nh_scores(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
+
+extern SEXP
+C_iBGe_nh_argmax(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
 
 extern SEXP
 C_unif_index(SEXP);
@@ -46,6 +52,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"C_iBGe_score",      (DL_FUNC) &C_iBGe_score,      6},
     {"C_iBIC_nh_scores",  (DL_FUNC) &C_iBIC_nh_scores,  8},
     {"C_iBGe_nh_scores",  (DL_FUNC) &C_iBGe_nh_scores,  9},
+    {"C_iBIC_nh_argmax",  (DL_FUNC) &C_iBIC_nh_argmax,  9},
+    {"C_iBGe_nh_argmax",  (DL_FUNC) &C_iBGe_nh_argmax, 10},
     {"C_unif_index",      (DL_FUNC) &C_unif_index,      1},
     {"C_dag_new",           (DL_FUNC) &C_dag_new,           1},
     {"C_dag_apply_move",    (DL_FUNC) &C_dag_apply_move,    4},
