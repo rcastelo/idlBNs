@@ -54,7 +54,7 @@ iBGe_node_score(const double* TNj, int p, const int* pa, int lp, int node,
 
     /* build 0-based parent index array, with the same bounds safeguards
        as iBIC_node_score() */
-    int* idx = (int *) R_alloc(lp, sizeof(int));
+    int* idx = (int *) R_alloc((size_t) lp, sizeof(int));
     for (int k = 0; k < lp; k++) {
         int pk = pa[k];
 
@@ -72,7 +72,7 @@ iBGe_node_score(const double* TNj, int p, const int* pa, int lp, int node,
 
     /* extract B = TNj[node, pa] (lp x 1); TNj is symmetric, so this
        equals TNj[pa, node] too */
-    double* B = (double *) R_alloc(lp, sizeof(double));
+    double* B = (double *) R_alloc((size_t) lp, sizeof(double));
     for (int r = 0; r < lp; r++)
         B[r] = TNj[(size_t) idx[r] * p + node0];
 

@@ -39,7 +39,7 @@ iBIC_node_score(const double* Sj, int p1, const int* pa, int lp, int node,
     int m = lp + 1;                  /* intercept + parents */
 
     /* build 0-based index array: [0, pa[0], pa[1], ...] */
-    int* idx = (int *) R_alloc(m, sizeof(int));
+    int* idx = (int *) R_alloc((size_t) m, sizeof(int));
     idx[0] = 0;
     if (node <= 0 || node >= p1)
         error("iBIC_node_score: node index %d out of range [1,%d]", node, p1-1);
@@ -61,7 +61,7 @@ iBIC_node_score(const double* Sj, int p1, const int* pa, int lp, int node,
             ZtZ[c * m + r] = Sj[(size_t)idx[c] * p1 + idx[r]];
 
     /* extract ZtY (mx1) */
-    double* ZtY = (double *) R_alloc(m, sizeof(double));
+    double* ZtY = (double *) R_alloc((size_t) m, sizeof(double));
     for (int r = 0; r < m; r++)
         ZtY[r] = Sj[(size_t)node * p1 + idx[r]];
 
