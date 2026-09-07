@@ -45,30 +45,6 @@
  * dependence on p.
  */
 
-/* is the arc i -> w covered, i.e. pa(i) == pa(w) \ {i}?
-   both lists are ascending and duplicate-free, and i is necessarily in
-   pa(w), so the sizes must differ by exactly one. */
-static int
-arc_is_covered(const idl_dag *d, int i, int w) {
-    const idl_ivec *pi = &d->pas[i];
-    const idl_ivec *pw = &d->pas[w];
-
-    if (pi->n != pw->n - 1)
-        return 0;
-
-    int a = 0;
-    for (int b = 0; b < pw->n; b++) {
-        int x = pw->v[b];
-        if (x == i)
-            continue;                       /* the setdiff */
-        if (a >= pi->n || pi->v[a] != x)
-            return 0;
-        a++;
-    }
-
-    return a == pi->n;
-}
-
 /*
  * C_dag_nh
  *
@@ -154,7 +130,7 @@ C_dag_nh(SEXP st, SEXP kind_R, SEXP utargets_R) {
                 int w = chi->v[j];
                 if (kind == 3) {
                     int touches = istgt[i] || istgt[w];
-                    if (!touches && arc_is_covered(d, i, w))
+                    if (!touches && idl_dag_arc_is_covered(d, i, w))
                         continue;           /* I-covered: not in NCR */
                 }
                 if (!idl_dag_can_reverse(d, i, w))
@@ -217,7 +193,7 @@ C_dag_cedges(SEXP st, SEXP utargets_R) {
         const idl_ivec *chi = &d->ch[i];
         for (int j = 0; j < chi->n; j++) {
             int w = chi->v[j];
-            a[m++] = arc_is_covered(d, i, w) && !(istgt[i] || istgt[w]);
+            a[m++] = idl_dag_arc_is_covered(d, i, w) && !(istgt[i] || istgt[w]);
         }
     }
     UNPROTECT(1);

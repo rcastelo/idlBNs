@@ -28,6 +28,7 @@ extern SEXP C_dag_desc(SEXP);
 extern SEXP C_dag_check(SEXP);
 extern SEXP C_dag_nh(SEXP, SEXP, SEXP);
 extern SEXP C_dag_cedges(SEXP, SEXP);
+extern SEXP C_dag_rcar(SEXP, SEXP, SEXP);
 
 /* installs the external-pointer tag symbol; see src/dag_R.c */
 extern void idl_dag_R_init(void);
@@ -51,6 +52,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"C_dag_check",         (DL_FUNC) &C_dag_check,         1},
     {"C_dag_nh",            (DL_FUNC) &C_dag_nh,            3},
     {"C_dag_cedges",        (DL_FUNC) &C_dag_cedges,        2},
+    {"C_dag_rcar",          (DL_FUNC) &C_dag_rcar,          3},
     {NULL, NULL, 0}
 };
 

@@ -379,6 +379,46 @@ idl_dag_reverse_edge(idl_dag *d, int u, int v) {
 }
 
 /* ------------------------------------------------------------------------ */
+/* covered arcs                                                             */
+/* ------------------------------------------------------------------------ */
+
+/*
+ * idl_dag_arc_is_covered
+ *
+ * Is the arc i -> w covered, i.e. pa(i) == pa(w) \ {i}?
+ *
+ * Both parent lists are held ascending and duplicate-free (the 'pas'
+ * mirror), and i is necessarily in pa(w) because the arc exists, so the two
+ * sizes must differ by exactly one and the comparison is a single linear
+ * merge. That makes this O(|pa(i)| + |pa(w)|) with no sorting and no
+ * dependence on p -- which is the whole reason the mirror is maintained
+ * incrementally rather than sorted on demand.
+ *
+ * Used by the NCR neighbourhood (an I-covered arc is excluded from it) and
+ * by rcar() (which reverses only covered arcs).
+ */
+int
+idl_dag_arc_is_covered(const idl_dag *d, int i, int w) {
+    const idl_ivec *pi = &d->pas[i];
+    const idl_ivec *pw = &d->pas[w];
+
+    if (pi->n != pw->n - 1)
+        return 0;
+
+    int a = 0;
+    for (int b = 0; b < pw->n; b++) {
+        int x = pw->v[b];
+        if (x == i)
+            continue;                       /* the setdiff */
+        if (a >= pi->n || pi->v[a] != x)
+            return 0;
+        a++;
+    }
+
+    return a == pi->n;
+}
+
+/* ------------------------------------------------------------------------ */
 /* self-consistency                                                         */
 /* ------------------------------------------------------------------------ */
 

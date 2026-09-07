@@ -186,8 +186,17 @@ stopifnot(sum(dag_nh(b$st, 3L, 3L)$op == 3L) == 1L)
 cat("ncr: I-covered arcs dropped, target-touching covered arcs kept\n")
 
 ################################################################################
-## 4. out-of-range utargets are IGNORED, not rejected -- the documented
-## examples use targets like list(0L, 2L), whose 0 never names a vertex
+## 4. out-of-range utargets are IGNORED, not rejected.
+##
+## Not because such a value is meaningful -- it is not. A targets family says
+## which vertices each intervention acts on, and "no intervention" is
+## list(integer(0), ...), not list(0L, ...). But utargets is derived as
+## sort(unique(unlist(targets))) and then used only through `%in%` against
+## vertex indices, so R never errors on a value outside 1..p; it silently
+## matches nothing. The C port has to reproduce that, because the whole
+## verification strategy is that C and R agree -- including on malformed
+## input. Validating targets belongs at the public boundary (hcmc() /
+## hillclimbing()), not here.
 ################################################################################
 
 b <- both(4, list(c(1,2), c(2,3)))

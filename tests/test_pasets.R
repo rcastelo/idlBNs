@@ -210,7 +210,7 @@ X3 <- 0.5 * X2 + rnorm(nint, mean=0, sd=1)
 intdat <- data.frame(X1=X1, X2=X2, X3=X3)
 
 dat <- rbind(obsdat, intdat)
-targets <- list(0L, 2L)
+targets <- list(integer(0), 2L)
 target.index <- c(rep(1L, nobs), rep(2L, nint))
 
 datm <- as.matrix(dat)

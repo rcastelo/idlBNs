@@ -50,7 +50,7 @@ Type 'q()' to quit R.
 > dat <- rbind(obsdat, intdat)
 > 
 > ## define the targets and target indices for the interventional data
-> targets <- list(0L, 2L)
+> targets <- list(integer(0), 2L)
 > target.index <- c(rep(1L, nobs), rep(2L, nint))
 > 
 > ## calculate the interventional BIC score for the DAG and data set

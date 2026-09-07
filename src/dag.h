@@ -130,6 +130,13 @@ void idl_dag_remove_edge(idl_dag *d, int u, int v);
 void idl_dag_reverse_edge(idl_dag *d, int u, int v);
 
 /*
+ * Is the arc i -> w covered, i.e. pa(i) == pa(w) \ {i}? A linear merge over
+ * the two ascending parent mirrors: O(|pa(i)| + |pa(w)|), independent of p.
+ * The arc must exist. Shared by the NCR neighbourhood and by rcar().
+ */
+int idl_dag_arc_is_covered(const idl_dag *d, int i, int w);
+
+/*
  * idl_dag_check
  *
  * Full internal self-consistency pass, for the debug options and the
