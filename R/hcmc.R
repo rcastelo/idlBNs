@@ -135,6 +135,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
     if (!is.null(attr(scorefun, "scorefun.name")))
         scorefun.name <- attr(scorefun, "scorefun.name")
     supports.pasets <- isTRUE(attr(scorefun, "supports.pasets"))
+    nh.scores.fun <- attr(scorefun, "nh.scores.fun")
 
     anc <- init.ancestors(colnames(dat))
     vidx <- setNames(seq_len(ncol(dat)), colnames(dat))
@@ -170,7 +171,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
         ne <- ncr.nh(dag, anc, utargets)
         sco <- score.nh(ne, dag, dat, targets, target.index, cached.scores,
                         global.sufstats, pasets, vidx.nodes, supports.pasets,
-                        scorefun)
+                        scorefun, nh.scores.fun)
         b <- which.max(sco)
         b.op <- ne$op[b]
         b.u <- ne$u[b]
@@ -185,10 +186,8 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                         add.ancestors(anc, vnames[b.u], vnames[b.v]),
                         remove.ancestors(anc, dag, vnames[b.u], vnames[b.v]),
                         reverse.ancestors(anc, dag, vnames[b.u], vnames[b.v]))
-          pasets <- switch(b.op,
-                           add.pasets(pasets, vidx.nodes[b.u], vidx.nodes[b.v]),
-                           remove.pasets(pasets, vidx.nodes[b.u], vidx.nodes[b.v]),
-                           reverse.pasets(pasets, vidx.nodes[b.u], vidx.nodes[b.v]))
+          pasets <- move.pasets(pasets, b.op, vidx.nodes[b.u],
+                                vidx.nodes[b.v])
           dag <- apply.move(dag, b.op, b.u, b.v, vnames)
           if (was_in_local_maximum) {
               escapes <- escapes + 1

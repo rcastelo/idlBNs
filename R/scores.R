@@ -209,6 +209,29 @@ attr(iBIC, "scorefun.name") <- "iBIC"
 ## it.
 attr(iBIC, "supports.pasets") <- TRUE
 
+## score a whole neighborhood of candidate moves against the current DAG in
+## a single .Call(), returning one total iBIC score per candidate move.
+## 'op'/'u'/'v' are the three parallel integer vectors of a neighborhood as
+## returned by nr.nh()/ar.nh()/ncr.nh(), with 'u'/'v' already translated
+## from nodes(dag) positions to the dat-column indices that 'pasets' is
+## keyed by. Only the one or two vertices whose parent set a move changes
+## get rescored, instead of all p of them (see src/nh_scores.c), so a
+## neighborhood costs O(|NH|) node scores rather than O(p * |NH|).
+.iBIC.nh.scores <- function(op, u, v, pasets, global.sufstats, cached.scores)
+    .Call(C_iBIC_nh_scores,
+          global.sufstats$S,
+          pasets,
+          as.double(global.sufstats$data.count),
+          as.double(global.sufstats$n),
+          cached.scores,
+          op, u, v)
+
+## expose the neighborhood scorer to the search algorithms the same way the
+## global sufficient statistics function is exposed: as a deliberate opt-in
+## attribute, so a custom user scorefun without one keeps being called once
+## per candidate move (see score.nh() in search.R)
+attr(iBIC, "nh.scores.fun") <- .iBIC.nh.scores
+
 ## convert a list of targets and a vector of target indices to data
 ## observations into a logical matrix of observations by variables,
 ## where TRUE indicates that a variable has been intervened in a observation
@@ -531,6 +554,20 @@ attr(iBGe, "scorefun.name") <- "iBGe"
 ## mark iBGe() as able to accept a precomputed 'pasets' argument -- see the
 ## identical attribute on iBIC() for the rationale.
 attr(iBGe, "supports.pasets") <- TRUE
+
+## score a whole neighborhood of candidate moves against the current DAG in
+## a single .Call() -- see .iBIC.nh.scores() for the rationale
+.iBGe.nh.scores <- function(op, u, v, pasets, global.sufstats, cached.scores)
+    .Call(C_iBGe_nh_scores,
+          global.sufstats$TN,
+          pasets,
+          as.double(global.sufstats$awpN),
+          as.double(global.sufstats$p),
+          global.sufstats$scoreconstvec,
+          cached.scores,
+          op, u, v)
+
+attr(iBGe, "nh.scores.fun") <- .iBGe.nh.scores
 
 ## calculate global sufficient statistics for the iBGe score, which do not
 ## depend on the structure of a specific DAG, but only on the input data,

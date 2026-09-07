@@ -3,79 +3,13 @@
 #include <Rinternals.h>
 #include <R_ext/Lapack.h>
 #include "cache_key.h"
+#include "nh_scores.h"
 
 /* prototypes */
 
 double
 iBGe_node_score(const double* TNj, int p, const int* pa, int lp, int node,
                double awpN_i, double gsP, const double* scoreconstvec_i);
-
-/*
- * C_iBGe_node_score
- *
- * Computes the iBGe score contribution for one node, replicating the
- * inner body of the iBGe() R loop using LAPACK Cholesky + triangular
- * solve. This is an R-facing API C wrapper for the iBGe_node_score()
- * function, which does the actual computation.
- *
- * Arguments
- * ---------
- * TNj_R              REALSXP  the p x p matrix global.sufstats$TN[[i]],
- *                             stored in column-major order
- * pa_R               INTSXP   parent variable indices, 1-based (may be
- *                             length 0)
- * node_R             INTSXP   scalar: the R loop variable i (1-based,
- *                             range 1..p) -- unlike iBIC's S, TN has no
- *                             intercept row/column, so node_R is used as
- *                             a plain 1-based index, converted to 0-based
- *                             internally (no offset-cancellation trick)
- * awpN_i_R           REALSXP  scalar: global.sufstats$awpN[i]
- * gsP_R              REALSXP  scalar: global.sufstats$p (the total number
- *                             of vertices, same for every node)
- * scoreconstvec_i_R  REALSXP  global.sufstats$scoreconstvec[[i]], length p
- *
- * Returns a length-1 REALSXP containing the node score s.
- */
-SEXP
-C_iBGe_node_score(SEXP TNj_R, SEXP pa_R, SEXP node_R, SEXP awpN_i_R,
-                  SEXP gsP_R, SEXP scoreconstvec_i_R) {
-
-    if (TYPEOF(TNj_R) != REALSXP)
-        error("C_iBGe_node_score: 'TNj' must be a numeric matrix");
-    R_xlen_t TNj_len = XLENGTH(TNj_R);
-
-    int p      = (int) sqrt((double) TNj_len); /* dim of square TN  */
-
-    if ((R_xlen_t) p * p != TNj_len)
-        error("C_iBGe_node_score: 'TNj' must be a square matrix, but length(TNj)=%lld is not a perfect square",
-              (long long) TNj_len);
-    if (TYPEOF(pa_R) != INTSXP)
-        error("C_iBGe_node_score: 'pa' must be an integer vector");
-
-    int lp     = LENGTH(pa_R);                 /* number of parents */
-
-    if (TYPEOF(node_R) != INTSXP || XLENGTH(node_R) != 1)
-        error("C_iBGe_node_score: 'node' must be an integer scalar");
-
-    int node   = INTEGER(node_R)[0];           /* 1-based node idx  */
-
-    double awpN_i = REAL(awpN_i_R)[0];
-    double gsP    = REAL(gsP_R)[0];
-
-    const double* TNj = REAL(TNj_R);
-    const int*    pa  = INTEGER(pa_R);
-    const double* scoreconstvec_i = REAL(scoreconstvec_i_R);
-
-    double s = iBGe_node_score(TNj, p, pa, lp, node, awpN_i, gsP,
-                               scoreconstvec_i);
-
-    /* return as length-1 numeric vector */
-    SEXP result = PROTECT(allocVector(REALSXP, 1));
-    REAL(result)[0] = s;
-    UNPROTECT(1);
-
-    return result;
-}
 
 /*
  * iBGe_node_score
@@ -242,13 +176,7 @@ C_iBGe_score(SEXP TN_R, SEXP pasets_R, SEXP awpN_R, SEXP gsP_R,
 
         if (has_cache) {
             env = VECTOR_ELT(cached_scores_R, i);
-            char *key = build_cache_key(pa, lp);
-            sym = Rf_install(key); /* symbols are GC-safe unprotected */
-            if (R_existsVarInFrame(env, sym)) {
-                SEXP val = R_getVar(sym, env, FALSE);
-                s = REAL(val)[0];
-                found = 1;
-            }
+            found = cache_lookup(env, pa, lp, &sym, &s);
         }
 
         if (!found) {
@@ -258,17 +186,8 @@ C_iBGe_score(SEXP TN_R, SEXP pasets_R, SEXP awpN_R, SEXP gsP_R,
             const double *scoreconstvec_i = REAL(VECTOR_ELT(scoreconstvec_R, i));
             s = iBGe_node_score(REAL(TNj_R), tp, pa, lp, i + 1, awpN_i, gsP,
                                scoreconstvec_i);
-            if (has_cache) {
-                /* Rf_install() above and Rf_ScalarReal() here are kept as
-                   separate statements, and the ScalarReal() result is
-                   protected before defineVar(): nesting both allocating
-                   calls as sibling arguments to defineVar() would leave
-                   the unprotected ScalarReal() result exposed to GC under
-                   C's unspecified argument-evaluation order */
-                SEXP val = PROTECT(Rf_ScalarReal(s));
-                Rf_defineVar(sym, val, env);
-                UNPROTECT(1);
-            }
+            if (has_cache)
+                cache_store(env, sym, s);
         }
         total += s;
 
@@ -277,4 +196,83 @@ C_iBGe_score(SEXP TN_R, SEXP pasets_R, SEXP awpN_R, SEXP gsP_R,
     }
 
     return Rf_ScalarReal(total);
+}
+
+/*
+ * iBGe_ctx / iBGe_node_score_thunk
+ *
+ * Binds the iBGe global sufficient statistics to the generic
+ * node_score_fn signature that nh_scores_driver() calls back into, so
+ * that the delta-scoring driver stays score-function agnostic.
+ */
+typedef struct {
+    SEXP          TN_R;            /* global.sufstats$TN, p matrices      */
+    SEXP          scoreconstvec_R; /* global.sufstats$scoreconstvec       */
+    const double *awpN;            /* global.sufstats$awpN, length p      */
+    double        gsP;             /* global.sufstats$p                   */
+} iBGe_ctx;
+
+static double
+iBGe_node_score_thunk(void *ctxv, const int *pa, int lp, int node) {
+    iBGe_ctx *ctx = (iBGe_ctx *) ctxv;
+    SEXP TNj_R = VECTOR_ELT(ctx->TN_R, node - 1);
+    int tp = (int) sqrt((double) LENGTH(TNj_R));
+
+    return iBGe_node_score(REAL(TNj_R), tp, pa, lp, node, ctx->awpN[node - 1],
+                           ctx->gsP,
+                           REAL(VECTOR_ELT(ctx->scoreconstvec_R, node - 1)));
+}
+
+/*
+ * C_iBGe_nh_scores
+ *
+ * Scores a whole neighborhood of candidate moves against the current DAG
+ * in a single .Call(), returning one total iBGe score per candidate. See
+ * nh_scores.c for how the per-candidate totals are derived from the
+ * current DAG's per-vertex terms.
+ *
+ * Arguments
+ * ---------
+ * TN_R            VECSXP   global.sufstats$TN, a list of p p x p matrices
+ * pasets_R        VECSXP   a list of p integer vectors, the 1-based
+ *                          parent indices of each vertex in the current
+ *                          DAG
+ * awpN_R          REALSXP  global.sufstats$awpN, length p
+ * gsP_R           REALSXP  scalar: global.sufstats$p
+ * scoreconstvec_R VECSXP   global.sufstats$scoreconstvec, p vectors
+ * cached_scores_R VECSXP   a list of p environments, or R_NilValue
+ * op_R            INTSXP   move operation codes, length k
+ * u_R             INTSXP   move tail vertices, 1-based, length k
+ * v_R             INTSXP   move head vertices, 1-based, length k
+ *
+ * Returns a REALSXP of length k.
+ */
+SEXP
+C_iBGe_nh_scores(SEXP TN_R, SEXP pasets_R, SEXP awpN_R, SEXP gsP_R,
+                 SEXP scoreconstvec_R, SEXP cached_scores_R, SEXP op_R,
+                 SEXP u_R, SEXP v_R) {
+    if (TYPEOF(pasets_R) != VECSXP)
+        error("C_iBGe_nh_scores: 'pasets' must be a list");
+
+    int p = LENGTH(pasets_R);
+
+    if (TYPEOF(TN_R) != VECSXP || LENGTH(TN_R) != p)
+        error("C_iBGe_nh_scores: 'TN' must be a list of length %d", p);
+    if (TYPEOF(scoreconstvec_R) != VECSXP || LENGTH(scoreconstvec_R) != p)
+        error("C_iBGe_nh_scores: 'scoreconstvec' must be a list of length %d",
+              p);
+    if (TYPEOF(awpN_R) != REALSXP || LENGTH(awpN_R) != p)
+        error("C_iBGe_nh_scores: 'awpN' must be a numeric vector of length %d",
+              p);
+    if (TYPEOF(gsP_R) != REALSXP || LENGTH(gsP_R) != 1)
+        error("C_iBGe_nh_scores: 'gsP' must be a numeric scalar");
+
+    iBGe_ctx ctx;
+    ctx.TN_R            = TN_R;
+    ctx.scoreconstvec_R = scoreconstvec_R;
+    ctx.awpN            = REAL(awpN_R);
+    ctx.gsP             = REAL(gsP_R)[0];
+
+    return nh_scores_driver(pasets_R, cached_scores_R, op_R, u_R, v_R,
+                            iBGe_node_score_thunk, &ctx);
 }
