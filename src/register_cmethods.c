@@ -29,9 +29,15 @@ extern SEXP C_dag_check(SEXP);
 extern SEXP C_dag_nh(SEXP, SEXP, SEXP);
 extern SEXP C_dag_cedges(SEXP, SEXP);
 extern SEXP C_dag_rcar(SEXP, SEXP, SEXP);
+extern SEXP C_sccache_new(SEXP);
+extern SEXP C_sccache_dump(SEXP);
+extern SEXP C_sccache_stats(SEXP);
 
 /* installs the external-pointer tag symbol; see src/dag_R.c */
 extern void idl_dag_R_init(void);
+
+/* installs the score cache's external-pointer tag; see src/sccache.c */
+extern void idl_sc_R_init(void);
 
 /* registration of C-entry points */
 
@@ -53,6 +59,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"C_dag_nh",            (DL_FUNC) &C_dag_nh,            3},
     {"C_dag_cedges",        (DL_FUNC) &C_dag_cedges,        2},
     {"C_dag_rcar",          (DL_FUNC) &C_dag_rcar,          3},
+    {"C_sccache_new",       (DL_FUNC) &C_sccache_new,       1},
+    {"C_sccache_dump",      (DL_FUNC) &C_sccache_dump,      1},
+    {"C_sccache_stats",     (DL_FUNC) &C_sccache_stats,     1},
     {NULL, NULL, 0}
 };
 
@@ -60,6 +69,7 @@ void
 R_init_idlBNs(DllInfo* dll) {
     R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
     idl_dag_R_init();
+    idl_sc_R_init();
     R_useDynamicSymbols(dll, FALSE);
     R_forceSymbols(dll, TRUE);
 }

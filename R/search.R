@@ -573,9 +573,35 @@ hillclimbing <- function(dat, targets=list(integer(0)),
     stopifnot(is.list(targets)) ## QC
     scorefun <- match.fun(scorefun)
 
-    cached.scores <- list()
-    for (i in seq_len(ncol(dat)))
-        cached.scores[[i]] <- new.env(hash=TRUE, parent=emptyenv())
+    ## the attributes that decide which engine can run, extracted before the
+    ## score cache is built because they decide which KIND of cache it is
+    scorefun.name <- attr(scorefun, "scorefun.name")
+    supports.pasets <- isTRUE(attr(scorefun, "supports.pasets"))
+    nh.scores.fun <- attr(scorefun, "nh.scores.fun")
+
+    ## the C engine keeps the DAG, its ancestor relation and its parent sets
+    ## in compiled state, and enumerates the neighbourhood there. It needs a
+    ## scorefun that can score a whole neighbourhood in one call, because it
+    ## holds no graphNEL during the search and so cannot serve score.nh()'s
+    ## per-candidate fallback. iBIC() and iBGe() qualify; anything else falls
+    ## back to R rather than failing.
+    use.c <- engine == "C" && !is.null(nh.scores.fun)
+
+    ## the score cache. The C engine uses a compiled open-addressing table
+    ## keyed on the parent set's integers; the R engine uses the documented
+    ## list of per-vertex environments keyed on the same set as a string.
+    ## Both key identically and neither evicts, so they hold the same
+    ## entries with the same values after the same search -- which matters,
+    ## because a node score depends on the parent SEQUENCE while the key is
+    ## the parent SET, so the cache is part of the arithmetic. See
+    ## src/sccache.h and tests/test_c_cache.R.
+    if (use.c)
+        cached.scores <- .Call(C_sccache_new, ncol(dat))
+    else {
+        cached.scores <- list()
+        for (i in seq_len(ncol(dat)))
+            cached.scores[[i]] <- new.env(hash=TRUE, parent=emptyenv())
+    }
 
     global.sufstats <- NULL
     global.sufstats.fun <- attr(scorefun, "global.sufstats.fun")
@@ -584,11 +610,6 @@ hillclimbing <- function(dat, targets=list(integer(0)),
             cli_alert_info("Calculating global sufficient statistics")
         global.sufstats <- global.sufstats.fun(dat, targets, target.index)
     }
-    scorefun.name <- NULL
-    if (!is.null(attr(scorefun, "scorefun.name")))
-        scorefun.name <- attr(scorefun, "scorefun.name")
-    supports.pasets <- isTRUE(attr(scorefun, "supports.pasets"))
-    nh.scores.fun <- attr(scorefun, "nh.scores.fun")
 
     anc <- init.ancestors(colnames(dat))
     vidx <- setNames(seq_len(ncol(dat)), colnames(dat))
@@ -621,8 +642,6 @@ hillclimbing <- function(dat, targets=list(integer(0)),
     ## one call, because it holds no graphNEL during the search and so cannot
     ## serve score.nh()'s per-candidate fallback. iBIC() and iBGe() qualify;
     ## anything else falls back to R rather than failing.
-    use.c <- engine == "C" && !is.null(nh.scores.fun)
-
     if (use.c) {
         st <- .Call(C_dag_new, ncol(dat))
         while (s1 > s0) {

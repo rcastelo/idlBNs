@@ -3,6 +3,7 @@
 #include <Rinternals.h>
 #include <R_ext/Lapack.h>
 #include "cache_key.h"
+#include "cache_ref.h"
 #include "nh_scores.h"
 
 /* prototypes */
@@ -152,13 +153,7 @@ C_iBGe_score(SEXP TN_R, SEXP pasets_R, SEXP awpN_R, SEXP gsP_R,
         error("C_iBGe_score: 'gsP' must be a numeric scalar");
 
     double gsP = REAL(gsP_R)[0];
-    int has_cache = (cached_scores_R != R_NilValue);
-
-    if (has_cache) {
-        if (TYPEOF(cached_scores_R) != VECSXP || LENGTH(cached_scores_R) != p)
-            error("C_iBGe_score: 'cached_scores' must be either NULL or a list of length %d",
-                  p);
-    }
+    idl_cache_ref cr = idl_cache_resolve(cached_scores_R, p, "C_iBGe_score");
     double total = 0.0;
 
     for (int i = 0; i < p; i++) {
@@ -169,15 +164,21 @@ C_iBGe_score(SEXP TN_R, SEXP pasets_R, SEXP awpN_R, SEXP gsP_R,
         const int *pa = INTEGER(pa_R);
         int lp = LENGTH(pa_R);
 
-        SEXP env = R_NilValue;
-        SEXP sym = R_NilValue;
         double s = 0.0;
         int found = 0;
 
-        if (has_cache) {
-            env = VECTOR_ELT(cached_scores_R, i);
-            found = cache_lookup(env, pa, lp, &sym, &s);
+        /* the cache is keyed on the ASCENDING parent set, while the score
+           itself is computed from 'pa' in its given order -- see
+           cached_node_score() in nh_scores.c for why that distinction
+           matters. p sorts per call is nothing here, unlike in the
+           neighbourhood driver where it would be p sorts per candidate. */
+        int *key = (int *) R_alloc((size_t) (lp > 0 ? lp : 1), sizeof(int));
+        if (lp > 0) {
+            memcpy(key, pa, (size_t) lp * sizeof(int));
+            qsort(key, (size_t) lp, sizeof(int), cmp_int);
         }
+        if (cr.kind != IDL_CACHE_NONE)
+            found = idl_cache_get(&cr, i, key, lp, &s);
 
         if (!found) {
             SEXP TNj_R = VECTOR_ELT(TN_R, i);
@@ -186,8 +187,8 @@ C_iBGe_score(SEXP TN_R, SEXP pasets_R, SEXP awpN_R, SEXP gsP_R,
             const double *scoreconstvec_i = REAL(VECTOR_ELT(scoreconstvec_R, i));
             s = iBGe_node_score(REAL(TNj_R), tp, pa, lp, i + 1, awpN_i, gsP,
                                scoreconstvec_i);
-            if (has_cache)
-                cache_store(env, sym, s);
+            if (cr.kind != IDL_CACHE_NONE)
+                idl_cache_put(&cr, i, key, lp, s);
         }
         total += s;
 

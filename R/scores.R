@@ -323,6 +323,15 @@ attr(iBIC, "global.sufstats.fun") <- .iBIC.global.sufstats
     if (is.null(cached.scores))
         return(invisible(NULL))
 
+    ## a compiled score cache, as the C search engine creates with
+    ## C_sccache_new(). The C side checks its own external-pointer tag and
+    ## that it was built for the right number of vertices, so there is
+    ## nothing useful to verify here -- and nothing to validate it AS, since
+    ## an external pointer is opaque from R. The documented
+    ## list-of-environments form is still handled below, unchanged.
+    if (typeof(cached.scores) == "externalptr")
+        return(invisible(NULL))
+
     ## fast path: skip the full O(p) validation below on repeat calls with
     ## the same cached.scores object, e.g. once per neighbor from inside
     ## hcmc()'s or hillclimbing()'s search loop, where the same

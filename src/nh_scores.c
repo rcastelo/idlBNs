@@ -1,6 +1,7 @@
 #include <R.h>
 #include <Rinternals.h>
 #include "cache_key.h"
+#include "cache_ref.h"
 #include "nh_scores.h"
 
 /*
@@ -49,25 +50,71 @@
  * bit-identical to the pre-delta-scoring code.
  */
 
-/* score one node with the parent set 'pa', going through the per-node
-   score cache when one was supplied */
+/*
+ * score one node, going through the per-vertex cache when there is one.
+ *
+ * TWO ARRAYS, and the difference between them is the whole subtlety of this
+ * cache. 'pa' is the parent set in INSERTION order and is what gets scored:
+ * the node score is a function of the parent SEQUENCE, because ZtZ is built
+ * with the columns in that order and a symmetrically permuted ZtZ Choleskys
+ * to a slightly different double. 'key' is the same set ASCENDING and is
+ * what the cache is keyed by.
+ *
+ * So the cached value for a set is whichever order-variant of it missed
+ * first, and the cache is part of the arithmetic rather than a transparent
+ * memo of it. Both cache backends key identically, which is what makes them
+ * store identical doubles given the same sequence of lookups.
+ */
 static double
-cached_node_score(node_score_fn fn, void *ctx, SEXP cached_scores_R,
-                  int node0, const int *pa, int lp) {
+cached_node_score(node_score_fn fn, void *ctx, idl_cache_ref *cr,
+                  int node0, const int *pa, int lp,
+                  const int *key, int klen) {
     double s;
 
-    if (cached_scores_R == R_NilValue)
+    if (cr->kind == IDL_CACHE_NONE)
         return fn(ctx, pa, lp, node0 + 1);
 
-    SEXP env = VECTOR_ELT(cached_scores_R, node0);
-    SEXP sym = R_NilValue;
-    if (cache_lookup(env, pa, lp, &sym, &s))
+    if (idl_cache_get(cr, node0, key, klen, &s))
         return s;
 
     s = fn(ctx, pa, lp, node0 + 1);
-    cache_store(env, sym, s);
+    idl_cache_put(cr, node0, key, klen, s);
 
     return s;
+}
+
+/* insert 'add1' into the ascending, duplicate-free 'key' -- the sorted
+   counterpart of paset_with(). O(k): a binary-searched position and one
+   copy, no sort. */
+static int
+key_with(const int *key, int klen, int add1, int *buf) {
+    int lo = 0, hi = klen;
+    while (lo < hi) {
+        int mid = lo + ((hi - lo) >> 1);
+        if (key[mid] < add1)
+            lo = mid + 1;
+        else
+            hi = mid;
+    }
+    for (int k = 0; k < lo; k++)
+        buf[k] = key[k];
+    buf[lo] = add1;
+    for (int k = lo; k < klen; k++)
+        buf[k + 1] = key[k];
+
+    return klen + 1;
+}
+
+/* drop 'drop1' from the ascending 'key' -- the sorted counterpart of
+   paset_without() */
+static int
+key_without(const int *key, int klen, int drop1, int *buf) {
+    int m = 0;
+    for (int k = 0; k < klen; k++)
+        if (key[k] != drop1)
+            buf[m++] = key[k];
+
+    return m;
 }
 
 /* copy pa[] into buf[] and append 'add1' (a 1-based vertex index),
@@ -141,10 +188,8 @@ nh_scores_driver(SEXP pasets_R, SEXP cached_scores_R, SEXP op_R, SEXP u_R,
 
     if (XLENGTH(u_R) != k || XLENGTH(v_R) != k)
         error("nh_scores_driver: 'op', 'u' and 'v' must have the same length");
-    if (cached_scores_R != R_NilValue &&
-        (TYPEOF(cached_scores_R) != VECSXP || LENGTH(cached_scores_R) != p))
-        error("nh_scores_driver: 'cached_scores' must be either NULL or a list of length %d",
-              p);
+    idl_cache_ref cr = idl_cache_resolve(cached_scores_R, p,
+                                        "nh_scores_driver");
 
     const int *op = INTEGER(op_R);
     const int *uu = INTEGER(u_R);
@@ -153,19 +198,45 @@ nh_scores_driver(SEXP pasets_R, SEXP cached_scores_R, SEXP op_R, SEXP u_R,
     SEXP res_R = PROTECT(allocVector(REALSXP, k));
     double *res = REAL(res_R);
 
-    /* per-vertex terms of the current DAG, and their sum in vertex order */
     void *vmax0 = vmaxget();
+
+    /* the ascending form of every parent set, built once here into a flat
+       arena, so that each candidate's cache key can be derived in O(k) by
+       key_with()/key_without() instead of sorting per lookup -- which is
+       what build_cache_key() had to do on every single call */
+    size_t tot = 0;
+    for (int i = 0; i < p; i++)
+        tot += (size_t) LENGTH(VECTOR_ELT(pasets_R, i));
+    int *sarena = (int *) R_alloc(tot + 1, sizeof(int));
+    int *soff = (int *) R_alloc((size_t) p, sizeof(int));
+    {
+        size_t at = 0;
+        for (int i = 0; i < p; i++) {
+            SEXP pa_R = VECTOR_ELT(pasets_R, i);
+            int lp = LENGTH(pa_R);
+            soff[i] = (int) at;
+            if (lp > 0) {
+                memcpy(sarena + at, INTEGER(pa_R), (size_t) lp * sizeof(int));
+                qsort(sarena + at, (size_t) lp, sizeof(int), cmp_int);
+            }
+            at += (size_t) lp;
+        }
+    }
+
+    /* per-vertex terms of the current DAG, and their sum in vertex order */
     double *base = (double *) R_alloc((size_t) p, sizeof(double));
     for (int i = 0; i < p; i++) {
         void *vmax = vmaxget();
         SEXP pa_R = VECTOR_ELT(pasets_R, i);
-        base[i] = cached_node_score(fn, ctx, cached_scores_R, i,
-                                    INTEGER(pa_R), LENGTH(pa_R));
+        base[i] = cached_node_score(fn, ctx, &cr, i,
+                                    INTEGER(pa_R), LENGTH(pa_R),
+                                    sarena + soff[i], LENGTH(pa_R));
         vmaxset(vmax);
     }
-    /* scratch for one modified parent set; a vertex can gain at most one
-       parent over its current set, so p ints always suffice */
+    /* scratch for one modified parent set, and for its sorted key; a vertex
+       can gain at most one parent over its current set, so p ints suffice */
     int *buf = (int *) R_alloc((size_t) p, sizeof(int));
+    int *kbuf = (int *) R_alloc((size_t) p, sizeof(int));
 
     for (R_xlen_t m = 0; m < k; m++) {
         void *vmax = vmaxget();
@@ -185,22 +256,27 @@ nh_scores_driver(SEXP pasets_R, SEXP cached_scores_R, SEXP op_R, SEXP u_R,
         switch (op[m]) {
         case IDLBNS_OP_ADD:
             lp = paset_with(pav, lpv, uu[m], buf);
-            s = cached_node_score(fn, ctx, cached_scores_R, v0, buf, lp);
+            key_with(sarena + soff[v0], lpv, uu[m], kbuf);
+            s = cached_node_score(fn, ctx, &cr, v0, buf, lp, kbuf, lp);
             res[m] = total_with(base, p, v0, s, -1, 0.0);
             break;
         case IDLBNS_OP_REMOVE:
             lp = paset_without(pav, lpv, uu[m], buf);
-            s = cached_node_score(fn, ctx, cached_scores_R, v0, buf, lp);
+            key_without(sarena + soff[v0], lpv, uu[m], kbuf);
+            s = cached_node_score(fn, ctx, &cr, v0, buf, lp, kbuf, lp);
             res[m] = total_with(base, p, v0, s, -1, 0.0);
             break;
         case IDLBNS_OP_REVERSE: {
+            /* the head first, then the tail: the cache is order sensitive,
+               so the sequence of lookups is part of the contract */
             lp = paset_without(pav, lpv, uu[m], buf);
-            double sv = cached_node_score(fn, ctx, cached_scores_R, v0, buf,
-                                          lp);
+            key_without(sarena + soff[v0], lpv, uu[m], kbuf);
+            double sv = cached_node_score(fn, ctx, &cr, v0, buf, lp, kbuf, lp);
             SEXP pau_R = VECTOR_ELT(pasets_R, u0);
-            lp = paset_with(INTEGER(pau_R), LENGTH(pau_R), vv[m], buf);
-            double su = cached_node_score(fn, ctx, cached_scores_R, u0, buf,
-                                          lp);
+            int lpu = LENGTH(pau_R);
+            lp = paset_with(INTEGER(pau_R), lpu, vv[m], buf);
+            key_with(sarena + soff[u0], lpu, vv[m], kbuf);
+            double su = cached_node_score(fn, ctx, &cr, u0, buf, lp, kbuf, lp);
             res[m] = total_with(base, p, v0, sv, u0, su);
             break;
         }
