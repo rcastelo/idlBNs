@@ -12,50 +12,6 @@ iBIC_node_score(const double* Sj, int p1, const int* pa, int lp, int node,
                 double Nj, double n);
 
 /*
- * C_iBIC_node_score
- *
- * Computes the iBIC score contribution for one node, replicating the inner
- * body of the iBIC() R loop using LAPACK Cholesky + triangular solve. This
- * is an R-facing API C wrapper for the iBIC_node_score() function, which does
- * the actual computation.
- *
- * Arguments
- * ---------
- * Sj_R    REALSXP  the (p+1)x(p+1) sufficient-statistics matrix S[[i]],
- *                  stored in column-major order (as R matrices always are)
- * pa_R    INTSXP   parent variable indices, 1-based (may be length 0)
- * node_R  INTSXP   scalar: the R loop variable i (1-based, range 1..p)
- *                  NOTE: the 0-based column of the response in S is node_C=i,
- *                  not i-1, because R accesses S at column i+1 (1-based) which
- *                  is column i in 0-based indexing
- * Nj_R    REALSXP  scalar: number of non-intervened observations for this node
- * n_R     REALSXP  scalar: total observation count n (used to compute lambda)
- *
- * Returns a length-1 REALSXP containing the node score s.
- */
-SEXP
-C_iBIC_node_score(SEXP Sj_R, SEXP pa_R, SEXP node_R, SEXP Nj_R, SEXP n_R) {
-    /* dimensions */
-    int p1     = (int)sqrt((double)LENGTH(Sj_R)); /* p+1, dim of square S     */
-    int lp     = LENGTH(pa_R);                    /* number of parents        */
-    int node_C = INTEGER(node_R)[0];              /* 0-based response column  */
-    double Nj  = REAL(Nj_R)[0];
-    double n   = REAL(n_R)[0];
-
-    const double* Sj = REAL(Sj_R);
-    const int*    pa = INTEGER(pa_R);
-
-    double s = iBIC_node_score(Sj, p1, pa, lp, node_C, Nj, n);
-
-    /* return as length-1 numeric vector */
-    SEXP result = PROTECT(allocVector(REALSXP, 1));
-    REAL(result)[0] = s;
-    UNPROTECT(1);
-
-    return result;
-}
-
-/*
  * iBIC_node_score
  *
  * Computes the iBIC score contribution for one node, replicating the inner
@@ -63,19 +19,19 @@ C_iBIC_node_score(SEXP Sj_R, SEXP pa_R, SEXP node_R, SEXP Nj_R, SEXP n_R) {
  *
  * Arguments
  * ---------
- * Sj      double* the (p+1)x(p+1) sufficient-statistics matrix S[[i]],
+ * Sj      double*  the (p+1)x(p+1) sufficient-statistics matrix S[[i]],
  *                  stored in column-major order (as R matrices always are)
  * p1      int      p+1, dim of square S
- * pa      INTSXP   parent variable indices, 1-based (may be length 0)
+ * pa      int*     parent variable indices, 1-based (may be length 0)
  * lp      int      number of parents
- * node    int      scalar: the R loop variable i (1-based, range 1..p)
+ * node    int      the R loop variable i (1-based, range 1..p)
  *                  NOTE: the 0-based column of the response in S is node=i,
  *                  not i-1, because R accesses S at column i+1 (1-based) which
  *                  is column i in 0-based indexing
- * Nj      REALSXP  scalar: number of non-intervened observations for this node
- * n       REALSXP  scalar: total observation count n (used to compute lambda)
+ * Nj      double   number of non-intervened observations for this node
+ * n       double   total observation count n (used to compute lambda)
  *
- * Returns a length-1 REALSXP containing the node score s.
+ * Returns the node score s.
  */
 double
 iBIC_node_score(const double* Sj, int p1, const int* pa, int lp, int node,

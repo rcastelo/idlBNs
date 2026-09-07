@@ -3,13 +3,7 @@
 #include <R_ext/Rdynload.h>
 
 extern SEXP
-C_iBIC_node_score(SEXP, SEXP, SEXP, SEXP, SEXP);
-
-extern SEXP
 C_iBIC_score(SEXP, SEXP, SEXP, SEXP, SEXP);
-
-extern SEXP
-C_iBGe_node_score(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
 
 extern SEXP
 C_iBGe_score(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
@@ -23,9 +17,7 @@ C_iBGe_nh_scores(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
 /* registration of C-entry points */
 
 static const R_CallMethodDef CallEntries[] = {
-    {"C_iBIC_node_score", (DL_FUNC) &C_iBIC_node_score, 5},
     {"C_iBIC_score",      (DL_FUNC) &C_iBIC_score,      5},
-    {"C_iBGe_node_score", (DL_FUNC) &C_iBGe_node_score, 6},
     {"C_iBGe_score",      (DL_FUNC) &C_iBGe_score,      6},
     {"C_iBIC_nh_scores",  (DL_FUNC) &C_iBIC_nh_scores,  8},
     {"C_iBGe_nh_scores",  (DL_FUNC) &C_iBGe_nh_scores,  9},

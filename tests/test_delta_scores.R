@@ -57,6 +57,18 @@ for (p in c(5, 8, 12)) {
     for (sf in list(iBIC, iBGe)) {
       nh.scores.fun <- attr(sf, "nh.scores.fun")
       stopifnot(is.function(nh.scores.fun))
+      ## the same scorer reached through the package namespace rather than
+      ## through the attribute. the two are the same function, but a search
+      ## only ever reaches it the attribute way, and an attribute captured
+      ## its closure when the package was built -- so a tool that rewrites
+      ## the namespace binding afterwards (covr, trace(), debug()) never
+      ## sees the attribute copy run. calling both here keeps the wrapper
+      ## honestly exercised whichever way it is reached, and pins the
+      ## attribute to the function it is supposed to name.
+      direct <- switch(attr(sf, "scorefun.name"),
+                       iBIC=idlBNs:::.iBIC.nh.scores,
+                       iBGe=idlBNs:::.iBGe.nh.scores)
+      stopifnot(is.function(direct))
       for (tgt in list(list(targets=list(integer(0)),
                             target.index=rep(1L, n)),
                        list(targets=list(integer(0), utargets),
@@ -71,6 +83,13 @@ for (p in c(5, 8, 12)) {
               cs <- lapply(seq_len(p),
                            function(i) new.env(hash=TRUE, parent=emptyenv()))
             got <- nh.scores.fun(ne$op, ne$u, ne$v, pasets, gs, cs)
+            ## reaching the scorer either way must give the same answer
+            cs2 <- NULL
+            if (usecache)
+              cs2 <- lapply(seq_len(p),
+                            function(i) new.env(hash=TRUE, parent=emptyenv()))
+            stopifnot(identical(got,
+                                direct(ne$op, ne$u, ne$v, pasets, gs, cs2)))
 
             ## reference: score each candidate by summing all p vertex terms
             ref <- vapply(seq_along(ne$op), function(m) {
