@@ -244,15 +244,22 @@ attr(iBIC, "nh.scores.fun") <- .iBIC.nh.scores
 ## 'verify' scores every candidate exactly as well and checks the band
 ## against it; it is O(p * |NH|) and exists for tests/test_c_band.R and the
 ## idlBNs.debug.band option.
+##
+## 'stamp' is the DAG's per-vertex parent-set version vector. When it is
+## supplied together with a compiled cache, additions -- about 99% of the
+## candidates -- are served from a memo keyed on (u, v) and validated by one
+## integer compare against stamp[v], which is what removes the hash lookup
+## from the hot path. Without it the memo stays off and every candidate goes
+## through the cache.
 .iBIC.nh.argmax <- function(op, u, v, pasets, global.sufstats, cached.scores,
-                            verify=FALSE)
+                            verify=FALSE, stamp=NULL)
     .Call(C_iBIC_nh_argmax,
           global.sufstats$S,
           pasets,
           as.double(global.sufstats$data.count),
           as.double(global.sufstats$n),
           cached.scores,
-          op, u, v, verify)
+          op, u, v, stamp, verify)
 
 attr(iBIC, "nh.argmax.fun") <- .iBIC.nh.argmax
 
@@ -605,7 +612,7 @@ attr(iBGe, "nh.scores.fun") <- .iBGe.nh.scores
 ## find the best candidate move in a neighbourhood -- see
 ## .iBIC.nh.argmax() for the rationale
 .iBGe.nh.argmax <- function(op, u, v, pasets, global.sufstats, cached.scores,
-                            verify=FALSE)
+                            verify=FALSE, stamp=NULL)
     .Call(C_iBGe_nh_argmax,
           global.sufstats$TN,
           pasets,
@@ -613,7 +620,7 @@ attr(iBGe, "nh.scores.fun") <- .iBGe.nh.scores
           as.double(global.sufstats$p),
           global.sufstats$scoreconstvec,
           cached.scores,
-          op, u, v, verify)
+          op, u, v, stamp, verify)
 
 attr(iBGe, "nh.argmax.fun") <- .iBGe.nh.argmax
 

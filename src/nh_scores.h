@@ -45,6 +45,7 @@ nh_scores_driver(SEXP pasets_R, SEXP cached_scores_R, SEXP op_R, SEXP u_R,
  */
 SEXP
 nh_argmax_driver(SEXP pasets_R, SEXP cached_scores_R, SEXP op_R, SEXP u_R,
-                 SEXP v_R, int verify, node_score_fn fn, void *ctx);
+                 SEXP v_R, SEXP stamp_R, int verify, node_score_fn fn,
+                 void *ctx);
 
 #endif /* IDLBNS_NH_SCORES_H */

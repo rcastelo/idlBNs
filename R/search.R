@@ -660,7 +660,7 @@ hillclimbing <- function(dat, targets=list(integer(0)),
             ## be the maximum rather than for all O(p^2) of them
             am <- nh.argmax.fun(ne$op, vidx.nodes[ne$u], vidx.nodes[ne$v],
                                 pasets, global.sufstats, cached.scores,
-                                verify.band)
+                                verify.band, .Call(C_dag_pastamp, st))
             b <- am$index
             .Call(C_dag_apply_move, st, ne$op[b], ne$u[b], ne$v[b])
             s1 <- am$total

@@ -121,6 +121,7 @@ idl_dag_free(idl_dag *d) {
     R_Free(d->sc_delta); R_Free(d->sc_set); R_Free(d->sc_ancsave);
     R_Free(d->sc_a); R_Free(d->sc_b); R_Free(d->sc_order);
     R_Free(d->sc_indeg); R_Free(d->sc_queue); R_Free(d->sc_inD);
+    R_Free(d->pav_stamp);
     R_Free(d);
 }
 
@@ -162,6 +163,9 @@ idl_dag_init(idl_dag *d) {
     d->sc_indeg = R_Calloc((size_t) p, int);
     d->sc_queue = R_Calloc((size_t) p, int);
     d->sc_inD   = R_Calloc((size_t) p, int);
+    d->pav_stamp = R_Calloc((size_t) p, int);
+    for (int i = 0; i < p; i++)
+        d->pav_stamp[i] = 1;         /* 0 is the "never computed" sentinel */
 
     for (int i = 0; i < p; i++) {
         ivec_init(&d->pa[i], 4);
@@ -218,6 +222,7 @@ link_edge(idl_dag *d, int u, int v) {
 
     ivec_push(&d->pa[v], u);              /* INSERTION order  */
     ivec_insert_sorted(&d->pas[v], u);    /* ascending mirror */
+    d->pav_stamp[v]++;                    /* pa(v) changed    */
     ivec_push(&d->ch[u], v);              /* edgeL order      */
     idl_bs_set(d->pab + (size_t) v * d->W, u);
     idl_bs_set(d->adj + (size_t) u * d->W, v);
@@ -228,6 +233,7 @@ static void
 unlink_edge(idl_dag *d, int u, int v) {
     ivec_erase(&d->pa[v], u);
     ivec_erase(&d->pas[v], u);
+    d->pav_stamp[v]++;                    /* pa(v) changed    */
     ivec_erase(&d->ch[u], v);
     idl_bs_clear(d->pab + (size_t) v * d->W, u);
     idl_bs_clear(d->adj + (size_t) u * d->W, v);

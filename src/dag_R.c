@@ -208,6 +208,21 @@ C_dag_edgeM(SEXP st) {
     return ans;
 }
 
+/*
+ * The per-vertex parent-set version stamps, so a caller can memoise things
+ * that depend only on a vertex's parent set and detect staleness with one
+ * integer compare. Used by the addition memo in nh_scores.c.
+ */
+SEXP
+C_dag_pastamp(SEXP st) {
+    idl_dag *d = idlBNs_dag_from_extptr(st);
+    SEXP ans = PROTECT(allocVector(INTSXP, d->p));
+    memcpy(INTEGER(ans), d->pav_stamp, (size_t) d->p * sizeof(int));
+    UNPROTECT(1);
+
+    return ans;
+}
+
 SEXP
 C_dag_nedges(SEXP st) {
     idl_dag *d = idlBNs_dag_from_extptr(st);

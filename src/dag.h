@@ -72,6 +72,15 @@ typedef struct idl_dag {
     idl_word *anc;            /* p * W: anc + v * W = ancestors of v       */
     idl_word *desc;           /* p * W: desc + v * W = descendants of v    */
 
+    /*
+     * pav_stamp[v] is bumped every time pa(v) changes, starting at 1. It
+     * lets a caller memoise anything that is a function of a vertex's parent
+     * set and recognise a stale entry with one integer compare -- no
+     * invalidation sweep, and no need for the DAG to know what is being
+     * memoised. See the addition memo in nh_scores.c.
+     */
+    int      *pav_stamp;
+
     /* scratch, sized once at construction and reused by every mutation */
     idl_word *sc_delta;       /* W                                         */
     idl_word *sc_set;         /* W                                         */

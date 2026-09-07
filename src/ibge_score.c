@@ -292,7 +292,7 @@ C_iBGe_nh_scores(SEXP TN_R, SEXP pasets_R, SEXP awpN_R, SEXP gsP_R,
 SEXP
 C_iBGe_nh_argmax(SEXP TN_R, SEXP pasets_R, SEXP awpN_R, SEXP gsP_R,
                   SEXP scoreconstvec_R, SEXP cached_scores_R, SEXP op_R,
-                  SEXP u_R, SEXP v_R, SEXP verify_R) {
+                  SEXP u_R, SEXP v_R, SEXP stamp_R, SEXP verify_R) {
     if (TYPEOF(pasets_R) != VECSXP)
         error("C_iBGe_nh_argmax: 'pasets' must be a list");
 
@@ -303,5 +303,5 @@ C_iBGe_nh_argmax(SEXP TN_R, SEXP pasets_R, SEXP awpN_R, SEXP gsP_R,
     ctx.gsP             = REAL(gsP_R)[0];
 
     return nh_argmax_driver(pasets_R, cached_scores_R, op_R, u_R, v_R,
-                            asLogical(verify_R) == TRUE, iBGe_node_score_thunk, &ctx);
+                            stamp_R, asLogical(verify_R) == TRUE, iBGe_node_score_thunk, &ctx);
 }

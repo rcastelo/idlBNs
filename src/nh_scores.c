@@ -433,7 +433,8 @@ idl_gamma(double n) {
 
 SEXP
 nh_argmax_driver(SEXP pasets_R, SEXP cached_scores_R, SEXP op_R, SEXP u_R,
-                 SEXP v_R, int verify, node_score_fn fn, void *ctx) {
+                 SEXP v_R, SEXP stamp_R, int verify, node_score_fn fn,
+                 void *ctx) {
     if (TYPEOF(pasets_R) != VECSXP)
         error("nh_argmax_driver: 'pasets' must be a list");
     if (TYPEOF(op_R) != INTSXP || TYPEOF(u_R) != INTSXP ||
@@ -449,6 +450,26 @@ nh_argmax_driver(SEXP pasets_R, SEXP cached_scores_R, SEXP op_R, SEXP u_R,
         error("nh_argmax_driver: the neighbourhood is empty");
     idl_cache_ref cr = idl_cache_resolve(cached_scores_R, p,
                                         "nh_argmax_driver");
+
+    /*
+     * The addition memo is used only when the caller supplies the DAG's
+     * per-vertex parent-set stamps AND there is a compiled cache to hold it.
+     * Without stamps there is no way to tell a stale entry from a fresh one,
+     * so the memo stays off and every candidate goes through the cache --
+     * which is what direct callers and the differential tests do.
+     */
+    const int *stamp = NULL;
+    idl_sc_cache *memo = NULL;
+    if (stamp_R != R_NilValue) {
+        if (TYPEOF(stamp_R) != INTSXP || LENGTH(stamp_R) != p)
+            error("nh_argmax_driver: 'stamp' must be NULL or an integer vector of length %d",
+                  p);
+        if (cr.kind == IDL_CACHE_HASH) {
+            stamp = INTEGER(stamp_R);
+            memo = cr.hash;
+            idl_sc_memo_enable(memo);
+        }
+    }
 
     const int *op = INTEGER(op_R);
     const int *uu = INTEGER(u_R);
@@ -503,95 +524,135 @@ nh_argmax_driver(SEXP pasets_R, SEXP cached_scores_R, SEXP op_R, SEXP u_R,
     cc.sarena = sarena; cc.soff = soff; cc.buf = buf; cc.kbuf = kbuf;
     cc.p = p;
 
-    double *est = (double *) R_alloc((size_t) k, sizeof(double));
-    double *lo  = (double *) R_alloc((size_t) k, sizeof(double));
-    double *hi  = (double *) R_alloc((size_t) k, sizeof(double));
-    int *c1 = (int *) R_alloc((size_t) k, sizeof(int));
-    int *c2 = (int *) R_alloc((size_t) k, sizeof(int));
-    double *s1 = (double *) R_alloc((size_t) k, sizeof(double));
-    double *s2 = (double *) R_alloc((size_t) k, sizeof(double));
+    /*
+     * MEMORY TRAFFIC. An earlier version of this kept est, lo, hi, s1, s2,
+     * c1 and c2 for every candidate -- 48 bytes each, 7.5 MB per call at
+     * p = 400 -- when pass 2 needs the per-candidate terms only for the
+     * BAND, which is normally a single candidate. So pass 1 now keeps just
+     * one array, the upper interval end, and pass 2 re-scores the handful of
+     * band members.
+     *
+     * Re-scoring is contents-neutral for the cache: the keys are the ones
+     * pass 1 just looked up, so every one of them is a hit, and a hit
+     * neither stores anything nor changes what is stored. It costs a few
+     * extra lookups against 6 MB less memory written per call.
+     */
+    double *hi = (double *) R_alloc((size_t) k, sizeof(double));
+    /* est is needed only to check the bound in verify mode */
+    double *est = verify
+        ? (double *) R_alloc((size_t) k, sizeof(double))
+        : NULL;
 
     double Ap = absA * (1.0 + 2.0 * (double) p * IDL_UROUND);
     double gam = idl_gamma((double) (p > 1 ? p - 1 : 1));
     int all_finite = finite_base;
+    double M = R_NegInf;
 
-    /* pass 1: score every candidate (same lookups, same order as the exact
-       driver) and bound its estimate */
+    /* pass 1: score every candidate -- the same lookups, in the same order,
+       as the exact driver issues -- and bound its estimate */
     for (R_xlen_t m = 0; m < k; m++) {
-        void *vm = vmaxget();
-        idl_cand c = score_candidate(&cc, op[m], uu[m], vv[m]);
-        vmaxset(vm);
+        double d1, d2 = 0.0;
 
-        c1[m] = c.c1; s1[m] = c.s1;
-        c2[m] = c.c2; s2[m] = c.s2;
-
-        double e1 = base[c.c1];
-        double d1 = c.s1 - e1;
-        double d2 = 0.0, e2 = 0.0;
-        if (c.c2 >= 0) {
-            e2 = base[c.c2];
-            d2 = c.s2 - e2;
+        if (memo != NULL && op[m] == IDLBNS_OP_ADD) {
+            /* additions are ~99% of the candidates, and an addition's delta
+               is a function of pa(v) alone -- through both s(v, pa(v) + u)
+               and base[v] -- so one stamp compare decides validity */
+            size_t slot = (size_t) (uu[m] - 1) * (size_t) p
+                          + (size_t) (vv[m] - 1);
+            if (memo->add_st[slot] == stamp[vv[m] - 1]) {
+                d1 = memo->add_d[slot];
+                memo->memo_hits++;
+            } else {
+                void *vm = vmaxget();
+                idl_cand c = score_candidate(&cc, op[m], uu[m], vv[m]);
+                vmaxset(vm);
+                d1 = c.s1 - base[c.c1];
+                memo->add_d[slot] = d1;
+                memo->add_st[slot] = stamp[vv[m] - 1];
+                memo->memo_misses++;
+            }
+        } else {
+            void *vm = vmaxget();
+            idl_cand c = score_candidate(&cc, op[m], uu[m], vv[m]);
+            vmaxset(vm);
+            d1 = c.s1 - base[c.c1];
+            if (c.c2 >= 0)
+                d2 = c.s2 - base[c.c2];
         }
-        double d = d1 + d2;
-        est[m] = total + d;
 
-        double Am = Ap - fabs(e1) + fabs(c.s1);
-        if (c.c2 >= 0)
-            Am += fabs(c.s2) - fabs(e2);
+        double em = total + (d1 + d2);
+
+        /*
+         * The magnitude bound uses |e| + |d| in place of |s|, which is valid
+         * by the triangle inequality since s = e + d, and lets the bound be
+         * computed from the delta alone -- a memo hit never reconstructs s.
+         * It is marginally looser, so the band may be a candidate or two
+         * wider; that cannot change the answer, because the true maximum is
+         * inside either way and pass 2 takes the first candidate attaining
+         * it in ascending order.
+         */
+        double Am = Ap + fabs(d1) + fabs(d2);
         Am += 4.0 * IDL_UROUND * Ap;
 
         double B = gam * (Am + Ap) + 2.0 * IDL_UROUND * (fabs(d1) + fabs(d2))
-                   + IDL_UROUND * fabs(est[m]);
+                   + IDL_UROUND * fabs(em);
         double w = IDL_SAFETY * B;
-        lo[m] = nextafter(est[m] - w, R_NegInf);
-        hi[m] = nextafter(est[m] + w, R_PosInf);
 
-        if (!R_FINITE(est[m]) || !R_FINITE(B))
+        /*
+         * The interval ends are formed without nextafter(), which is a libm
+         * call and was measurable at this candidate count. Rounding them to
+         * nearest is safe because SAFETY = 4 leaves room: B already
+         * contains the term u*|est|, so the rounding error in forming
+         * est +/- w is at most about u*|est| <= B = w/4. Hence the computed
+         * hi is at least est + 0.75w, comfortably above the est + B the
+         * proof needs, and the computed lo is at most est - 0.75w, which
+         * only ever makes M smaller and the band larger.
+         */
+        hi[m] = em + w;
+        double lom = em - w;
+        if (lom > M)
+            M = lom;
+        if (verify)
+            est[m] = em;
+
+        if (!R_FINITE(em) || !R_FINITE(B))
             all_finite = 0;
     }
 
     /* if anything is non-finite the interval arithmetic is meaningless, so
-       fall back to scoring every candidate exactly. unreachable in practice
-       -- the node score functions error on a failed Cholesky rather than
-       returning a NaN -- but a two-line guard against a silent wrong answer
-       is worth having */
+       score every candidate exactly instead. unreachable in practice -- the
+       node score functions error on a failed Cholesky rather than returning
+       a NaN -- but a guard against a silent wrong answer is worth having */
     R_xlen_t bidx = 0;
     double btot = 0.0;
     R_xlen_t nband = 0;
     double worst = 0.0;
+    int first = 1;
 
-    if (!all_finite) {
-        for (R_xlen_t m = 0; m < k; m++) {
-            double t = total_with(base, p, c1[m], s1[m], c2[m], s2[m]);
-            if (m == 0 || t > btot) { btot = t; bidx = m; }
-        }
-        nband = k;
-    } else {
-        double M = lo[0];
-        for (R_xlen_t m = 1; m < k; m++)
-            if (lo[m] > M)
-                M = lo[m];
-
-        int first = 1;
-        for (R_xlen_t m = 0; m < k; m++) {
-            if (hi[m] < M)
-                continue;                       /* provably not the maximum */
-            nband++;
-            double t = total_with(base, p, c1[m], s1[m], c2[m], s2[m]);
-            /* ascending m with a strict '>' is what reproduces which.max() */
-            if (first || t > btot) { btot = t; bidx = m; first = 0; }
-        }
-        if (first)                              /* cannot happen: M = lo[j]
-                                                   implies hi[j] >= M */
-            error("nh_argmax_driver: the candidate band came out empty");
+    for (R_xlen_t m = 0; m < k; m++) {
+        if (all_finite && hi[m] < M)
+            continue;                           /* provably not the maximum */
+        void *vm = vmaxget();
+        idl_cand c = score_candidate(&cc, op[m], uu[m], vv[m]);
+        vmaxset(vm);
+        double t = total_with(base, p, c.c1, c.s1, c.c2, c.s2);
+        nband++;
+        /* ascending m with a strict '>' is what reproduces which.max() */
+        if (first || t > btot) { btot = t; bidx = m; first = 0; }
     }
+    if (first)                                  /* cannot happen: M = lo[j]
+                                                   implies hi[j] >= M */
+        error("nh_argmax_driver: the candidate band came out empty");
 
     /* verify mode: score every candidate exactly and check the band */
     if (verify) {
         double bestt = 0.0;
         R_xlen_t besti = 0;
         for (R_xlen_t m = 0; m < k; m++) {
-            double t = total_with(base, p, c1[m], s1[m], c2[m], s2[m]);
+            void *vm = vmaxget();
+            idl_cand c = score_candidate(&cc, op[m], uu[m], vv[m]);
+            vmaxset(vm);
+            double t = total_with(base, p, c.c1, c.s1, c.c2, c.s2);
             if (m == 0 || t > bestt) { bestt = t; besti = m; }
             if (all_finite) {
                 double B = (hi[m] - est[m]) / IDL_SAFETY;

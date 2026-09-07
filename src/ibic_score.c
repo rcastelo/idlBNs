@@ -256,7 +256,7 @@ C_iBIC_nh_scores(SEXP S_R, SEXP pasets_R, SEXP data_count_R, SEXP n_R,
 SEXP
 C_iBIC_nh_argmax(SEXP S_R, SEXP pasets_R, SEXP data_count_R, SEXP n_R,
                   SEXP cached_scores_R, SEXP op_R, SEXP u_R, SEXP v_R,
-                  SEXP verify_R) {
+                  SEXP stamp_R, SEXP verify_R) {
     if (TYPEOF(pasets_R) != VECSXP)
         error("C_iBIC_nh_argmax: 'pasets' must be a list");
 
@@ -266,5 +266,5 @@ C_iBIC_nh_argmax(SEXP S_R, SEXP pasets_R, SEXP data_count_R, SEXP n_R,
     ctx.n          = REAL(n_R)[0];
 
     return nh_argmax_driver(pasets_R, cached_scores_R, op_R, u_R, v_R,
-                            asLogical(verify_R) == TRUE, iBIC_node_score_thunk, &ctx);
+                            stamp_R, asLogical(verify_R) == TRUE, iBIC_node_score_thunk, &ctx);
 }

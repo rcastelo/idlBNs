@@ -75,6 +75,15 @@ idl_sc_init(idl_sc_cache *c) {
 }
 
 void
+idl_sc_memo_enable(idl_sc_cache *c) {
+    if (c->add_d != NULL)
+        return;
+    size_t n = (size_t) c->p * (size_t) c->p;
+    c->add_d = R_Calloc(n, double);
+    c->add_st = R_Calloc(n, int);       /* 0 = never computed */
+}
+
+void
 idl_sc_free(idl_sc_cache *c) {
     if (c == NULL)
         return;
@@ -83,6 +92,8 @@ idl_sc_free(idl_sc_cache *c) {
             R_Free(c->tab[i].slot);
     R_Free(c->tab);
     R_Free(c->arena);
+    R_Free(c->add_d);
+    R_Free(c->add_st);
     R_Free(c);
 }
 
@@ -270,8 +281,8 @@ C_sccache_dump(SEXP st) {
 SEXP
 C_sccache_stats(SEXP st) {
     idl_sc_cache *c = sccache_from_extptr(st);
-    SEXP ans = PROTECT(allocVector(REALSXP, 4));
-    SEXP nm = PROTECT(allocVector(STRSXP, 4));
+    SEXP ans = PROTECT(allocVector(REALSXP, 6));
+    SEXP nm = PROTECT(allocVector(STRSXP, 6));
     uint64_t entries = 0;
     for (int i = 0; i < c->p; i++)
         entries += c->tab[i].n;
@@ -279,10 +290,14 @@ C_sccache_stats(SEXP st) {
     REAL(ans)[1] = (double) c->misses;
     REAL(ans)[2] = (double) c->probes;
     REAL(ans)[3] = (double) entries;
+    REAL(ans)[4] = (double) c->memo_hits;
+    REAL(ans)[5] = (double) c->memo_misses;
     SET_STRING_ELT(nm, 0, mkChar("hits"));
     SET_STRING_ELT(nm, 1, mkChar("misses"));
     SET_STRING_ELT(nm, 2, mkChar("probes"));
     SET_STRING_ELT(nm, 3, mkChar("entries"));
+    SET_STRING_ELT(nm, 4, mkChar("memo.hits"));
+    SET_STRING_ELT(nm, 5, mkChar("memo.misses"));
     setAttrib(ans, R_NamesSymbol, nm);
     UNPROTECT(2);
 

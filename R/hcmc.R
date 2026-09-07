@@ -230,7 +230,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
             ## be the maximum rather than for all O(p^2) of them
             am <- nh.argmax.fun(ne$op, vidx.nodes[ne$u], vidx.nodes[ne$v],
                                 pasets, global.sufstats, cached.scores,
-                                verify.band)
+                                verify.band, .Call(C_dag_pastamp, st))
             b <- am$index
             s1 <- am$total
             local_maximum <- s1 <= s0
