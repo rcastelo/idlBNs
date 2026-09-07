@@ -276,11 +276,22 @@ ncr.nh <- function(dag, anc, utargets=integer(0)) {
 ## apply a move's parent-set delta to 'pasets'. 'pu'/'pv' are the move's
 ## endpoints already translated to the dat-column indices 'pasets' is keyed
 ## by (see vidx.nodes in hcmc()/hillclimbing()).
+
+#' @importFrom cli cli_abort
 move.pasets <- function(pasets, op, pu, pv) {
-    switch(op,
-           add.pasets(pasets, pu, pv),
-           remove.pasets(pasets, pu, pv),
-           reverse.pasets(pasets, pu, pv))
+    if (length(op) != 1L || is.na(op))
+        cli_abort(c=("move.pasets: unknown operation code {op}"))
+    
+    if (op == OP.ADD)
+        return(add.pasets(pasets, pu, pv))
+
+    if (op == OP.REMOVE)
+        return(remove.pasets(pasets, pu, pv))
+
+    if (op == OP.REVERSE)
+        return(reverse.pasets(pasets, pu, pv))
+
+    cli_abort(c=("move.pasets: unknown operation code {op}"))
 }
 
 ## score every candidate move of a neighborhood 'ne' against the DAG it was
