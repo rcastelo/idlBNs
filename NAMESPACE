@@ -5,7 +5,6 @@ export(hillclimbing)
 export(iBGe)
 export(iBIC)
 importClassesFrom(graph,graphNEL)
-importFrom(RBGL,tsort)
 importFrom(cli,
   cli_abort,
   cli_alert_info,
@@ -32,4 +31,5 @@ importFrom(stats,
   cov.wt,
   setNames
 )
+importFrom(utils,installed.packages)
 useDynLib(idlBNs, .registration=TRUE)

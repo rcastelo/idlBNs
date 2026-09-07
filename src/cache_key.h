@@ -44,7 +44,7 @@ build_cache_key(const int *pa, int lp) {
         return buf; 
     }
 
-    int *sorted = (int *) R_alloc(lp, sizeof(int));
+    int *sorted = (int *) R_alloc((size_t) lp, sizeof(int));
     memcpy(sorted, pa, (size_t) lp * sizeof(int));
     qsort(sorted, lp, sizeof(int), cmp_int);
 

@@ -1,2 +1,38 @@
-PKG_CFLAGS = @CFLAGS@
+## LAPACK is called from C in ibic_score.c and ibge_score.c (dpotrf, dtrtrs),
+## so the package must link R's LAPACK and BLAS. $(LAPACK_LIBS),
+## $(BLAS_LIBS) and $(FLIBS) come from R's etc/Makeconf.
+##
+## WHY THIS MATTERS, and why the file is a .in with a configure script.
+##
+## This file used to exist WITHOUT a configure script, which meant R never
+## read it: nothing substituted it into src/Makevars, so PKG_LIBS was never
+## applied and dpotrf_/dtrtrs_ were left as undefined symbols in idlBNs.so,
+## to be resolved from whatever happened to be loaded in the process. On
+## macOS that turned out to be Apple's Accelerate framework -- confirmed
+## with dladdr() -- and not R's own libRlapack, even though R itself uses
+## libRlapack. The two do not agree: over 400 random Cholesky
+## factorisations they differed in 365, by up to 8.9e-16 per element. So the
+## package's arithmetic silently depended on the platform.
+##
+## Linking explicitly fixes that. The compiled code now uses whichever
+## LAPACK R itself was built against, so results depend on R's own
+## configuration rather than on load order.
+##
+## Writing R Extensions asks for $(BLAS_LIBS) to be followed by $(FLIBS),
+## and R CMD check enforces that textually on this file, so the reference
+## below is spelled out literally.
+##
+## But $(FLIBS) names a gfortran runtime at the exact path R was built
+## against, and that tree is absent on some machines that can otherwise
+## build this package perfectly well. configure therefore tests whether it
+## links, and drops it from the generated src/Makevars if it does not.
+##
+## Dropping it is safe HERE specifically: there are no Fortran sources, and
+## R's libRlapack already links libgfortran and libquadmath itself, so the
+## Fortran runtime is satisfied transitively. It changes nothing about WHICH
+## LAPACK is used, only whether the runtime is named again on the link line.
+##
+## Note that overriding FLIBS to empty in a Makevars does NOT work: R passes
+## it to make on the command line, and command-line assignments beat
+## makefile ones. The reference has to be removed, not neutralised.
 PKG_LIBS = $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)

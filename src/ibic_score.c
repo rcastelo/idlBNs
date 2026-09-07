@@ -3,6 +3,7 @@
 #include <Rinternals.h>
 #include <R_ext/Lapack.h>
 #include "cache_key.h"
+#include "cache_ref.h"
 #include "nh_scores.h"
 
 /* prototypes */
@@ -39,7 +40,7 @@ iBIC_node_score(const double* Sj, int p1, const int* pa, int lp, int node,
     int m = lp + 1;                  /* intercept + parents */
 
     /* build 0-based index array: [0, pa[0], pa[1], ...] */
-    int* idx = (int *) R_alloc(m, sizeof(int));
+    int* idx = (int *) R_alloc((size_t) m, sizeof(int));
     idx[0] = 0;
     if (node <= 0 || node >= p1)
         error("iBIC_node_score: node index %d out of range [1,%d]", node, p1-1);
@@ -61,7 +62,7 @@ iBIC_node_score(const double* Sj, int p1, const int* pa, int lp, int node,
             ZtZ[c * m + r] = Sj[(size_t)idx[c] * p1 + idx[r]];
 
     /* extract ZtY (mx1) */
-    double* ZtY = (double *) R_alloc(m, sizeof(double));
+    double* ZtY = (double *) R_alloc((size_t) m, sizeof(double));
     for (int r = 0; r < m; r++)
         ZtY[r] = Sj[(size_t)node * p1 + idx[r]];
 
@@ -125,7 +126,7 @@ C_iBIC_score(SEXP S_R, SEXP pasets_R, SEXP data_count_R, SEXP n_R,
             SEXP cached_scores_R) {
     int p = LENGTH(pasets_R);
     double n = REAL(n_R)[0];
-    int has_cache = (cached_scores_R != R_NilValue);
+    idl_cache_ref cr = idl_cache_resolve(cached_scores_R, p, "C_iBIC_score");
     double total = 0.0;
 
     for (int i = 0; i < p; i++) {
@@ -136,23 +137,29 @@ C_iBIC_score(SEXP S_R, SEXP pasets_R, SEXP data_count_R, SEXP n_R,
         const int *pa = INTEGER(pa_R);
         int lp = LENGTH(pa_R);
 
-        SEXP env = R_NilValue;
-        SEXP sym = R_NilValue;
         double s = 0.0;
         int found = 0;
 
-        if (has_cache) {
-            env = VECTOR_ELT(cached_scores_R, i);
-            found = cache_lookup(env, pa, lp, &sym, &s);
+        /* the cache is keyed on the ASCENDING parent set, while the score
+           itself is computed from 'pa' in its given order -- see
+           cached_node_score() in nh_scores.c for why that distinction
+           matters. p sorts per call is nothing here, unlike in the
+           neighbourhood driver where it would be p sorts per candidate. */
+        int *key = (int *) R_alloc((size_t) (lp > 0 ? lp : 1), sizeof(int));
+        if (lp > 0) {
+            memcpy(key, pa, (size_t) lp * sizeof(int));
+            qsort(key, (size_t) lp, sizeof(int), cmp_int);
         }
+        if (cr.kind != IDL_CACHE_NONE)
+            found = idl_cache_get(&cr, i, key, lp, &s);
 
         if (!found) {
             SEXP Sj_R = VECTOR_ELT(S_R, i);
             int p1 = (int) sqrt((double) LENGTH(Sj_R));
             double Nj = REAL(data_count_R)[i];
             s = iBIC_node_score(REAL(Sj_R), p1, pa, lp, i + 1, Nj, n);
-            if (has_cache)
-                cache_store(env, sym, s);
+            if (cr.kind != IDL_CACHE_NONE)
+                idl_cache_put(&cr, i, key, lp, s);
         }
         total += s;
 
@@ -233,4 +240,31 @@ C_iBIC_nh_scores(SEXP S_R, SEXP pasets_R, SEXP data_count_R, SEXP n_R,
 
     return nh_scores_driver(pasets_R, cached_scores_R, op_R, u_R, v_R,
                             iBIC_node_score_thunk, &ctx);
+}
+
+/*
+ * C_iBIC_nh_argmax
+ *
+ * As C_iBIC_nh_scores(), but returns only the winning candidate --
+ * list(index=, total=, band=, worst=) -- found through the error-bounded
+ * candidate band rather than by summing all p vertex terms for every
+ * candidate. See the band commentary in nh_scores.c.
+ *
+ * verify_R  LGLSXP  when TRUE, additionally scores every candidate exactly
+ *                   and checks the band against it. O(p * k), for testing.
+ */
+SEXP
+C_iBIC_nh_argmax(SEXP S_R, SEXP pasets_R, SEXP data_count_R, SEXP n_R,
+                  SEXP cached_scores_R, SEXP op_R, SEXP u_R, SEXP v_R,
+                  SEXP stamp_R, SEXP verify_R) {
+    if (TYPEOF(pasets_R) != VECSXP)
+        error("C_iBIC_nh_argmax: 'pasets' must be a list");
+
+    iBIC_ctx ctx;
+    ctx.S_R        = S_R;
+    ctx.data_count = REAL(data_count_R);
+    ctx.n          = REAL(n_R)[0];
+
+    return nh_argmax_driver(pasets_R, cached_scores_R, op_R, u_R, v_R,
+                            stamp_R, asLogical(verify_R) == TRUE, iBIC_node_score_thunk, &ctx);
 }

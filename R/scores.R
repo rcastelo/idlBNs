@@ -232,6 +232,37 @@ attr(iBIC, "supports.pasets") <- TRUE
 ## per candidate move (see score.nh() in search.R)
 attr(iBIC, "nh.scores.fun") <- .iBIC.nh.scores
 
+## find the best candidate move in a neighbourhood, returning only
+## list(index=, total=, band=, worst=) rather than all |NH| scores. The
+## winner is located through an error-bounded candidate band, so the O(p)
+## exact summation is paid only for the provable handful of candidates that
+## could still be the maximum, instead of for every one of the O(p^2) of
+## them (see the band commentary in src/nh_scores.c). The move it picks, and
+## the total it reports, are exactly what ranking every candidate exactly
+## would give -- including which of several tied candidates wins.
+##
+## 'verify' scores every candidate exactly as well and checks the band
+## against it; it is O(p * |NH|) and exists for tests/test_c_band.R and the
+## idlBNs.debug.band option.
+##
+## 'stamp' is the DAG's per-vertex parent-set version vector. When it is
+## supplied together with a compiled cache, additions -- about 99% of the
+## candidates -- are served from a memo keyed on (u, v) and validated by one
+## integer compare against stamp[v], which is what removes the hash lookup
+## from the hot path. Without it the memo stays off and every candidate goes
+## through the cache.
+.iBIC.nh.argmax <- function(op, u, v, pasets, global.sufstats, cached.scores,
+                            verify=FALSE, stamp=NULL)
+    .Call(C_iBIC_nh_argmax,
+          global.sufstats$S,
+          pasets,
+          as.double(global.sufstats$data.count),
+          as.double(global.sufstats$n),
+          cached.scores,
+          op, u, v, stamp, verify)
+
+attr(iBIC, "nh.argmax.fun") <- .iBIC.nh.argmax
+
 ## convert a list of targets and a vector of target indices to data
 ## observations into a logical matrix of observations by variables,
 ## where TRUE indicates that a variable has been intervened in a observation
@@ -321,6 +352,15 @@ attr(iBIC, "global.sufstats.fun") <- .iBIC.global.sufstats
 #' @importFrom cli cli_abort
 .check_cached_scores <- function(g, cached.scores) {
     if (is.null(cached.scores))
+        return(invisible(NULL))
+
+    ## a compiled score cache, as the C search engine creates with
+    ## C_sccache_new(). The C side checks its own external-pointer tag and
+    ## that it was built for the right number of vertices, so there is
+    ## nothing useful to verify here -- and nothing to validate it AS, since
+    ## an external pointer is opaque from R. The documented
+    ## list-of-environments form is still handled below, unchanged.
+    if (typeof(cached.scores) == "externalptr")
         return(invisible(NULL))
 
     ## fast path: skip the full O(p) validation below on repeat calls with
@@ -568,6 +608,21 @@ attr(iBGe, "supports.pasets") <- TRUE
           op, u, v)
 
 attr(iBGe, "nh.scores.fun") <- .iBGe.nh.scores
+
+## find the best candidate move in a neighbourhood -- see
+## .iBIC.nh.argmax() for the rationale
+.iBGe.nh.argmax <- function(op, u, v, pasets, global.sufstats, cached.scores,
+                            verify=FALSE, stamp=NULL)
+    .Call(C_iBGe_nh_argmax,
+          global.sufstats$TN,
+          pasets,
+          as.double(global.sufstats$awpN),
+          as.double(global.sufstats$p),
+          global.sufstats$scoreconstvec,
+          cached.scores,
+          op, u, v, stamp, verify)
+
+attr(iBGe, "nh.argmax.fun") <- .iBGe.nh.argmax
 
 ## calculate global sufficient statistics for the iBGe score, which do not
 ## depend on the structure of a specific DAG, but only on the input data,

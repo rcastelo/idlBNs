@@ -179,11 +179,7 @@ the DAG structure.
 
 # Computational performance benchmark
 
-Currently, the iBIC and iBGe scores, as well as the iHCMC algorithm, are
-implemented using only the R language without any kind of optimization. In
-practice, this means the iHCMC algorithm can only be applied to a handful of
-vertices and this implementation is currently only useful for research
-prototyping and educational purposes. Using the CRAN package
+Using the CRAN package
 [bench](https://cran.r-project.org/package=bench) [@HesVau25], here we
 benchmark the computational performance of the iHCMC algorithm for two
 different numbers of vertices, a given sample size and two randomly selected
@@ -271,9 +267,10 @@ bmdat <- bmdat |> add_column(p=rep(p, each=length(p)), .before="score_function")
 bmdat <- bmdat |> add_column(version=packageVersion("idlBNs"), .before="p")
 ```
 Table \@ref(tab:benchmark-results) below shows the benchmarking results of this
-version of the `idlBNs` package, jointly with the results of previous versions,
-if available, for comparison purposes. Actually, if you want to run the benchmark
-when building the vignette, you should set the environment variable
+version of the `idlBNs` package at the top, jointly with the results of previous
+versions, if available, in the following rows for comparison purposes. Actually,
+if you want to run the benchmark with the installed version of the package when
+building the vignette, you should set the environment variable
 `IDLBNS_BENCHMARK=TRUE` before building it, and if you want to save the results
 of the benchmark, you should set the environment variable
 `IDLBNS_BENCHMARK_RESULTS_PATH` to a valid path where the results will be saved
@@ -284,15 +281,18 @@ library(kableExtra)
 
 fname <- system.file("extdata", "benchmark_results.csv", package="idlBNs")
 if (file.exists(fname)) {
-    prevbmdat <- read.csv(fname)
+    prevbmdat <- as_tibble(read.csv(fname))
     prevbmdat$version <- package_version(prevbmdat$version)
     prevbmdat$median <- as_bench_time(prevbmdat$median)
     prevbmdat$mem_alloc <- as_bench_bytes(prevbmdat$mem_alloc)
     if (Sys.getenv("IDLBNS_BENCHMARK") == "TRUE") {
-      if (!bmdat$version[1] %in% prevbmdat$version)
-          bmdat <- rbind(prevbmdat, bmdat)
+      if (bmdat$version[1] %in% prevbmdat$version)
+          prevbmdat <- prevbmdat |> filter(version != bmdat$version[1])
+      bmdat <- rbind(prevbmdat, bmdat)
     } else
       bmdat <- prevbmdat
+
+    bmdat <- bmdat |> arrange(desc(version), p, score_function)
 }
 
 kable(bmdat, format="html",

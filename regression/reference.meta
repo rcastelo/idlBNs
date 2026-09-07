@@ -1,0 +1,30 @@
+# Provenance of regression/reference.csv -- the golden trajectory baseline.
+# Regenerating it invalidates every gate that compares against it, so this
+# records what it was captured on and, where re-baselined, why.
+idlBNs.version:   1.0.10
+git.commit:       20bbdd7c2432976a7bc3caf14bc36f8586b3ad35
+git.branch:       16-port-search-loop-and-rcar-into-c
+R.version:        R version 4.6.1 (2026-06-24)
+R.BLAS:           /Library/Frameworks/R.framework/Versions/4.6/Resources/lib/libRblas.0.dylib
+R.LAPACK:         /Library/Frameworks/R.framework/Versions/4.6/Resources/lib/libRlapack.dylib
+serves.dpotrf_:   libRlapack.dylib
+captured:         2026-09-07T14:46:01Z
+
+# 'serves.dpotrf_' is the image that actually provides the LAPACK symbols the
+# compiled score functions call, as reported by dladdr(). It should be the
+# same library as R.LAPACK; if it is not, src/Makevars is not being applied
+# and the arithmetic depends on load order rather than on R's configuration.
+#
+# RE-BASELINED ONCE, when configure + src/Makevars.in started linking R's
+# LAPACK explicitly. Before that, PKG_LIBS was never applied -- src/Makevars.in
+# existed with no configure script to substitute it -- so dpotrf_/dtrtrs_ were
+# resolved from whatever happened to be loaded in the process. On macOS that
+# was Apple's Accelerate framework, NOT the libRlapack that R itself uses.
+# The two disagree in the last bits: over 400 random Cholesky factorisations
+# they differed in 365, by up to 8.9e-16 per element, which moved 39 of these
+# 48 trajectories into different local optima.
+#
+# The pre-fix baseline is therefore not reproducible on a correctly linked
+# build, so it was replaced rather than kept. The three pinned .Rout.save
+# transcripts under tests/ were NOT affected: they print to 7 significant
+# digits and their small DAGs (p = 3, p = 5) did not change trajectory.

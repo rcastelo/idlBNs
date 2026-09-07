@@ -32,4 +32,20 @@ SEXP
 nh_scores_driver(SEXP pasets_R, SEXP cached_scores_R, SEXP op_R, SEXP u_R,
                  SEXP v_R, node_score_fn fn, void *ctx);
 
+/*
+ * nh_argmax_driver
+ *
+ * Returns only the WINNING candidate -- list(index=, total=, band=, worst=)
+ * -- rather than all k totals, so that the O(p) exact summation per
+ * candidate can be skipped for all but a provable handful. See nh_scores.c.
+ *
+ * verify != 0 additionally computes every candidate's exact total and checks
+ * the band against it, which is how tests/test_c_band.R pins the error
+ * bound. It is O(p * k) and so is only for testing.
+ */
+SEXP
+nh_argmax_driver(SEXP pasets_R, SEXP cached_scores_R, SEXP op_R, SEXP u_R,
+                 SEXP v_R, SEXP stamp_R, int verify, node_score_fn fn,
+                 void *ctx);
+
 #endif /* IDLBNS_NH_SCORES_H */

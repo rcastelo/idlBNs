@@ -11,7 +11,8 @@ hcmc(
   target.index = rep(1L, nrow(dat)),
   scorefun = iBIC,
   MAXTRIALS = 5,
-  verbose = TRUE
+  verbose = TRUE,
+  engine = c("C", "R")
 )
 }
 \arguments{
@@ -38,6 +39,16 @@ of fit (GoF) score of a DAG on a given data set.}
 maxima.}
 
 \item{verbose}{(Default TRUE) Show progress in the calculations.}
+
+\item{engine}{(Default \code{"C"}) A character string selecting the search
+engine: \code{"C"} (default) maintains the DAG, its ancestor relation and its
+parent sets in compiled code, and performs the (\emph{I}-)covered arc
+reversals there too; \code{"R"} uses the pure-R implementation and is provided
+for testing and verification. Both consume the random number stream
+identically and so follow the same trajectory from the same seed, and both
+return the same result. \code{"C"} requires a \code{scorefun} able to score a whole
+neighbourhood at once, which \code{\link{iBIC}} and \code{\link{iBGe}} are; with any other
+score function the \code{"R"} engine is used regardless.}
 }
 \value{
 A list containing a \code{\link[graph:graphNEL-class]{graphNEL}} object with
