@@ -8,7 +8,8 @@
 #' @param dat A `data.frame` or `matrix` object, containing input Gaussian data,
 #' with data value records in the rows and random variables in the columns.
 #'
-#' @param r (Default 20) Maximum number of (\emph{I}-)covered arc reversals.
+#' @param r (Default 20) Non-negative integer scalar indicating the maximum
+#' number of (\emph{I}-)covered arc reversals.
 #'
 #' @param targets (Default `list(integer(0))`) A `list` object with a family of
 #' targets provided as a list of integer vectors. Its default value indicates
@@ -21,8 +22,8 @@
 #' that there are no interventions in the data, i.e., the data is purely
 #' observational.
 #'
-#' @param MAXTRIALS (Default 5) Maximum number of trials to escape from local
-#' maxima.
+#' @param MAXTRIALS (Default 5) Non-negative integer scalar indicating the
+#' maximum number of trials to escape from local maxima.
 #'
 #' @param scorefun (Default is [`iBIC`]) A function to calculate the goodness
 #' of fit (GoF) score of a DAG on a given data set.
@@ -131,6 +132,22 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
 
     stopifnot(is.list(targets)) ## QC
     scorefun <- match.fun(scorefun)
+
+    ## the r argument must be a finite non-negative integer scalar
+    if (!is.numeric(r) || length(r) != 1 || is.na(r) || r < 0 ||
+        r != floor(r)) {
+        msg <- paste("The 'r' argument must be a finite non-negative",
+                     "integer scalar.")
+        cli_abort(c("x"=msg))
+    }
+
+    ## the MAXTRIALS argument must be a finite non-negative integer scalar
+    if (!is.numeric(MAXTRIALS) || length(MAXTRIALS) != 1 ||
+        is.na(MAXTRIALS) || MAXTRIALS < 0 || MAXTRIALS != floor(MAXTRIALS)) {
+        msg <- paste("The 'MAXTRIALS' argument must be a finite non-negative",
+                     "integer scalar.")
+        cli_abort(c("x"=msg))
+    }
 
     ## the attributes that decide which engine can run, extracted before the
     ## score cache is built because they decide which KIND of cache it is
