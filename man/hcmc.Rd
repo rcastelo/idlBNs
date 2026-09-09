@@ -12,14 +12,18 @@ hcmc(
   scorefun = iBIC,
   MAXTRIALS = 5,
   verbose = TRUE,
-  engine = c("C", "R")
+  engine = c("C", "R"),
+  sampler = c("rcar", "exact"),
+  escape = c("trials", "exhaustive"),
+  max.class.size = 8L
 )
 }
 \arguments{
 \item{dat}{A \code{data.frame} or \code{matrix} object, containing input Gaussian data,
 with data value records in the rows and random variables in the columns.}
 
-\item{r}{(Default 20) Maximum number of (\emph{I}-)covered arc reversals.}
+\item{r}{(Default 20) Non-negative integer scalar indicating the maximum
+number of (\emph{I}-)covered arc reversals.}
 
 \item{targets}{(Default \code{list(integer(0))}) A \code{list} object with a family of
 targets provided as a list of integer vectors. Its default value indicates
@@ -35,8 +39,8 @@ observational.}
 \item{scorefun}{(Default is \code{\link{iBIC}}) A function to calculate the goodness
 of fit (GoF) score of a DAG on a given data set.}
 
-\item{MAXTRIALS}{(Default 5) Maximum number of trials to escape from local
-maxima.}
+\item{MAXTRIALS}{(Default 5) Non-negative integer scalar indicating the
+maximum number of trials to escape from local maxima.}
 
 \item{verbose}{(Default TRUE) Show progress in the calculations.}
 

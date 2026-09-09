@@ -123,9 +123,20 @@
 hcmc <- function(dat, r=20, targets=list(integer(0)),
                  target.index=rep(1L, nrow(dat)),
                  scorefun=iBIC, MAXTRIALS=5, verbose=TRUE,
-                 engine=c("C", "R")) {
+                 engine=c("C", "R"),
+                 sampler=c("rcar", "exact"), escape=c("trials", "exhaustive"),
+                 max.class.size=8L) {
 
     engine <- match.arg(engine)
+    sampler <- match.arg(sampler)
+    escape <- match.arg(escape)
+    ## the exact sampler needs the I-essential graph of the current DAG, which
+    ## only the R engine can build for now; see R/imec.R
+    if ((sampler == "exact" || escape == "exhaustive") && engine == "C") {
+        if (verbose)
+            cli_alert_info("sampler='exact'/escape='exhaustive' require engine='R'; switching")
+        engine <- "R"
+    }
     dat <- .check_input_data(dat)
     dag <- graphNEL(colnames(dat), edgemode="directed")
     attr(dat, "sanitycheck") <- TRUE
@@ -283,7 +294,10 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
     } else {
         while (!local_maximum) {
             s0 <- s1
-            rcar.out <- rcar(dag, r, utargets, anc, pasets, vidx)
+            rcar.out <- if (sampler == "exact")
+                isample.move(dag, targets, utargets, anc, pasets, vidx, vnames,
+                             vidx.nodes, r, max.class.size)
+            else rcar(dag, r, utargets, anc, pasets, vidx)
             dag <- rcar.out$dag
             anc <- rcar.out$anc
             pasets <- rcar.out$pasets
@@ -317,9 +331,52 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                     was_in_local_maximum <- FALSE
                 }
                 trials <- 0
+            } else if (escape == "exhaustive" &&
+                       !is.null(mm <- imec.members(dag, targets, vnames,
+                                                   vidx.nodes, max.class.size))) {
+                ## Examine EVERY member of the current I-equivalence class and
+                ## take the best move available from any of them.  With the
+                ## class size known exactly this replaces the MAXTRIALS budget
+                ## by a deterministic and complete check: if nothing here beats
+                ## s0, the search really is at a local maximum of the class.
+                best.s <- s0; best <- NULL
+                for (M in mm) {
+                    ne.m <- ncr.nh(M$dag, M$anc, utargets)
+                    sco.m <- score.nh(ne.m, M$dag, dat, targets, target.index,
+                                      cached.scores, global.sufstats, M$pasets,
+                                      vidx.nodes, supports.pasets, scorefun,
+                                      nh.scores.fun)
+                    bm <- which.max(sco.m)
+                    if (sco.m[bm] > best.s) {
+                        best.s <- sco.m[bm]
+                        best <- list(M=M, op=ne.m$op[bm], u=ne.m$u[bm], v=ne.m$v[bm])
+                    }
+                }
+                if (is.null(best)) {
+                    local_maximum <- TRUE
+                    s1 <- s0
+                } else {
+                    anc <- switch(best$op,
+                                  add.ancestors(best$M$anc, vnames[best$u], vnames[best$v]),
+                                  remove.ancestors(best$M$anc, best$M$dag,
+                                                   vnames[best$u], vnames[best$v]),
+                                  reverse.ancestors(best$M$anc, best$M$dag,
+                                                    vnames[best$u], vnames[best$v]))
+                    pasets <- move.pasets(best$M$pasets, best$op,
+                                          vidx.nodes[best$u], vidx.nodes[best$v])
+                    dag <- apply.move(best$M$dag, best$op, best$u, best$v, vnames)
+                    s1 <- best.s
+                    local_maximum <- FALSE
+                    escapes <- escapes + 1
+                    was_in_local_maximum <- FALSE
+                    trials <- 0
+                }
             } else if (trials < MAXTRIALS) {
                 s1 <- s0
-                rcar.out <- rcar(dag, r, utargets, anc, pasets, vidx)
+                rcar.out <- if (sampler == "exact")
+                    isample.move(dag, targets, utargets, anc, pasets, vidx, vnames,
+                                 vidx.nodes, r, max.class.size)
+                else rcar(dag, r, utargets, anc, pasets, vidx)
                 dag <- rcar.out$dag
                 anc <- rcar.out$anc
                 pasets <- rcar.out$pasets
