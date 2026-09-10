@@ -462,17 +462,34 @@ sample_and_apply(idl_dag *d, const iess *G, int rng) {
     int *pos = (int *) R_alloc((size_t) p, sizeof(int));
     memset(pos, 0, (size_t) p * sizeof(int));
     int ord[64];
+
+    /* Build every context first, then bracket only the draws: cp_build()
+       allocates with R_alloc() and longjmps on failure, which between
+       GetRNGstate() and PutRNGstate() would strand R's generator ahead of
+       .Random.seed. A decline therefore consumes no randomness either.
+       C_cp_amo_sample() in cliquepick.c is structured identically, which is
+       what keeps the two engines' streams aligned. */
+    cp_ctx *ctxs = (cp_ctx *) R_alloc((size_t) (nc > 0 ? nc : 1), sizeof(cp_ctx));
+    int *ids = (int *) R_alloc((size_t) (nc > 0 ? nc : 1), sizeof(int));
+    for (int c = 0; c < nc; c++) {
+        memset(&ctxs[c], 0, sizeof(cp_ctx)); ctxs[c].ok = 1;
+        cp_vset uni = (cc[c].m == 64) ? ~(cp_vset) 0 : (((cp_vset) 1 << cc[c].m) - 1);
+        ids[c] = cp_build(&ctxs[c], cc[c].adj, cc[c].m, uni);
+        if (ids[c] < 0) return 0;
+    }
+
+    /* Nothing between GetRNGstate() and PutRNGstate() can longjmp: cp_sample()
+       returns 0 instead of raising, and the report waits for the bracket to
+       close. See cp_sample() in cliquepick.c. */
+    int ok = 1;
     if (rng) GetRNGstate();
     for (int c = 0; c < nc; c++) {
-        cp_ctx ctx; memset(&ctx, 0, sizeof(ctx)); ctx.ok = 1;
-        cp_vset uni = (cc[c].m == 64) ? ~(cp_vset) 0 : (((cp_vset) 1 << cc[c].m) - 1);
-        int id = cp_build(&ctx, cc[c].adj, cc[c].m, uni);
-        if (id < 0) { if (rng) PutRNGstate(); return 0; }
         int tick = 0;
-        cp_sample(&ctx, id, ord, &tick);
+        if (!cp_sample(&ctxs[c], ids[c], ord, &tick)) { ok = 0; break; }
         for (int i = 0; i < tick; i++) pos[cc[c].v[ord[i]]] = i;
     }
     if (rng) PutRNGstate();
+    if (!ok) error("sample_and_apply: no allowed permutation after 100000 trials");
 
     int cap = G->na > 0 ? G->na : 1;
     int *cf = (int *) R_alloc((size_t) cap, sizeof(int));

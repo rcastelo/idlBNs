@@ -42,7 +42,9 @@ double cp_count(cp_ctx *ctx, int id);
  * order into ord[] starting at position *tick. Consumes R's RNG; the caller
  * brackets it with Get/PutRNGstate.
  */
-void   cp_sample(cp_ctx *ctx, int id, int *ord, int *tick);
+/* one uniform AMO; 0 if the rejection loop gave up, in which case the caller
+   must restore the RNG state before raising -- see cliquepick.c */
+int    cp_sample(cp_ctx *ctx, int id, int *ord, int *tick);
 
 /*
  * The k-th member of the class rooted at `id`, 0-based, as a topological order

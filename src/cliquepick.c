@@ -400,7 +400,16 @@ cp_allowed(const int *perm, int len, const int *o) {
     return 1;
 }
 
-void
+/*
+ * Returns 0 rather than raising when the rejection loop gives up. Raising
+ * here would longjmp out from between GetRNGstate() and PutRNGstate(),
+ * stranding R's generator ahead of .Random.seed; handing the failure back
+ * lets the caller close the bracket first and then report it. That is also
+ * why the draw loop needs no R_UnwindProtect: the only longjmp it could have
+ * caught cannot happen. (Measured, the protection was free -- about 0.5% of
+ * a draw at p = 200 -- so this is for simplicity, not speed.)
+ */
+int
 cp_sample(cp_ctx *ctx, int id, int *ord, int *tick) {
     const cp_node *nd = &ctx->node[id];
 
@@ -436,13 +445,13 @@ cp_sample(cp_ctx *ctx, int id, int *ord, int *tick) {
             int t = perm[i]; perm[i] = perm[k]; perm[k] = t;
         }
         if (cp_allowed(perm, len, o)) break;
-        if (trial > 100000)
-            error("cp_sample: no allowed permutation after 100000 trials");
+        if (trial > 100000) return 0;
     }
 
     for (int i = 0; i < len; i++) ord[(*tick)++] = perm[i];
     for (int c = 0; c < nd->nsp[j]; c++)
-        cp_sample(ctx, nd->sp[j][c], ord, tick);
+        if (!cp_sample(ctx, nd->sp[j][c], ord, tick)) return 0;
+    return 1;
 }
 
 /* --------------------------------------------------------- enumeration */
@@ -726,17 +735,42 @@ C_cp_amo_sample(SEXP A_R) {
     char *inc = (char *) R_alloc((size_t) (p > 0 ? p : 1), sizeof(char));
     memset(inc, 0, (size_t) p);
     int ord[CP_MAXV];
+
+    /*
+     * Every context is built BEFORE the first draw. cp_build() allocates with
+     * R_alloc(), which longjmps when the allocation fails, and a longjmp
+     * between GetRNGstate() and PutRNGstate() discards the draws already
+     * made: unif_rand() has advanced R's internal generator while
+     * .Random.seed is left behind, so a caller that traps the error resumes
+     * on a stale stream. Only the draws are bracketed now.
+     *
+     * It also makes a decline consume nothing. Previously a component that
+     * failed to build after earlier ones had been sampled left the stream
+     * advanced by those earlier draws, even though the caller was told to
+     * fall back and would sample again. sample_and_apply() in imec.c is
+     * restructured the same way, so the two engines stay aligned.
+     */
+    cp_ctx *ctxs = (cp_ctx *) R_alloc((size_t) (nc > 0 ? nc : 1), sizeof(cp_ctx));
+    int *ids = (int *) R_alloc((size_t) (nc > 0 ? nc : 1), sizeof(int));
+    for (int c = 0; c < nc; c++) {
+        memset(&ctxs[c], 0, sizeof(cp_ctx)); ctxs[c].ok = 1;
+        cp_vset uni = (ms[c] == 64) ? ~(cp_vset) 0 : (((cp_vset) 1 << ms[c]) - 1);
+        ids[c] = cp_build(&ctxs[c], ab + (size_t) c * 64, ms[c], uni);
+        if (ids[c] < 0) { vmaxset(vmax); return R_NilValue; }
+    }
+
+    /* Nothing between GetRNGstate() and PutRNGstate() can longjmp: cp_sample()
+       hands its one failure back as a 0 and the report waits until after the
+       bracket is closed. */
+    int ok = 1;
     if (nc > 0) GetRNGstate();
     for (int c = 0; c < nc; c++) {
-        cp_ctx ctx; memset(&ctx, 0, sizeof(ctx)); ctx.ok = 1;
-        cp_vset uni = (ms[c] == 64) ? ~(cp_vset) 0 : (((cp_vset) 1 << ms[c]) - 1);
-        int id = cp_build(&ctx, ab + (size_t) c * 64, ms[c], uni);
-        if (id < 0) { if (nc > 0) PutRNGstate(); vmaxset(vmax); return R_NilValue; }
         int tick = 0;
-        cp_sample(&ctx, id, ord, &tick);
+        if (!cp_sample(&ctxs[c], ids[c], ord, &tick)) { ok = 0; break; }
         for (int i = 0; i < tick; i++) { pos[vs[c][ord[i]]] = i; inc[vs[c][ord[i]]] = 1; }
     }
     if (nc > 0) PutRNGstate();
+    if (!ok) error("cliquepick: no allowed permutation after 100000 trials");
 
     /* emit a full order: each component's vertices in their sampled order,
        then everything else */

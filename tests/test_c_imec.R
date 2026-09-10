@@ -211,3 +211,44 @@ stopifnot(identical(seedC, .Random.seed),                  # same random stream
                     sort(as.vector(graph::edgeMatrix(hR$dag)))),
           hC$sampler.fallbacks == 0L, hR$sampler.fallbacks == 0L)
 cat("test_c_imec.R: exact sampling is unrestricted in p, engines still agree\n")
+
+## 7: a declined exact draw must consume no randomness, and the Get/PutRNGstate
+## bracket must cover only the draws. cp_build() allocates with R_alloc(),
+## which longjmps on failure; inside the bracket that would leave R's
+## generator advanced while .Random.seed stayed behind, so a caller trapping
+## the error would resume on a stale stream. Building every context first also
+## makes a decline free: it used to leave the stream advanced by the
+## components already sampled before a later one failed to build, even though
+## the caller was told to fall back and would sample again.
+local({
+    q <- 70L                                   # one chain component of 70 > 64
+    em <- matrix(as.integer(rbind(1:(q-1), 2:q)), nrow = 2,
+                 dimnames = list(c("from", "to"), NULL))
+    U <- matrix(FALSE, q, q); for (i in 1:(q-1)) U[i, i+1] <- U[i+1, i] <- TRUE
+    st <- dag_new(q); invisible(dag_set(st, em))
+    set.seed(1); before <- .Random.seed
+    stopifnot(identical(.Call(idlBNs:::C_dag_imec_sample, st, list(integer(0))), FALSE),
+              identical(.Random.seed, before))          # C engine: nothing drawn
+    set.seed(1); before <- .Random.seed
+    stopifnot(is.null(.Call(idlBNs:::C_cp_amo_sample, U)),
+              identical(.Random.seed, before))          # R engine: nothing drawn
+    A <- matrix(FALSE, q, q); for (i in 1:(q-1)) A[i, i+1] <- TRUE
+    stopifnot(is.null(idlBNs:::imec.sample(A)))
+    V <- matrix(FALSE, 6L, 6L); for (i in 1:5) V[i, i+1] <- V[i+1, i] <- TRUE
+    set.seed(1); before <- .Random.seed
+    invisible(.Call(idlBNs:::C_cp_amo_sample, V))
+    stopifnot(!identical(.Random.seed, before))         # a real draw still advances
+})
+cat("test_c_imec.R: a declined draw consumes no randomness\n")
+
+## cp_sample() reports its one failure ("no allowed permutation after 100000
+## trials") as a 0 rather than raising, so the caller closes the RNG bracket
+## before reporting it and nothing between GetRNGstate() and PutRNGstate()
+## can longjmp. That path cannot be reached from R without injecting a fault,
+## so it is not exercised here; it was verified out of tree by patching
+## cp_sample() to return 0 on its second call and checking that the error
+## surfaces AND .Random.seed is committed. To reproduce: add
+##     { static int n = 0; if (getenv("IDLBNS_FAIL_DRAW") && ++n == 2)
+##           return 0; }
+## at the top of cp_sample(), rebuild, and draw from a graph with two chain
+## components with IDLBNS_FAIL_DRAW set.
