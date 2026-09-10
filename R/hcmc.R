@@ -201,7 +201,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
     dag <- graphNEL(colnames(dat), edgemode="directed")
     attr(dat, "sanitycheck") <- TRUE
 
-    .check_targets(targets, ncol(dat))
+    targets <- .check_targets(targets, ncol(dat))
     scorefun <- match.fun(scorefun)
 
     ## the r argument must be a finite non-negative integer scalar
@@ -590,4 +590,6 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
             cli_abort(c("x"=msg))
         }
     }
+
+    targets
 }
