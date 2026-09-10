@@ -271,3 +271,51 @@ cat("test_c_imec.R: a declined draw consumes no randomness\n")
 ##           return 0; }
 ## at the top of cp_sample(), rebuild, and draw from a graph with two chain
 ## components with IDLBNS_FAIL_DRAW set.
+
+## 8: the exhaustive escape asks the enumeration ONCE per escape episode.
+## A decline is followed by up to MAXTRIALS within-class trials, and those
+## re-randomise the DAG inside its I-equivalence class -- whose I-essential
+## graph, hence class size and chain components, is an invariant of the class.
+## So the enumeration cannot answer differently, and re-attempting it after
+## every trial recomputed a settled decision and counted the same refusal
+## MAXTRIALS + 1 times (6 at the default, 21 at MAXTRIALS = 20).
+local({
+    set.seed(5); p <- 20L; n <- 1500L
+    o <- sample(p); B <- matrix(0, p, p)
+    for (i in 1:(p-1)) for (j in (i+1):p)
+        if (runif(1) < 0.15) B[o[i], o[j]] <- runif(1, .5, 1.5)
+    X <- matrix(0, n, p)
+    for (v in o) X[, v] <- X %*% B[, v] + rnorm(n)
+    colnames(X) <- as.character(seq_len(p))
+    ## escape.max = 1 makes the enumeration decline at every local maximum,
+    ## so the count is exactly the number of escape episodes. From this seed
+    ## the search has one, whatever the trial budget: the count is 1 for both
+    ## budgets, where before the fix it was MAXTRIALS + 1, i.e. 6 and 21.
+    ## (The count is NOT generally independent of MAXTRIALS -- a different
+    ## budget is a different trajectory, so a different number of episodes --
+    ## which is why the seed is fixed here.)
+    for (eng in c("C", "R")) {
+        set.seed(9)
+        f5  <- hcmc(X, verbose = FALSE, engine = eng, escape = "exhaustive",
+                    escape.max = 1, MAXTRIALS = 5)
+        set.seed(9)
+        f20 <- hcmc(X, verbose = FALSE, engine = eng, escape = "exhaustive",
+                    escape.max = 1, MAXTRIALS = 20)
+        stopifnot(identical(f5$escape.fallbacks, 1L),
+                  identical(f20$escape.fallbacks, 1L))
+    }
+    ## and an escape that always declines must be indistinguishable from
+    ## escape = "trials": the enumeration consumes no randomness and, once
+    ## refused, has no side effect on the state
+    for (eng in c("C", "R")) {
+        set.seed(3)
+        a <- hcmc(X, verbose = FALSE, engine = eng, escape = "exhaustive",
+                  escape.max = 1)
+        sa <- .Random.seed
+        set.seed(3)
+        b <- hcmc(X, verbose = FALSE, engine = eng, escape = "trials")
+        stopifnot(identical(a$sco, b$sco), identical(sa, .Random.seed),
+                  identical(dagadj(a$dag), dagadj(b$dag)))
+    }
+})
+cat("test_c_imec.R: the exhaustive escape is attempted once per episode\n")

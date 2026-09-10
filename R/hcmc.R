@@ -301,6 +301,15 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
     ## maxima where the class could not be enumerated and the MAXTRIALS budget
     ## was used instead.
     sampler.fallbacks <- escape.fallbacks <- 0L
+    ## Whether the exhaustive enumeration has already declined for the class
+    ## the search is sitting in. The MAXTRIALS trials that follow a decline
+    ## re-randomise the DAG WITHIN its I-equivalence class, so they change
+    ## neither the class size nor its chain components -- the I-essential
+    ## graph is an invariant of the class. Re-attempting the enumeration after
+    ## each of them therefore recomputes a decision that cannot have changed,
+    ## and counted the same refusal MAXTRIALS + 1 times. The flag is cleared
+    ## whenever a move actually leaves the class.
+    escape.declined <- FALSE
 
     if (verbose) {
       algname <- if (identical(targets, list(integer(0)))) "HCMC" else "iHCMC"
@@ -354,12 +363,15 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                     was_in_local_maximum <- FALSE
                 }
                 trials <- 0
-            } else if (escape == "exhaustive" &&
+                escape.declined <- FALSE
+            } else if (escape == "exhaustive" && !escape.declined &&
                        !is.null(mm <- {
                            m0 <- .Call(C_dag_imec_members, st, targets,
                                        escape.maxD)
-                           if (is.null(m0))
+                           if (is.null(m0)) {
                                escape.fallbacks <- escape.fallbacks + 1L
+                               escape.declined <- TRUE
+                           }
                            m0
                        })) {
                 ## every member of the I-equivalence class, and the best move
@@ -392,6 +404,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                     escapes <- escapes + 1
                     was_in_local_maximum <- FALSE
                     trials <- 0
+                    escape.declined <- FALSE
                 }
             } else if (trials < MAXTRIALS) {
                 s1 <- s0
@@ -456,12 +469,15 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                     was_in_local_maximum <- FALSE
                 }
                 trials <- 0
-            } else if (escape == "exhaustive" &&
+                escape.declined <- FALSE
+            } else if (escape == "exhaustive" && !escape.declined &&
                        !is.null(mm <- {
                            m0 <- imec.members(dag, targets, vnames, vidx.nodes,
                                               escape.max)
-                           if (is.null(m0))
+                           if (is.null(m0)) {
                                escape.fallbacks <- escape.fallbacks + 1L
+                               escape.declined <- TRUE
+                           }
                            m0
                        })) {
                 ## Examine EVERY member of the current I-equivalence class and
@@ -500,6 +516,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                     escapes <- escapes + 1
                     was_in_local_maximum <- FALSE
                     trials <- 0
+                    escape.declined <- FALSE
                 }
             } else if (trials < MAXTRIALS) {
                 s1 <- s0
