@@ -1,7 +1,7 @@
 ## 2026-09-10 differential test for the C port of the exact I-MEC machinery in
 ## src/imec.c against the R reference in R/imec.R.
 ##
-## Three levels, in increasing strength:
+## Sections, the first three in increasing strength:
 ##
 ##   1. |[D]_I| and the enumeration agree, as SETS.
 ##   2. The enumeration is duplicate free and exactly of size |[D]_I|, so it is
@@ -10,9 +10,25 @@
 ##      Clique-Picking decomposition, and the sampler draws its own clique
 ##      rather than indexing into the enumeration.
 ##   3. The sampler agrees bit for bit AND leaves .Random.seed in the same
-##      place. As with rcar(), the stream is the load-bearing part: one
-##      R_unif_index() per chain component, in component order, and R's
-##      sample.int(n, 1) is (int) R_unif_index(n) + 1.
+##      place. The stream is the load-bearing part, but the invariant is
+##      EQUIVALENCE, not a draw count: Clique-Picking spends one unif_rand()
+##      on the clique choice (none when the node has a single clique), then
+##      R_unif_index() per Fisher-Yates step -- 1 to 3 unif_rand() calls each
+##      under sample.kind = "Rejection" -- retried for as long as the
+##      forbidden-prefix test rejects the permutation, and recurses into every
+##      subproblem. The total varies with the component AND with the seed:
+##      over 400 seeds a complete component of 5 vertices consumed between 4
+##      and 13 unif_rand() calls, an 8-vertex path between 2 and 7. What is
+##      pinned is that both engines reach the same cp_sample() on the same
+##      components in the same order, so they consume the same draws and end
+##      in the same place. (The identity sample.int(n, 1) == R_unif_index(n)
+##      + 1 belongs to rcar(); see tests/test_rng_equivalence.R.)
+##   4. Both engines run end to end and agree on score -- bitwise -- DAG and
+##      final seed, over every sampler/escape combination.
+##   5. C_dag_set_edges rejects a malformed edge list without mutating state.
+##   6. Exact sampling has no whole-graph size limit; the 64-bit vertex sets
+##      are per chain component.
+##   7. A declined draw consumes no randomness at all.
 
 suppressPackageStartupMessages({
   library(graph)
