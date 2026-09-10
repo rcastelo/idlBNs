@@ -179,16 +179,16 @@
 ## One draw, uniform on [D]_I, by Clique-Picking (src/cliquepick.c): the class
 ## factorises over the chain components of the I-essential graph, and the C
 ## routine returns a topological order whose induced orientation of each
-## component is uniform among its acyclic moral orientations.  There is no
-## component-size limit; both engines call this same code, which is what keeps
-## their random streams aligned.
+## component is uniform among its acyclic moral orientations.  Both engines
+## call this same code, which is what keeps their random streams aligned.
 ##
-## There is no whole-graph limit either. The 64-bit vertex sets are per chain
-## component, and C_cp_amo_sample() returns a full order of all p vertices,
-## the ones outside any component appended in index order, so a DAG of any
-## size whose components are each within 64 vertices is sampled exactly. An
-## earlier `if (p > 64L) return(NULL)` here made the R engine fall back for a
-## graph of 65 isolated vertices, which has no undirected component at all.
+## The one limit is an implementation limit, and it is per chain component:
+## vertex sets within a component are 64-bit masks, so a component of more
+## than 64 vertices makes the draw decline and the caller fall back. Nothing
+## bounds the size of the class, and nothing bounds p -- C_cp_amo_sample()
+## returns a full order of all p vertices, the ones outside any component
+## appended in index order -- so a DAG of any size whose components are each
+## within 64 vertices is sampled exactly.
 imec.sample <- function(A, targets = list(integer(0))) {
     p <- nrow(A)
     E <- .iessgraph(A, targets)
@@ -204,9 +204,9 @@ imec.sample <- function(A, targets = list(integer(0))) {
     out
 }
 
-## |[D]_I| by Clique-Picking, in polynomial time and with no size limit --
-## neither on the graph nor, beyond 64 vertices in one chain component, on the
-## components.
+## |[D]_I| by Clique-Picking, in polynomial time. NA when a chain component
+## exceeds the 64-vertex implementation limit described above; nothing else
+## is bounded, the class size and p included.
 imec.size <- function(A, targets = list(integer(0))) {
     E <- .iessgraph(A, targets)
     .Call(C_cp_amo_count, E & t(E))
