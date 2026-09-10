@@ -44,8 +44,8 @@ of fit (GoF) score of a DAG on a given data set.}
 maximum number of trials to escape from local maxima when \code{escape="trials"}.
 It is ignored when \code{escape="exhaustive"}, unless the exhaustive enumeration
 of the (\emph{I}-)equivalence class exceeds \code{escape.max} or a chain component
-has more than 64 vertices, in which case the the escape mechanism falls back
-to the RCAR algorithm for a maximum of \code{MAXTRIALS} trials. See the \code{escape}
+has more than 64 vertices, in which case the escape mechanism falls back to
+the RCAR algorithm for a maximum of \code{MAXTRIALS} trials. See the \code{escape}
 argument for details.}
 
 \item{verbose}{(Default TRUE) Show progress in the calculations.}
@@ -74,7 +74,7 @@ of the class, and none on the number of vertices in the DAG; its one
 implementation limit is that vertex sets within an undirected chain
 component are 64-bit masks, so a component of more than 64 vertices makes it
 decline and that draw reverts to the walk, which is counted in
-\code{sampler.fallbacks}.  Components that large need a DAG with almost no
+\code{sampler.fallbacks}. Components that large need a DAG with almost no
 immoralities; the largest seen for random DAGs up to \eqn{p = 500} is 16.}
 
 \item{escape}{(Default \code{"trials"}) A character string selecting what happens
@@ -83,12 +83,12 @@ class and retries, up to \code{MAXTRIALS} times. \code{"exhaustive"} instead exa
 \emph{every} member of the class and takes the best move available from any
 of them, which settles the question of whether the search is really at a
 local maximum of the class; \code{MAXTRIALS} is then unused. It falls back to
-\code{"trials"} in the two cases the enumeration declines, both counted in
-\code{escape.fallbacks}: a class larger than \code{escape.max}, and a class whose size
-cannot be computed at all because some chain component has more than 64
-vertices. The second is the 64-bit mask limit described under \code{sampler}, and
-applies here whichever \code{sampler} is in use, since the escape enumerates the
-class regardless of how the search moves within it.}
+\code{"trials"} in the cases where the enumeration declines, counted in
+\code{escape.fallbacks}: a class larger than \code{escape.max} or \code{INT_MAX}, and a
+class whose size cannot be computed at all because some chain component has
+more than 64 vertices. The second is the 64-bit mask limit described under
+\code{sampler}, and applies here whichever \code{sampler} is in use, since the escape
+enumerates the class regardless of how the search moves within it.}
 
 \item{escape.max}{(Default 512) Positive integer scalar giving the largest
 (\emph{I}-)equivalence class the \code{escape="exhaustive"} enumeration will

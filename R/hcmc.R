@@ -27,8 +27,8 @@
 #' maximum number of trials to escape from local maxima when `escape="trials"`.
 #' It is ignored when `escape="exhaustive"`, unless the exhaustive enumeration
 #' of the (\emph{I}-)equivalence class exceeds `escape.max` or a chain component
-#' has more than 64 vertices, in which case the the escape mechanism falls back
-#' to the RCAR algorithm for a maximum of `MAXTRIALS` trials. See the `escape`
+#' has more than 64 vertices, in which case the escape mechanism falls back to
+#' the RCAR algorithm for a maximum of `MAXTRIALS` trials. See the `escape`
 #' argument for details.
 #'
 #' @param scorefun (Default is [`iBIC`]) A function to calculate the goodness
@@ -60,7 +60,7 @@
 #' implementation limit is that vertex sets within an undirected chain
 #' component are 64-bit masks, so a component of more than 64 vertices makes it
 #' decline and that draw reverts to the walk, which is counted in
-#' `sampler.fallbacks`.  Components that large need a DAG with almost no
+#' `sampler.fallbacks`. Components that large need a DAG with almost no
 #' immoralities; the largest seen for random DAGs up to \eqn{p = 500} is 16.
 #'
 #' @param escape (Default `"trials"`) A character string selecting what happens
@@ -69,12 +69,12 @@
 #' \emph{every} member of the class and takes the best move available from any
 #' of them, which settles the question of whether the search is really at a
 #' local maximum of the class; `MAXTRIALS` is then unused. It falls back to
-#' `"trials"` in the two cases the enumeration declines, both counted in
-#' `escape.fallbacks`: a class larger than `escape.max`, and a class whose size
-#' cannot be computed at all because some chain component has more than 64
-#' vertices. The second is the 64-bit mask limit described under `sampler`, and
-#' applies here whichever `sampler` is in use, since the escape enumerates the
-#' class regardless of how the search moves within it.
+#' `"trials"` in the cases where the enumeration declines, counted in
+#' `escape.fallbacks`: a class larger than `escape.max` or `INT_MAX`, and a
+#' class whose size cannot be computed at all because some chain component has
+#' more than 64 vertices. The second is the 64-bit mask limit described under
+#' `sampler`, and applies here whichever `sampler` is in use, since the escape
+#' enumerates the class regardless of how the search moves within it.
 #'
 #' @param escape.max (Default 512) Positive integer scalar giving the largest
 #' (\emph{I}-)equivalence class the `escape="exhaustive"` enumeration will
