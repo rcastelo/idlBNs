@@ -583,6 +583,11 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                          "vector of finite positive integer values.")
             cli_abort(c("x"=msg))
         }
+        if (any(targets[[i]] < 1 | targets[[i]] > p)) {
+            msg <- paste("Each target in the 'targets' list must be an",
+                         "integer between 1 and", p, "(inclusive).")
+            cli_abort(c("x"=msg))
+        }
         if (!is.integer(targets[[i]])) {
             if (any(targets[[i]] != floor(targets[[i]]))) {
                 msg <- paste("Each element of the 'targets' list must be an",
@@ -590,11 +595,6 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                 cli_abort(c("x"=msg))
             }
             targets[[i]] <- as.integer(targets[[i]])
-        }
-        if (any(targets[[i]] < 1 | targets[[i]] > p)) {
-            msg <- paste("Each target in the 'targets' list must be an",
-                         "integer between 1 and", p, "(inclusive).")
-            cli_abort(c("x"=msg))
         }
     }
 
