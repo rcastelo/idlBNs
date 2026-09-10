@@ -9,7 +9,8 @@
 #' with data value records in the rows and random variables in the columns.
 #'
 #' @param r (Default 20) Non-negative integer scalar indicating the maximum
-#' number of (\emph{I}-)covered arc reversals.
+#' number of (\emph{I}-)covered arc reversals by the RCAR algorithm (Castelo
+#' and Kočka, 2003).
 #'
 #' @param targets (Default `list(integer(0))`) A `list` object with a family of
 #' targets provided as a list of integer vectors. Its default value indicates
@@ -23,7 +24,8 @@
 #' observational.
 #'
 #' @param MAXTRIALS (Default 5) Non-negative integer scalar indicating the
-#' maximum number of trials to escape from local maxima.
+#' maximum number of trials to escape from local maxima when `escape="trials"`.
+#' It is ignored when `escape="exhaustive"`.
 #'
 #' @param scorefun (Default is [`iBIC`]) A function to calculate the goodness
 #' of fit (GoF) score of a DAG on a given data set.
@@ -40,8 +42,55 @@
 #' neighbourhood at once, which [`iBIC`] and [`iBGe`] are; with any other
 #' score function the `"R"` engine is used regardless.
 #'
-#' @return A list containing a [`graphNEL`][graph::graphNEL-class] object with
-#' the structure of the learned DAG, and its corresponding score.
+#' @param sampler (Default `"rcar"`) A character string selecting how the
+#' algorithm moves within the (\emph{I}-)equivalence class of the current DAG.
+#' `"rcar"` performs the RCAR algorithm (a random walk of up to `r`
+#' (\emph{I}-)covered arc reversals) of Castelo and Kočka (2003). `"exact"`
+#' instead draws a member of the class uniformly at random, by the
+#' Clique-Picking algorithm of Wienöbst \emph{et al.} (2023), and ignores `r`.
+#' The walk produced by the RCAR algorithm and the exact draw are not
+#' equivalent: the walk is a random walk on the class, so its equilibrium is
+#' proportional to the number of (\emph{I}-)covered arcs of each member and is
+#' not uniform for any value of `r`.
+#'
+#' @param escape (Default `"trials"`) A character string selecting what happens
+#' at a local maximum. `"trials"` re-randomises the current DAG within its
+#' class and retries, up to `MAXTRIALS` times. `"exhaustive"` instead examines
+#' \emph{every} member of the class and takes the best move available from any
+#' of them, which settles the question of whether the search is really at a
+#' local maximum of the class; `MAXTRIALS` is then unused. It falls back to
+#' `"trials"` for a class the enumeration cannot handle, i.e. one larger than
+#' `escape.max` or containing a chain component larger than `max.class.size`.
+#'
+#' @param max.class.size (Default 8) Positive integer scalar giving the largest
+#' undirected chain component the `escape="exhaustive"` enumeration will
+#' handle. It does \emph{not} limit `sampler="exact"`, which draws uniformly
+#' whatever the size of the class. That sampler carries an implementation
+#' limit of its own, unrelated to this one: it represents vertex sets within a
+#' chain component as 64-bit masks, so a component of more than 64 vertices
+#' makes it decline and the draw reverts to the `"rcar"` walk, which is
+#' counted in `sampler.fallbacks`. Components that large need a DAG with
+#' almost no immoralities; the largest seen for random DAGs up to
+#' \eqn{p = 500} is 16. The number of vertices in the whole DAG is
+#' unrestricted throughout.
+#'
+#' @param escape.max (Default 64) Positive numeric scalar giving the largest
+#' (\emph{I}-)equivalence class the `escape="exhaustive"` enumeration will
+#' walk. That escape scores one whole neighbourhood per member, so its cost
+#' grows linearly in the size of the class, which is why it is bounded by the
+#' class size and not only by `max.class.size`.
+#'
+#' @return A list with the following components: `dag`, a
+#' [`graphNEL`][graph::graphNEL-class] object with the structure of the learned
+#' DAG; `sco`, its score; `sampler.fallbacks`, the number of draws for which
+#' `sampler="exact"` declined and the `"rcar"` walk was used instead; and
+#' `escape.fallbacks`, the number of local maxima at which
+#' `escape="exhaustive"` declined and the `MAXTRIALS` budget was used instead.
+#' Both counts are zero unless the corresponding exact method was selected, and
+#' a non-zero count means part of the run silently used the older machinery:
+#' the walk does not sample the (\emph{I}-)equivalence class uniformly, so a
+#' result obtained with `sampler.fallbacks > 0` is not the one
+#' `sampler="exact"` promises.
 #' 
 #' @references Castelo, R. and Kočka, T. On inclusion-driven learning of
 #' Bayesian networks. *Journal of Machine Learning Research*, 4:527-574, 2003.
@@ -49,6 +98,10 @@
 #' @references Castelo, R. Interventional idlBNs in DAG-space. In *Challenges
 #' and Algorithms for Knowledge Discovery from Data*, M. van Leeuwen and
 #' J.  Vreeken (eds.). LNCS 16067, Festschrift, Springer, 2026.
+#'
+#' @references Wienöbst, M., Bannach, M. and Liśkiewicz, M. Polynomial-time
+#' algorithms for counting and sampling Markov equivalent DAGs with
+#' applications. *Journal of Machine Learning Research*, 24(213):1-45, 2023.
 #'
 #' @seealso [iBIC()], [iBGe()]
 #'
@@ -125,18 +178,24 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                  scorefun=iBIC, MAXTRIALS=5, verbose=TRUE,
                  engine=c("C", "R"),
                  sampler=c("rcar", "exact"), escape=c("trials", "exhaustive"),
-                 max.class.size=8L) {
+                 max.class.size=8L, escape.max=64) {
 
     engine <- match.arg(engine)
     sampler <- match.arg(sampler)
     escape <- match.arg(escape)
-    ## the exact sampler needs the I-essential graph of the current DAG, which
-    ## only the R engine can build for now; see R/imec.R
-    if ((sampler == "exact" || escape == "exhaustive") && engine == "C") {
-        if (verbose)
-            cli_alert_info("sampler='exact'/escape='exhaustive' require engine='R'; switching")
-        engine <- "R"
-    }
+    ## Two different limits, because the two features scale differently.
+    ##
+    ## max.class.size caps the CHAIN COMPONENT the sampler will enumerate: the
+    ## cost of one draw is the cost of enumerating that component's acyclic
+    ## moral orientations, which is at worst m! for a complete component.
+    ##
+    ## escape.max caps the CLASS SIZE the exhaustive escape will walk: that
+    ## escape scores one whole neighbourhood per member, which at p = 200 is
+    ## about 10 ms, so its cost is linear in |[D]_I| with a large constant and
+    ## has to be bounded by the class size rather than by a component's.
+    ## Above it the search falls back to the MAXTRIALS budget.
+    max.class.sizeI <- as.integer(max.class.size)
+    escape.maxD <- as.double(escape.max)
     dat <- .check_input_data(dat)
     dag <- graphNEL(colnames(dat), edgemode="directed")
     attr(dat, "sanitycheck") <- TRUE
@@ -231,6 +290,13 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                    cached.scores=cached.scores, global.sufstats=global.sufstats)
     was_in_local_maximum <- local_maximum <- s1 < s0
     trials <- escapes <- avg_trials_per_escape <- 0
+    ## Both exact paths can decline and hand the work back to the older,
+    ## cruder machinery, and neither degradation is otherwise visible from the
+    ## result: sampler.fallbacks counts draws that reverted to the rcar() walk,
+    ## whose equilibrium is NOT uniform, and escape.fallbacks counts local
+    ## maxima where the class could not be enumerated and the MAXTRIALS budget
+    ## was used instead.
+    sampler.fallbacks <- escape.fallbacks <- 0L
 
     if (verbose) {
       algname <- if (identical(targets, list(integer(0)))) "HCMC" else "iHCMC"
@@ -255,7 +321,15 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
         st <- .Call(C_dag_new, ncol(dat))
         while (!local_maximum) {
             s0 <- s1
-            .Call(C_dag_rcar, st, rlen, utargets.i)
+            if (sampler == "exact") {
+                ## falls back to the walk when a chain component exceeds the
+                ## 64 vertices the exact sampler represents as a bitmask
+                if (!.Call(C_dag_imec_sample, st, targets, max.class.sizeI)) {
+                    sampler.fallbacks <- sampler.fallbacks + 1L
+                    .Call(C_dag_rcar, st, rlen, utargets.i)
+                }
+            } else
+                .Call(C_dag_rcar, st, rlen, utargets.i)
             ne <- .Call(C_dag_nh, st, 3L, utargets.i)    ## 3 = ncr
             pasets <- .Call(C_dag_pasets, st)
             ## only the winner is needed, so the O(p) exact summation is
@@ -276,9 +350,54 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                     was_in_local_maximum <- FALSE
                 }
                 trials <- 0
+            } else if (escape == "exhaustive" &&
+                       !is.null(mm <- {
+                           m0 <- .Call(C_dag_imec_members, st, targets,
+                                       max.class.sizeI, escape.maxD)
+                           if (is.null(m0))
+                               escape.fallbacks <- escape.fallbacks + 1L
+                           m0
+                       })) {
+                ## every member of the I-equivalence class, and the best move
+                ## available from any of them; no MAXTRIALS budget involved
+                here <- .Call(C_dag_edgeM, st)
+                best.s <- s0; best <- NULL
+                for (em in mm) {
+                    .Call(C_dag_set_edges, st, em)
+                    ne.m <- .Call(C_dag_nh, st, 3L, utargets.i)
+                    am.m <- nh.argmax.fun(ne.m$op, vidx.nodes[ne.m$u],
+                                          vidx.nodes[ne.m$v],
+                                          .Call(C_dag_pasets, st), global.sufstats,
+                                          cached.scores, verify.band,
+                                          .Call(C_dag_pastamp, st))
+                    if (am.m$total > best.s) {
+                        best.s <- am.m$total
+                        best <- list(em=em, op=ne.m$op[am.m$index],
+                                     u=ne.m$u[am.m$index], v=ne.m$v[am.m$index])
+                    }
+                }
+                if (is.null(best)) {
+                    .Call(C_dag_set_edges, st, here)
+                    local_maximum <- TRUE
+                    s1 <- s0
+                } else {
+                    .Call(C_dag_set_edges, st, best$em)
+                    .Call(C_dag_apply_move, st, best$op, best$u, best$v)
+                    s1 <- best.s
+                    local_maximum <- FALSE
+                    escapes <- escapes + 1
+                    was_in_local_maximum <- FALSE
+                    trials <- 0
+                }
             } else if (trials < MAXTRIALS) {
                 s1 <- s0
-                .Call(C_dag_rcar, st, rlen, utargets.i)
+                if (sampler == "exact") {
+                    if (!.Call(C_dag_imec_sample, st, targets, max.class.sizeI)) {
+                        sampler.fallbacks <- sampler.fallbacks + 1L
+                        .Call(C_dag_rcar, st, rlen, utargets.i)
+                    }
+                } else
+                    .Call(C_dag_rcar, st, rlen, utargets.i)
                 local_maximum <- FALSE
                 was_in_local_maximum <- TRUE
                 trials <- trials + 1
@@ -298,6 +417,8 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                 isample.move(dag, targets, utargets, anc, pasets, vidx, vnames,
                              vidx.nodes, r, max.class.size)
             else rcar(dag, r, utargets, anc, pasets, vidx)
+            if (isTRUE(rcar.out$fallback))
+                sampler.fallbacks <- sampler.fallbacks + 1L
             dag <- rcar.out$dag
             anc <- rcar.out$anc
             pasets <- rcar.out$pasets
@@ -332,8 +453,13 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                 }
                 trials <- 0
             } else if (escape == "exhaustive" &&
-                       !is.null(mm <- imec.members(dag, targets, vnames,
-                                                   vidx.nodes, max.class.size))) {
+                       !is.null(mm <- {
+                           m0 <- imec.members(dag, targets, vnames, vidx.nodes,
+                                              max.class.size, escape.max)
+                           if (is.null(m0))
+                               escape.fallbacks <- escape.fallbacks + 1L
+                           m0
+                       })) {
                 ## Examine EVERY member of the current I-equivalence class and
                 ## take the best move available from any of them.  With the
                 ## class size known exactly this replaces the MAXTRIALS budget
@@ -377,6 +503,8 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                     isample.move(dag, targets, utargets, anc, pasets, vidx, vnames,
                                  vidx.nodes, r, max.class.size)
                 else rcar(dag, r, utargets, anc, pasets, vidx)
+                if (isTRUE(rcar.out$fallback))
+                    sampler.fallbacks <- sampler.fallbacks + 1L
                 dag <- rcar.out$dag
                 anc <- rcar.out$anc
                 pasets <- rcar.out$pasets
@@ -398,7 +526,14 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
         cli_progress_done("{algname} algorithm completed")
     }
 
-    list(dag=dag, sco=s1)
+    if (verbose && (sampler.fallbacks > 0L || escape.fallbacks > 0L))
+        cli_alert_warning(paste("exact machinery declined {sampler.fallbacks}",
+                                "time{?s} while sampling and {escape.fallbacks}",
+                                "time{?s} while escaping; those steps used the",
+                                "rcar() walk and the MAXTRIALS budget instead"))
+
+    list(dag=dag, sco=s1, sampler.fallbacks=sampler.fallbacks,
+         escape.fallbacks=escape.fallbacks)
 }
 
 #' @importFrom cli cli_abort

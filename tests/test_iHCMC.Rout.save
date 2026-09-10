@@ -64,6 +64,12 @@ Number of Edges = 2
 $sco
 [1] -83.29332
 
+$sampler.fallbacks
+[1] 0
+
+$escape.fallbacks
+[1] 0
+
 > 
 > ## calculate the structural Hamming distance (SHD) between the generative
 > ## DAG and the estimated DAG
@@ -83,6 +89,12 @@ Number of Edges = 4
 
 $sco
 [1] -50.0166
+
+$sampler.fallbacks
+[1] 0
+
+$escape.fallbacks
+[1] 0
 
 > 
 > ## the estimated DAG is closer to the generative DAG (lower SHD value)
@@ -104,6 +116,12 @@ Number of Edges = 3
 
 $sco
 [1] -181.6408
+
+$sampler.fallbacks
+[1] 0
+
+$escape.fallbacks
+[1] 0
 
 > shd(e, dag2essgraph(dhat.ihcmc2$dag))
 [1] 2
