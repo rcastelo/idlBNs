@@ -32,6 +32,11 @@ adj2em <- function(A) { E <- which(A, arr.ind = TRUE)
 em2adj <- function(em, p) { A <- matrix(FALSE, p, p)
     if (ncol(em)) A[cbind(em["from", ], em["to", ])] <- TRUE; A }
 key    <- function(A) paste(which(A), collapse = ",")
+## Two learned DAGs compared by adjacency matrix. Sorting the flattened edge
+## matrix, as this once did, discards the pairing of each arc's tail with its
+## head: 1->2, 3->4 and 1->4, 3->2 both flatten and sort to (1,2,3,4), so two
+## genuinely different DAGs compared equal.
+dagadj <- function(g) { m <- as(g, "matrix"); m[] <- m != 0; m }
 rdag   <- function(p, prob) { o <- sample(p); A <- matrix(FALSE, p, p)
     for (i in 1:(p-1)) for (j in (i+1):p) if (runif(1) < prob) A[o[i], o[j]] <- TRUE; A }
 ## Target families. Single-vertex interventions are the easy case: whenever
@@ -142,8 +147,7 @@ for (it in 1:6) {
         ## in 35 of 40 runs until idl_dag_canonical_order() was added.
         stopifnot(identical(seedC, .Random.seed),
                   identical(hC$sco, hR$sco),
-                  identical(sort(as.vector(graph::edgeMatrix(hC$dag))),
-                            sort(as.vector(graph::edgeMatrix(hR$dag)))))
+                  identical(dagadj(hC$dag), dagadj(hR$dag)))
     }
 }
 cat("test_c_imec.R: engines agree on the exact path\n")
@@ -207,8 +211,7 @@ seedC <- .Random.seed
 set.seed(5); hR <- hcmc(X, verbose = FALSE, engine = "R", sampler = "exact")
 stopifnot(identical(seedC, .Random.seed),                  # same random stream
           identical(hC$sco, hR$sco),                       # bitwise, see above
-          identical(sort(as.vector(graph::edgeMatrix(hC$dag))),
-                    sort(as.vector(graph::edgeMatrix(hR$dag)))),
+          identical(dagadj(hC$dag), dagadj(hR$dag)),
           hC$sampler.fallbacks == 0L, hR$sampler.fallbacks == 0L)
 cat("test_c_imec.R: exact sampling is unrestricted in p, engines still agree\n")
 
