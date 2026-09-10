@@ -32,8 +32,8 @@ dag_move  <- function(st, op, u, v)
                     as.integer(u), as.integer(v)))
 dag_pas   <- function(st) .Call(idlBNs:::C_dag_pasets, st)
 dag_stamp <- function(st) .Call(idlBNs:::C_dag_pastamp, st)
-dag_nh    <- function(st, kind, ut = integer(0))
-    .Call(idlBNs:::C_dag_nh, st, as.integer(kind), as.integer(ut))
+dag_nh    <- function(st, kind, ut = list())
+    .Call(idlBNs:::C_dag_nh, st, as.integer(kind), ut)
 
 ################################################################################
 ## 1. the stamps themselves: pav_stamp[v] must change exactly when pa(v)
@@ -94,7 +94,7 @@ manual_search <- function(x, sf, p, use.memo, nsteps = 40L) {
   cs <- sc_new(p)
   st <- dag_new(p)
   amf <- attr(sf, "nh.argmax.fun")
-  ut <- as.integer(sort(unique(unlist(x$targets))))
+  ut <- x$targets
   for (k in seq_len(nsteps)) {
     ne <- dag_nh(st, 3L, ut)
     if (length(ne$op) == 0L)

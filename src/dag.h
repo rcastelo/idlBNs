@@ -2,6 +2,8 @@
 #define IDLBNS_DAG_H
 
 #include <stddef.h>
+#include <stdint.h>
+#include <Rinternals.h>          /* SEXP, for the target-mask helpers */
 #include "bitset.h"
 
 /*
@@ -126,6 +128,21 @@ static inline int
 idl_dag_has_edge(const idl_dag *d, int u, int v) {
     return idl_bs_test(d->adj + (size_t) u * d->W, v);
 }
+
+/*
+ * Target membership masks. mask[v] is the set of targets containing v, one
+ * bit per target; idl_tmask_separates() asks whether some target holds
+ * exactly one of u and v. That is the criterion in Hauser and Buehlmann
+ * (2012): an arc is target-protected iff a target separates its endpoints.
+ *
+ * The union of all targets is NOT a substitute. It agrees only when every
+ * target is a singleton: for targets = list(integer(0), c(1L, 2L)) both
+ * endpoints of 1 -> 2 lie in the union, yet no target separates them, so the
+ * arc is I-covered and reversing it stays inside the I-equivalence class.
+ * Returns the number of mask words per vertex.
+ */
+int idl_tmask_build(SEXP tgt, int p, uint64_t **maskp);
+int idl_tmask_separates(const uint64_t *mask, int nw, int u, int v);
 
 /* put pa[] and ch[] into ascending order; the graph is unchanged */
 void idl_dag_canonical_order(idl_dag *d);

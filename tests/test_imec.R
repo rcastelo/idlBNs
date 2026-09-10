@@ -110,18 +110,39 @@ while (found < 3) {
 }
 
 ## 4. an I-covered arc reversal does not leave the I-equivalence class ---------
+##
+## I-covered means covered AND unseparated: some single target must contain
+## exactly one endpoint for the arc to be target-protected. Skipping every
+## arc with an endpoint in the UNION of the targets, as this once did, threw
+## away precisely the arcs a multi-vertex target makes I-covered -- both ends
+## of 1 -> 2 lie in the union of list(integer(0), c(1L, 2L)), yet no target
+## separates them. Those are the arcs rcar() walks, so they are the ones this
+## invariant has to hold for. cedges(), which the search actually consults,
+## is checked against the same definition.
+separates <- function(tg, a, b)
+    any(vapply(tg, function(I) xor(a %in% I, b %in% I), NA))
 set.seed(4)
+nicov <- 0L
 for (it in 1:100) {
     p <- sample(5:8, 1); A <- rdag(p, 0.35); tg <- rtgts(p, sample(1:2, 1), A)
-    ut <- sort(unique(unlist(tg))); E <- which(A, arr.ind = TRUE)
+    E <- which(A, arr.ind = TRUE)
     ref <- iess(A, tg)
+    ## the search's own covered-arc mask, in edgeMatrix order
+    g <- gnel(A); em <- graph::edgeMatrix(g)
+    mR <- unname(idlBNs:::cedges(g, tg))
     for (e in seq_len(nrow(E))) {
         a <- E[e, 1]; b <- E[e, 2]
-        if (a %in% ut || b %in% ut) next
-        if (!setequal(which(A[, b]), union(a, which(A[, a])))) next   # not covered
+        icov <- !separates(tg, a, b) &&
+                setequal(which(A[, b]), union(a, which(A[, a])))
+        ## cedges() must agree, arc for arc
+        col <- which(as.integer(em["from", ]) == a & as.integer(em["to", ]) == b)
+        stopifnot(length(col) == 1L, identical(mR[col], icov))
+        if (!icov) next
+        nicov <- nicov + 1L
         B <- A; B[a, b] <- FALSE; B[b, a] <- TRUE
         stopifnot(all(iess(B, tg) == ref))
     }
 }
+stopifnot(nicov > 0L)      ## anti-vacuity
 
 cat("test_imec.R: OK\n")

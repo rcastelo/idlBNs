@@ -242,7 +242,7 @@ ar.nh <- function(dag, anc) {
 ## NCR: non-covered arc reversals neighborhood (NR + non-covered-arc-reversals)
 
 #' @importFrom graph edgeL nodes
-ncr.nh <- function(dag, anc, utargets=integer(0)) {
+ncr.nh <- function(dag, anc, targets=list()) {
     p <- length(nodes(dag))
     e <- edgeL(dag)
     nr <- nr.nh(dag, anc)
@@ -262,10 +262,10 @@ ncr.nh <- function(dag, anc, utargets=integer(0)) {
                       function(w) identical(pa.i,
                                             sort.int(setdiff(pasets[[w]], i))),
                       logical(1))
-        ## an I-covered arc is one that is covered AND has no target vertex
-        ## at either endpoint, so a covered arc touching a target stays in
-        ## the neighborhood
-        tgt <- (i %in% utargets) | (a %in% utargets)
+        ## an I-covered arc is covered AND unseparated by every target, so a
+        ## covered arc whose endpoints some target tells apart stays in the
+        ## neighborhood (see .separates())
+        tgt <- .separates(targets, rep(i, length(a)), a)
         .add.reversals(acc, i, a, (!ced | tgt) & .reversible(anc, a))
     }
 
@@ -431,11 +431,31 @@ score.nh <- function(ne, dag, dat, targets, target.index, cached.scores,
 ##
 
 ## build a logical mask indicated what edges are "covered" in the input DAG
-## utargets should be a vector of unique target vertices, which when non-empty
-## restricts covered edges to those without any target vertex
+## An arc is target-protected iff some SINGLE target contains exactly one of
+## its endpoints (Hauser and Buehlmann 2012), which is what .separates()
+## tests. The union of the targets is not a substitute: it agrees only when
+## every target is a singleton. For targets = list(integer(0), c(1L, 2L))
+## both ends of 1 -> 2 lie in the union, yet no target separates them, so the
+## arc is I-covered -- reversing it stays inside the I-equivalence class, and
+## the union test wrongly declared it protected. That made rcar() unable to
+## walk those arcs and left ncr.nh() exposing a within-class reversal.
+##
+## `targets` is the family, a list of integer vectors of vertex indices.
+## Returns a logical vector, one per (from, to) pair given.
+.separates <- function(targets, from, to) {
+    if (length(targets) == 0L || length(from) == 0L)
+        return(rep(FALSE, length(from)))
+    sep <- rep(FALSE, length(from))
+    for (I in targets)
+        sep <- sep | xor(from %in% I, to %in% I)
+    sep
+}
+
+## `targets` is the target family; a covered arc stays out of the covered set
+## only when some target separates its endpoints
 
 #' @importFrom graph nodes edgeMatrix
-cedges <- function(dag, utargets) {
+cedges <- function(dag, targets) {
     v <- nodes(dag)
     em <- edgeMatrix(dag)
     ## an edgeless DAG has no covered arcs. the early return is needed
@@ -449,9 +469,7 @@ cedges <- function(dag, utargets) {
     pasets <- split(v[em["from", ]], factor(v[em["to", ]], levels=v))
     cemask <- mapply(function(pafrom, pato, from) identical(sort(pafrom), sort(setdiff(pato, from))),
                      pasets[em["from", ]], pasets[em["to", ]], v[em["from", ]])
-    temask <- rep(FALSE, ncol(em))
-    if (length(utargets) > 0)
-        temask <- colSums(matrix(as.vector(em) %in% utargets, ncol=ncol(em))) > 0
+    temask <- .separates(targets, em["from", ], em["to", ])
     cemask & !temask
 }
 
@@ -476,7 +494,7 @@ resample <- function(x, ...) x[sample.int(length(x), ...)]
 .unif_index <- function(n) .Call(C_unif_index, as.double(n))
 
 ## RCAR: repeated covered arc reversal algorithm
-## utargets should be a vector of unique target vertices
+## `targets` is the target family (see .separates())
 ## returns a list(dag=, anc=, pasets=) since every reversal it performs,
 ## although always cycle-safe by construction (a covered edge cannot
 ## introduce a cycle), still changes true ancestor relationships and parent
@@ -486,10 +504,10 @@ resample <- function(x, ...) x[sample.int(length(x), ...)]
 ## 'pasets'), built once per search by the caller.
 
 #' @importFrom graph removeEdge addEdge numEdges edgeMatrix nodes
-rcar <- function(dag, r, utargets, anc, pasets, vidx) {
+rcar <- function(dag, r, targets, anc, pasets, vidx) {
     if (numEdges(dag) == 0)
         return(list(dag=dag, anc=anc, pasets=pasets))
-    cemask <- cedges(dag, utargets)
+    cemask <- cedges(dag, targets)
     if (!any(cemask))
         return(list(dag=dag, anc=anc, pasets=pasets))
 
@@ -498,7 +516,7 @@ rcar <- function(dag, r, utargets, anc, pasets, vidx) {
     rr <- sample(0:r, size=1)
     for (i in seq_len(rr)) {
         em <- edgeMatrix(tmp.g)
-        cemask <- cedges(tmp.g, utargets)
+        cemask <- cedges(tmp.g, targets)
         rndce <- resample(which(cemask), size=1)
         u <- v[em["from", rndce]]
         w <- v[em["to", rndce]]
@@ -657,7 +675,7 @@ hillclimbing <- function(dat, targets=list(integer(0)),
         st <- .Call(C_dag_new, ncol(dat))
         while (s1 > s0) {
             s0 <- s1
-            ne <- .Call(C_dag_nh, st, 2L, integer(0))    ## 2 = ar
+            ne <- .Call(C_dag_nh, st, 2L, list())       ## 2 = ar
             pasets <- .Call(C_dag_pasets, st)
             ## only the winner is needed, so the O(p) exact summation is
             ## paid for the provable handful of candidates that could still

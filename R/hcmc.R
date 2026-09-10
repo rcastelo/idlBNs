@@ -285,7 +285,6 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
     vidx.nodes <- unname(vidx[vnames])
     pasets <- init.pasets(ncol(dat))
     ## assuming .check_targets() has been called
-    utargets <- sort(unique(unlist(targets)))
     ## length(0:r) is computed here, not as r + 1 in C: 0:r for a
     ## non-integer r is 0:floor(r) and for a negative r counts down, so the
     ## coercion stays where it already behaves correctly (see src/rcar.c)
@@ -331,11 +330,11 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                 ## 64 vertices the exact sampler represents as a bitmask
                 if (!.Call(C_dag_imec_sample, st, targets)) {
                     sampler.fallbacks <- sampler.fallbacks + 1L
-                    .Call(C_dag_rcar, st, rlen, utargets)
+                    .Call(C_dag_rcar, st, rlen, targets)
                 }
             } else
-                .Call(C_dag_rcar, st, rlen, utargets)
-            ne <- .Call(C_dag_nh, st, 3L, utargets)    ## 3 = ncr
+                .Call(C_dag_rcar, st, rlen, targets)
+            ne <- .Call(C_dag_nh, st, 3L, targets)    ## 3 = ncr
             pasets <- .Call(C_dag_pasets, st)
             ## only the winner is needed, so the O(p) exact summation is
             ## paid for the provable handful of candidates that could still
@@ -369,7 +368,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                 best.s <- s0; best <- NULL
                 for (em in mm) {
                     .Call(C_dag_set_edges, st, em)
-                    ne.m <- .Call(C_dag_nh, st, 3L, utargets)
+                    ne.m <- .Call(C_dag_nh, st, 3L, targets)
                     am.m <- nh.argmax.fun(ne.m$op, vidx.nodes[ne.m$u],
                                           vidx.nodes[ne.m$v],
                                           .Call(C_dag_pasets, st), global.sufstats,
@@ -399,10 +398,10 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                 if (sampler == "exact") {
                     if (!.Call(C_dag_imec_sample, st, targets)) {
                         sampler.fallbacks <- sampler.fallbacks + 1L
-                        .Call(C_dag_rcar, st, rlen, utargets)
+                        .Call(C_dag_rcar, st, rlen, targets)
                     }
                 } else
-                    .Call(C_dag_rcar, st, rlen, utargets)
+                    .Call(C_dag_rcar, st, rlen, targets)
                 local_maximum <- FALSE
                 was_in_local_maximum <- TRUE
                 trials <- trials + 1
@@ -419,15 +418,15 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
         while (!local_maximum) {
             s0 <- s1
             rcar.out <- if (sampler == "exact")
-                isample.move(dag, targets, utargets, anc, pasets, vidx, vnames,
+                isample.move(dag, targets, anc, pasets, vidx, vnames,
                              vidx.nodes, r)
-            else rcar(dag, r, utargets, anc, pasets, vidx)
+            else rcar(dag, r, targets, anc, pasets, vidx)
             if (isTRUE(rcar.out$fallback))
                 sampler.fallbacks <- sampler.fallbacks + 1L
             dag <- rcar.out$dag
             anc <- rcar.out$anc
             pasets <- rcar.out$pasets
-            ne <- ncr.nh(dag, anc, utargets)
+            ne <- ncr.nh(dag, anc, targets)
             sco <- score.nh(ne, dag, dat, targets, target.index, cached.scores,
                             global.sufstats, pasets, vidx.nodes,
                             supports.pasets, scorefun, nh.scores.fun)
@@ -472,7 +471,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                 ## s0, the search really is at a local maximum of the class.
                 best.s <- s0; best <- NULL
                 for (M in mm) {
-                    ne.m <- ncr.nh(M$dag, M$anc, utargets)
+                    ne.m <- ncr.nh(M$dag, M$anc, targets)
                     sco.m <- score.nh(ne.m, M$dag, dat, targets, target.index,
                                       cached.scores, global.sufstats, M$pasets,
                                       vidx.nodes, supports.pasets, scorefun,
@@ -505,9 +504,9 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
             } else if (trials < MAXTRIALS) {
                 s1 <- s0
                 rcar.out <- if (sampler == "exact")
-                    isample.move(dag, targets, utargets, anc, pasets, vidx, vnames,
+                    isample.move(dag, targets, anc, pasets, vidx, vnames,
                                  vidx.nodes, r)
-                else rcar(dag, r, utargets, anc, pasets, vidx)
+                else rcar(dag, r, targets, anc, pasets, vidx)
                 if (isTRUE(rcar.out$fallback))
                     sampler.fallbacks <- sampler.fallbacks + 1L
                 dag <- rcar.out$dag

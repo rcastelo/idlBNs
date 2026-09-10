@@ -287,13 +287,13 @@ imec.list.ref <- function(A, targets = list(integer(0)), max.size = 8L) {
 ## rebuilt because an arbitrary jump invalidates the incremental updates.
 ## Falls back to rcar() only when a chain component exceeds the 64 vertices the
 ## sampler represents as a bitmask.
-isample.move <- function(dag, targets, utargets, anc, pasets, vidx, vnames,
+isample.move <- function(dag, targets, anc, pasets, vidx, vnames,
                          vidx.nodes, r = 20L) {
     p <- length(vnames)
     A <- .adj.from.dag(dag, p)
     B <- imec.sample(A, targets)
     if (is.null(B))
-        return(c(rcar(dag, r, utargets, anc, pasets, vidx), list(fallback = TRUE)))
+        return(c(rcar(dag, r, targets, anc, pasets, vidx), list(fallback = TRUE)))
     list(dag = .dag.from.adj(B, vnames), anc = .anc.from.adj(B, vnames),
          pasets = .pasets.from.adj(B, vidx.nodes), fallback = FALSE)
 }

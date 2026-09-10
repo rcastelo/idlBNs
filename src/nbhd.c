@@ -50,41 +50,38 @@
  *
  * st          externalptr  the DAG state
  * kind_R      INTSXP       1 = nr, 2 = ar, 3 = ncr
- * utargets_R  INTSXP       unique intervention target vertices, 1-based;
- *                          used only by kind 3. Values outside 1..p are
- *                          IGNORED rather than rejected, matching the R
- *                          code: utargets comes from unlist(targets), and
- *                          the documented examples include targets such as
- *                          list(0L, 2L), whose 0 simply never matches a
- *                          vertex index.
+ * tgt_R       VECSXP       the target family, a list of 1-based integer
+ *                          vectors; used only by kind 3. Vertices outside
+ *                          1..p are IGNORED rather than rejected, matching
+ *                          the R code: the documented examples include
+ *                          targets such as list(0L, 2L), whose 0 simply
+ *                          never matches a vertex index.
+ *
+ *                          The FAMILY, not the union of it: kind 3 drops an
+ *                          arc from the neighbourhood when it is I-covered,
+ *                          and that asks whether some single target
+ *                          separates its endpoints, which the union cannot
+ *                          answer. See idl_tmask_separates() in dag.h.
  *
  * Returns list(op=, u=, v=).
  */
 SEXP
-C_dag_nh(SEXP st, SEXP kind_R, SEXP utargets_R) {
+C_dag_nh(SEXP st, SEXP kind_R, SEXP tgt_R) {
     idl_dag *d = idlBNs_dag_from_extptr(st);
     int kind = asInteger(kind_R);
 
     if (kind != 1 && kind != 2 && kind != 3)
         error("C_dag_nh: 'kind' must be 1 (nr), 2 (ar) or 3 (ncr)");
-    if (TYPEOF(utargets_R) != INTSXP)
-        error("C_dag_nh: 'utargets' must be an integer vector");
+    if (tgt_R != R_NilValue && TYPEOF(tgt_R) != VECSXP)
+        error("C_dag_nh: 'targets' must be a list of integer vectors");
 
     int p = d->p;
     size_t W = d->W;
     void *vmax = vmaxget();
 
-    /* target flags, ignoring anything outside 1..p (see above) */
-    char *istgt = NULL;
-    if (kind == 3) {
-        istgt = (char *) R_alloc((size_t) p, sizeof(char));
-        memset(istgt, 0, (size_t) p);
-        const int *ut = INTEGER(utargets_R);
-        R_xlen_t nut = XLENGTH(utargets_R);
-        for (R_xlen_t k = 0; k < nut; k++)
-            if (ut[k] != NA_INTEGER && ut[k] >= 1 && ut[k] <= p)
-                istgt[ut[k] - 1] = 1;
-    }
+    /* target membership masks, ignoring anything outside 1..p (see above) */
+    uint64_t *tmask = NULL; int nw = 1;
+    if (kind == 3) nw = idl_tmask_build(tgt_R, p, &tmask);
 
     /* an exact upper bound: each vertex offers at most p-1 additions plus
        its children as removals, and the reversal block adds at most one
@@ -129,8 +126,10 @@ C_dag_nh(SEXP st, SEXP kind_R, SEXP utargets_R) {
             for (int j = 0; j < chi->n; j++) {
                 int w = chi->v[j];
                 if (kind == 3) {
-                    int touches = istgt[i] || istgt[w];
-                    if (!touches && idl_dag_arc_is_covered(d, i, w))
+                    /* separated by some target, not merely inside their
+                       union: see idl_tmask_separates() in dag.h */
+                    int sep = tmask != NULL && idl_tmask_separates(tmask, nw, i, w);
+                    if (!sep && idl_dag_arc_is_covered(d, i, w))
                         continue;           /* I-covered: not in NCR */
                 }
                 if (!idl_dag_can_reverse(d, i, w))
@@ -170,21 +169,16 @@ C_dag_nh(SEXP st, SEXP kind_R, SEXP utargets_R) {
    same arc_is_covered() drives it and the differential test can pin both at
    once. */
 SEXP
-C_dag_cedges(SEXP st, SEXP utargets_R) {
+C_dag_cedges(SEXP st, SEXP tgt_R) {
     idl_dag *d = idlBNs_dag_from_extptr(st);
 
-    if (TYPEOF(utargets_R) != INTSXP)
-        error("C_dag_cedges: 'utargets' must be an integer vector");
+    if (tgt_R != R_NilValue && TYPEOF(tgt_R) != VECSXP)
+        error("C_dag_cedges: 'targets' must be a list of integer vectors");
 
     int p = d->p;
     void *vmax = vmaxget();
-    char *istgt = (char *) R_alloc((size_t) p, sizeof(char));
-    memset(istgt, 0, (size_t) p);
-    const int *ut = INTEGER(utargets_R);
-    R_xlen_t nut = XLENGTH(utargets_R);
-    for (R_xlen_t k = 0; k < nut; k++)
-        if (ut[k] != NA_INTEGER && ut[k] >= 1 && ut[k] <= p)
-            istgt[ut[k] - 1] = 1;
+    uint64_t *tmask = NULL;
+    int nw = idl_tmask_build(tgt_R, p, &tmask);
 
     SEXP ans = PROTECT(allocVector(LGLSXP, d->nedges));
     int *a = LOGICAL(ans);
@@ -193,7 +187,8 @@ C_dag_cedges(SEXP st, SEXP utargets_R) {
         const idl_ivec *chi = &d->ch[i];
         for (int j = 0; j < chi->n; j++) {
             int w = chi->v[j];
-            a[m++] = idl_dag_arc_is_covered(d, i, w) && !(istgt[i] || istgt[w]);
+            a[m++] = idl_dag_arc_is_covered(d, i, w) &&
+                     !idl_tmask_separates(tmask, nw, i, w);
         }
     }
     UNPROTECT(1);

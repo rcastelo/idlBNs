@@ -44,7 +44,7 @@
  *      first. All allocation is done before GetRNGstate().
  *
  *   4. The covered set is recomputed from scratch on every iteration, as the
- *      R loop does (cemask <- cedges(tmp.g, utargets) inside the loop), and
+ *      R loop does (cemask <- cedges(tmp.g, targets) inside the loop), and
  *      in edgeMatrix() column order -- vertex ascending, children in stored
  *      insertion order -- because the draw is an INDEX into that order.
  *      Enumerating the arcs any other way would pick a different arc for the
@@ -53,14 +53,14 @@
 
 /* collect the I-covered arcs in edgeMatrix() column order; returns how many */
 static int
-covered_arcs(const idl_dag *d, const char *istgt, int *from, int *to) {
+covered_arcs(const idl_dag *d, const uint64_t *tmask, int nw, int *from, int *to) {
     int n = 0;
     for (int i = 0; i < d->p; i++) {
         const idl_ivec *chi = &d->ch[i];
         for (int j = 0; j < chi->n; j++) {
             int w = chi->v[j];
-            if (istgt != NULL && (istgt[i] || istgt[w]))
-                continue;                   /* touches a target: not I-covered */
+            if (tmask != NULL && idl_tmask_separates(tmask, nw, i, w))
+                continue;          /* a target separates them: not I-covered */
             if (!idl_dag_arc_is_covered(d, i, w))
                 continue;
             from[n] = i;
@@ -80,34 +80,39 @@ covered_arcs(const idl_dag *d, const char *istgt, int *from, int *to) {
  *                          that the coercion corner cases of 0:r for
  *                          non-integer or negative r stay where they already
  *                          behave correctly
- * utargets_R  INTSXP       unique target vertices, 1-based; values outside
- *                          1..p are ignored, matching R (see nbhd.c)
+ * tgt_R       VECSXP       the target family, a list of 1-based integer
+ *                          vectors; values outside 1..p are ignored,
+ *                          matching R (see nbhd.c). The family, not its
+ *                          union: an arc is I-covered unless some single
+ *                          target separates its endpoints, which the union
+ *                          cannot express (idl_tmask_separates(), dag.h).
  *
  * Returns the number of reversals actually performed, as R's rr.
  */
 SEXP
-C_dag_rcar(SEXP st, SEXP rlen_R, SEXP utargets_R) {
+C_dag_rcar(SEXP st, SEXP rlen_R, SEXP tgt_R) {
     idl_dag *d = idlBNs_dag_from_extptr(st);
     int rlen = asInteger(rlen_R);
 
     if (rlen == NA_INTEGER || rlen < 1)
         error("C_dag_rcar: 'rlen' must be a positive integer (length(0:r))");
-    if (TYPEOF(utargets_R) != INTSXP)
-        error("C_dag_rcar: 'utargets' must be an integer vector");
+    if (tgt_R != R_NilValue && TYPEOF(tgt_R) != VECSXP)
+        error("C_dag_rcar: 'targets' must be a list of integer vectors");
 
     int p = d->p;
     void *vmax = vmaxget();
 
     /* --- everything that can allocate or fail, before any RNG contact --- */
-    char *istgt = NULL;
-    R_xlen_t nut = XLENGTH(utargets_R);
+    /* Target membership masks, not the union of the targets: an arc is
+       I-covered unless some single target separates its endpoints. Both
+       ends of an arc can sit in the union and still not be separated --
+       targets = list(integer(0), c(1L, 2L)) over the arc 1 -> 2 -- and the
+       union test refused to walk exactly those arcs, so the walk could not
+       reach the whole I-equivalence class. */
+    uint64_t *tmask = NULL; int nw = 1;
+    R_xlen_t nut = (tgt_R == R_NilValue) ? 0 : XLENGTH(tgt_R);
     if (nut > 0) {
-        const int *ut = INTEGER(utargets_R);
-        istgt = (char *) R_alloc((size_t) p, sizeof(char));
-        memset(istgt, 0, (size_t) p);
-        for (R_xlen_t k = 0; k < nut; k++)
-            if (ut[k] != NA_INTEGER && ut[k] >= 1 && ut[k] <= p)
-                istgt[ut[k] - 1] = 1;
+        nw = idl_tmask_build(tgt_R, p, &tmask);
     }
 
     /* rcar() never adds or removes an arc, only reverses, so the arc count
@@ -121,7 +126,7 @@ C_dag_rcar(SEXP st, SEXP rlen_R, SEXP utargets_R) {
         vmaxset(vmax);
         return ScalarInteger(0);
     }
-    if (covered_arcs(d, istgt, cfrom, cto) == 0) {
+    if (covered_arcs(d, tmask, nw, cfrom, cto) == 0) {
         vmaxset(vmax);
         return ScalarInteger(0);
     }
@@ -132,7 +137,7 @@ C_dag_rcar(SEXP st, SEXP rlen_R, SEXP utargets_R) {
 
     for (int k = 0; k < rr; k++) {
         /* recomputed every iteration, in edgeMatrix order (rule 4) */
-        int nce = covered_arcs(d, istgt, cfrom, cto);
+        int nce = covered_arcs(d, tmask, nw, cfrom, cto);
         if (nce == 0) {
             /* unreachable: reversing a covered arc u -> w leaves w -> u
                covered, since pa'(w) = pa(w) \ {u} = pa(u) = pa'(u) \ {w},

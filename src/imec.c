@@ -190,25 +190,35 @@ static inline int ie_isnbr(const iess *G, int u, int v) {
  * condition that some I contains exactly one of u and v. Costs O(p * K / 64)
  * instead of the p^2 matrix.
  */
-static int
-build_tmask(SEXP tgt, int p, uint64_t **maskp) {
+int
+idl_tmask_build(SEXP tgt, int p, uint64_t **maskp) {
     R_xlen_t K = (tgt == R_NilValue) ? 0 : XLENGTH(tgt);
     int nw = (int) ((K + 63) / 64); if (nw < 1) nw = 1;
     uint64_t *mask = (uint64_t *) R_alloc((size_t) p * nw, sizeof(uint64_t));
     memset(mask, 0, (size_t) p * nw * sizeof(uint64_t));
     for (R_xlen_t k = 0; k < K; k++) {
+        /* a target may arrive as doubles -- targets = list(0, 2) is legal at
+           the R boundary -- so coerce rather than reinterpret the bytes */
         SEXP Ik = VECTOR_ELT(tgt, k);
+        int nprot = 0;
+        if (TYPEOF(Ik) != INTSXP) {
+            if (TYPEOF(Ik) != REALSXP && TYPEOF(Ik) != LGLSXP)
+                error("target %d must be a numeric vector of vertex indices",
+                      (int) k + 1);
+            Ik = PROTECT(coerceVector(Ik, INTSXP)); nprot = 1;
+        }
         const int *iv = INTEGER(Ik);
         R_xlen_t nk = XLENGTH(Ik);
         for (R_xlen_t j = 0; j < nk; j++)
             if (iv[j] != NA_INTEGER && iv[j] >= 1 && iv[j] <= p)
                 mask[(size_t)(iv[j] - 1) * nw + (k >> 6)] |= (uint64_t) 1 << (k & 63);
+        if (nprot) UNPROTECT(nprot);
     }
     *maskp = mask;
     return nw;
 }
-static inline int
-tm_protects(const uint64_t *mask, int nw, int u, int v) {
+int
+idl_tmask_separates(const uint64_t *mask, int nw, int u, int v) {
     for (int w = 0; w < nw; w++)
         if (mask[(size_t) u * nw + w] != mask[(size_t) v * nw + w]) return 1;
     return 0;
@@ -304,11 +314,11 @@ ie_build(const idl_dag *d, SEXP tgt, iess *G) {
 
     if (na == 0) return;
 
-    uint64_t *tmask; int nw = build_tmask(tgt, p, &tmask);
+    uint64_t *tmask; int nw = idl_tmask_build(tgt, p, &tmask);
     int *fl = (int *) R_alloc((size_t) na, sizeof(int));
     char *wasund = (char *) R_alloc((size_t) na, sizeof(char));
     for (int e = 0; e < na; e++)
-        fl[e] = tm_protects(tmask, nw, G->af[e], G->at[e]) ? PROTECTED : UNDECIDABLE;
+        fl[e] = idl_tmask_separates(tmask, nw, G->af[e], G->at[e]) ? PROTECTED : UNDECIDABLE;
 
     /* v-structures */
     for (int v = 0; v < p; v++)
