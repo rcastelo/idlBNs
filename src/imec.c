@@ -144,7 +144,8 @@ set_edges(idl_dag *d, const int *from, const int *to, int n) {
  * This representation carries the arcs themselves plus two CSR indexes: the
  * arcs grouped by head, for the configuration scans of the labelling, and the
  * skeleton with each vertex's neighbours ascending, for adjacency queries by
- * binary search. Everything below is O(V + E log deg); nothing iterates pairs.
+ * binary search. Everything below is O(V + E); nothing iterates pairs, and
+ * nothing is sorted -- both index arrays are built in ascending order.
  *
  * The enumeration used by the exhaustive escape shares this representation:
  * it computes the class size first, refuses an over-budget class before
@@ -251,34 +252,54 @@ ie_build(const idl_dag *d, SEXP tgt, iess *G) {
             G->af[e] = u; G->at[e] = v;
         }
     }
-    /* the tails within a head group must be ascending too */
-    for (int v = 0; v < p; v++)
-        for (int a = G->hstart[v] + 1; a < G->hstart[v + 1]; a++) {
-            int x = G->af[a], b = a - 1;
-            while (b >= G->hstart[v] && G->af[b] > x) { G->af[b + 1] = G->af[b]; b--; }
-            G->af[b + 1] = x;
-        }
+    /* Tails within a head group are already ascending, so nothing is sorted
+       here: the loop above walks tails in ascending order and appends each
+       arc to its head's group, so every group receives its tails in order. */
     for (int e = 0; e < na; e++) { G->undir[e] = 0; G->hlist[e] = e; }
 
-    /* skeleton CSR, neighbours ascending */
+    /*
+     * Skeleton CSR, neighbours ascending -- built in order rather than
+     * sorted into it.
+     *
+     * Appending arc by arc and then insertion-sorting each segment cost
+     * Theta(sum_v deg(v)^2), not the O(E log deg) claimed above it: a
+     * segment receives v's parents and children interleaved, and insertion
+     * sort is quadratic on that, so a single hub of degree d cost d^2 -- up
+     * to Theta(p^2) -- on every call, and ie_build() runs on every
+     * exact-sampling iteration.
+     *
+     * Instead, append in ascending order of the NEIGHBOUR being recorded.
+     * Then every segment is sorted by construction, in O(V + E) with no
+     * comparisons at all. Arcs are already grouped by head; grouping them by
+     * tail as well takes one counting sort, after which sweeping x upwards
+     * and recording x in the segment of each of its neighbours emits each
+     * segment in ascending order. No vertex can be recorded twice in the
+     * same segment, since x -> y and y -> x cannot both be arcs of a DAG.
+     */
     memset(cnt, 0, ((size_t) p + 1) * sizeof(int));
     for (int e = 0; e < na; e++) { cnt[G->af[e] + 1]++; cnt[G->at[e] + 1]++; }
     G->sstart[0] = 0;
     for (int v = 0; v < p; v++) G->sstart[v + 1] = G->sstart[v] + cnt[v + 1];
+
+    int *tstart = (int *) R_alloc((size_t) p + 1, sizeof(int));
+    int *tarc   = (int *) R_alloc((size_t) (na > 0 ? na : 1), sizeof(int));
+    memset(tstart, 0, ((size_t) p + 1) * sizeof(int));
+    for (int e = 0; e < na; e++) tstart[G->af[e] + 1]++;
+    for (int v = 0; v < p; v++) tstart[v + 1] += tstart[v];
+    memcpy(fill, tstart, (size_t) p * sizeof(int));
+    for (int e = 0; e < na; e++) tarc[fill[G->af[e]]++] = e;
+
     memcpy(fill, G->sstart, (size_t) p * sizeof(int));
-    for (int e = 0; e < na; e++) {
-        int u = G->af[e], v = G->at[e];
-        G->slist[fill[u]] = v; G->sarc[fill[u]++] = e;
-        G->slist[fill[v]] = u; G->sarc[fill[v]++] = e;
-    }
-    for (int v = 0; v < p; v++)
-        for (int a = G->sstart[v] + 1; a < G->sstart[v + 1]; a++) {
-            int xv = G->slist[a], xe = G->sarc[a], b = a - 1;
-            while (b >= G->sstart[v] && G->slist[b] > xv) {
-                G->slist[b + 1] = G->slist[b]; G->sarc[b + 1] = G->sarc[b]; b--;
-            }
-            G->slist[b + 1] = xv; G->sarc[b + 1] = xe;
+    for (int x = 0; x < p; x++) {
+        for (int k = tstart[x]; k < tstart[x + 1]; k++) {      /* x is a tail */
+            int e = tarc[k], w = G->at[e];
+            G->slist[fill[w]] = x; G->sarc[fill[w]++] = e;
         }
+        for (int e = G->hstart[x]; e < G->hstart[x + 1]; e++) { /* x is a head */
+            int w = G->af[e];
+            G->slist[fill[w]] = x; G->sarc[fill[w]++] = e;
+        }
+    }
 
     if (na == 0) return;
 
