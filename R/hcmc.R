@@ -200,7 +200,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
     dag <- graphNEL(colnames(dat), edgemode="directed")
     attr(dat, "sanitycheck") <- TRUE
 
-    stopifnot(is.list(targets)) ## QC
+    .check_targets(targets, ncol(dat))
     scorefun <- match.fun(scorefun)
 
     ## the r argument must be a finite non-negative integer scalar
@@ -277,10 +277,8 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
     vnames <- nodes(dag)
     vidx.nodes <- unname(vidx[vnames])
     pasets <- init.pasets(ncol(dat))
+    ## assuming .check_targets() has been called
     utargets <- sort(unique(unlist(targets)))
-    ## the C entry points take an INTSXP, and utargets comes out numeric if
-    ## the caller wrote targets=list(integer(0), 2) rather than 2L
-    utargets.i <- as.integer(utargets)
     ## length(0:r) is computed here, not as r + 1 in C: 0:r for a
     ## non-integer r is 0:floor(r) and for a negative r counts down, so the
     ## coercion stays where it already behaves correctly (see src/rcar.c)
@@ -326,11 +324,11 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                 ## 64 vertices the exact sampler represents as a bitmask
                 if (!.Call(C_dag_imec_sample, st, targets, max.class.sizeI)) {
                     sampler.fallbacks <- sampler.fallbacks + 1L
-                    .Call(C_dag_rcar, st, rlen, utargets.i)
+                    .Call(C_dag_rcar, st, rlen, utargets)
                 }
             } else
-                .Call(C_dag_rcar, st, rlen, utargets.i)
-            ne <- .Call(C_dag_nh, st, 3L, utargets.i)    ## 3 = ncr
+                .Call(C_dag_rcar, st, rlen, utargets)
+            ne <- .Call(C_dag_nh, st, 3L, utargets)    ## 3 = ncr
             pasets <- .Call(C_dag_pasets, st)
             ## only the winner is needed, so the O(p) exact summation is
             ## paid for the provable handful of candidates that could still
@@ -364,7 +362,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                 best.s <- s0; best <- NULL
                 for (em in mm) {
                     .Call(C_dag_set_edges, st, em)
-                    ne.m <- .Call(C_dag_nh, st, 3L, utargets.i)
+                    ne.m <- .Call(C_dag_nh, st, 3L, utargets)
                     am.m <- nh.argmax.fun(ne.m$op, vidx.nodes[ne.m$u],
                                           vidx.nodes[ne.m$v],
                                           .Call(C_dag_pasets, st), global.sufstats,
@@ -394,10 +392,10 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                 if (sampler == "exact") {
                     if (!.Call(C_dag_imec_sample, st, targets, max.class.sizeI)) {
                         sampler.fallbacks <- sampler.fallbacks + 1L
-                        .Call(C_dag_rcar, st, rlen, utargets.i)
+                        .Call(C_dag_rcar, st, rlen, utargets)
                     }
                 } else
-                    .Call(C_dag_rcar, st, rlen, utargets.i)
+                    .Call(C_dag_rcar, st, rlen, utargets)
                 local_maximum <- FALSE
                 was_in_local_maximum <- TRUE
                 trials <- trials + 1
@@ -561,4 +559,34 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
         cli_abort(c("x"="Input data in 'dat' must have 2 or more columns."))
 
     dat
+}
+
+.check_targets <- function(targets, p) {
+    if (!is.list(targets)) {
+        msg <- paste("The 'targets' argument must be a list of integer vectors",
+                     ", each vector specifying zero or more intervened random",
+                     "variables in the data.")
+        cli_abort(c("x"=msg))
+    }
+
+    for (i in seq_along(targets)) {
+        if (!is.numeric(targets[[i]])) {
+            msg <- paste("Each element of the 'targets' list must be an",
+                         "integer vector.")
+            cli_abort(c("x"=msg))
+        }
+        if (!is.integer(targets[[i]])) {
+            if (any(targets[[i]] != floor(targets[[i]]))) {
+                msg <- paste("Each element of the 'targets' list must be an",
+                             "integer vector.")
+                cli_abort(c("x"=msg))
+            }
+            targets[[i]] <- as.integer(targets[[i]])
+        }
+        if (any(targets[[i]] < 1 | targets[[i]] > p)) {
+            msg <- paste("Each target in the 'targets' list must be an",
+                         "integer between 1 and", p, "(inclusive).")
+            cli_abort(c("x"=msg))
+        }
+    }
 }

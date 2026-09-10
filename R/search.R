@@ -569,7 +569,7 @@ hillclimbing <- function(dat, targets=list(integer(0)),
     dag <- graphNEL(colnames(dat), edgemode="directed")
     attr(dat, "sanitycheck") <- TRUE
 
-    stopifnot(is.list(targets)) ## QC
+    .check_targets(targets, ncol(dat))
     scorefun <- match.fun(scorefun)
 
     ## the attributes that decide which engine can run, extracted before the
