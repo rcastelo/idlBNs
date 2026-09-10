@@ -127,6 +127,9 @@ idl_dag_has_edge(const idl_dag *d, int u, int v) {
     return idl_bs_test(d->adj + (size_t) u * d->W, v);
 }
 
+/* put pa[] and ch[] into ascending order; the graph is unchanged */
+void idl_dag_canonical_order(idl_dag *d);
+
 /* would this move keep the graph acyclic? */
 int idl_dag_can_add(const idl_dag *d, int u, int v);
 int idl_dag_can_reverse(const idl_dag *d, int u, int v);

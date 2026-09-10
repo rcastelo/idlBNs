@@ -114,8 +114,15 @@ for (it in 1:6) {
         set.seed(99 + it)
         hR <- hcmc(dat, 20, tg, ti, verbose = FALSE, engine = "R",
                    sampler = cf[1], escape = cf[2])
+        ## BITWISE, not all.equal: the two engines run the same scoring code
+        ## on the same parent sets, so the only way the last bits can differ
+        ## is if they present those sets in different orders. They did --
+        ## sample_and_apply() re-orients only the changed arcs, leaving a
+        ## history-dependent pa[]/ch[] order, while the R path rebuilds both
+        ## ascending from the sampled matrix -- and the scores drifted apart
+        ## in 35 of 40 runs until idl_dag_canonical_order() was added.
         stopifnot(identical(seedC, .Random.seed),
-                  isTRUE(all.equal(hC$sco, hR$sco)),
+                  identical(hC$sco, hR$sco),
                   identical(sort(as.vector(graph::edgeMatrix(hC$dag))),
                             sort(as.vector(graph::edgeMatrix(hR$dag)))))
     }
@@ -180,7 +187,7 @@ set.seed(5); hC <- hcmc(X, verbose = FALSE, engine = "C", sampler = "exact")
 seedC <- .Random.seed
 set.seed(5); hR <- hcmc(X, verbose = FALSE, engine = "R", sampler = "exact")
 stopifnot(identical(seedC, .Random.seed),                  # same random stream
-          isTRUE(all.equal(hC$sco, hR$sco)),
+          identical(hC$sco, hR$sco),                       # bitwise, see above
           identical(sort(as.vector(graph::edgeMatrix(hC$dag))),
                     sort(as.vector(graph::edgeMatrix(hR$dag)))),
           hC$sampler.fallbacks == 0L, hR$sampler.fallbacks == 0L)

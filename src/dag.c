@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <R.h>                  /* R_Calloc / R_Realloc / R_Free / R_alloc */
+#include <R_ext/Utils.h>        /* R_isort */
 #include "dag.h"
 
 /*
@@ -209,6 +210,34 @@ idl_dag_can_reverse(const idl_dag *d, int u, int v) {
 /* ------------------------------------------------------------------------ */
 /* mutations                                                                */
 /* ------------------------------------------------------------------------ */
+
+/*
+ * Put pa[] and ch[] into ascending order. The graph itself is untouched --
+ * only the order in which each vertex's parents and children are stored.
+ *
+ * That order is observable: C_dag_pasets() hands pa[v] to the score function,
+ * whose linear algebra is not associative, and the neighbourhood is
+ * enumerated in ch[] order. It is normally the insertion order, which both
+ * engines reproduce because both apply the same moves in the same sequence.
+ * The exact sampler breaks that symmetry: the C engine re-orients only the
+ * arcs whose direction changed, leaving a history-dependent order, while the
+ * R engine rebuilds pasets and edgeL from the sampled adjacency matrix, which
+ * comes out ascending. Canonicalising here puts the C engine on the R
+ * engine's footing, after which both append and stay in step.
+ *
+ * pas[v] is already the ascending mirror of pa[v], so the parents are a copy
+ * rather than a sort.
+ */
+void
+idl_dag_canonical_order(idl_dag *d) {
+    for (int v = 0; v < d->p; v++) {
+        idl_ivec *pav = &d->pa[v];
+        if (pav->n > 1)
+            memcpy(pav->v, d->pas[v].v, (size_t) pav->n * sizeof(int));
+        if (d->ch[v].n > 1)
+            R_isort(d->ch[v].v, d->ch[v].n);
+    }
+}
 
 /* the adjacency half of adding u -> v, shared by add and reverse */
 static void

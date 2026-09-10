@@ -417,7 +417,14 @@ sample_and_apply(idl_dag *d, const iess *G, int rng) {
     chaincomp *cc = (chaincomp *) R_alloc(CHAINCOMP_CAP(p), sizeof(chaincomp));
     int nc = 0;
     if (!ie_components(G, cc, &nc)) return 0;
-    if (nc == 0) return 1;                       /* the class is a singleton */
+    if (nc == 0) {                               /* the class is a singleton */
+        /* still canonicalise: the R path rebuilds pasets from the sampled
+           adjacency on every draw, this one included, so skipping it here
+           left the engines in different orders exactly when there was
+           nothing to sample */
+        idl_dag_canonical_order(d);
+        return 1;
+    }
 
     int *pos = (int *) R_alloc((size_t) p, sizeof(int));
     memset(pos, 0, (size_t) p * sizeof(int));
@@ -461,6 +468,15 @@ sample_and_apply(idl_dag *d, const iess *G, int rng) {
         }
         if (!progress) error("sample_and_apply: could not re-orient acyclically");
     }
+
+    /* Only the changed arcs were touched, so pa[] and ch[] are now in an
+       order that depends on the search's history. The R engine rebuilds both
+       from the sampled adjacency matrix, in ascending order. Match it, or the
+       two engines hand the score function the same parent SETS in different
+       orders -- the sets agreed in every one of 300 draws tested, the order
+       differed in 183 -- and the score function's arithmetic is not
+       associative, so the engines' scores drift apart in the last bits. */
+    idl_dag_canonical_order(d);
     return 1;
 }
 
