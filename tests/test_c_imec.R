@@ -121,3 +121,36 @@ for (it in 1:6) {
     }
 }
 cat("test_c_imec.R: engines agree on the exact path\n")
+
+## 5: C_dag_set_edges rejects a malformed edge list WITHOUT mutating the state.
+## The validation used to happen on the way in, so a cyclic list raised only
+## after the old arcs had been removed and the acyclic prefix inserted, and a
+## repeated arc was not detected at all -- link_edge() has no duplicate guard,
+## so it was pushed twice into pa[v] and ch[u] and counted twice in nedges,
+## silently desynchronising the vectors from the adjacency bitsets.
+mkem <- function(...) matrix(as.integer(c(...)), nrow = 2,
+                             dimnames = list(c("from", "to"), NULL))
+st   <- dag_new(5L)
+good <- mkem(1,2, 2,3, 1,3, 4,5)
+dag_set(st, good)
+before <- dag_edgeM(st)
+malformed <- list(
+    cyclic     = mkem(1,2, 2,3, 3,1),      # cycle among three
+    two.cycle  = mkem(1,2, 2,1),           # cycle of length two
+    duplicate  = mkem(1,2, 1,2, 2,3),      # arc given twice
+    dup.only   = mkem(3,4, 3,4),
+    out.range  = mkem(1,2, 6,1),           # endpoint past p
+    zero.index = mkem(0,1),                # 0-based index
+    self.loop  = mkem(2,2),
+    three.rows = matrix(1:6, nrow = 3),    # wrong shape, read as pairs before
+    not.matrix = 1:4,                      # no dim at all
+    doubles    = matrix(c(1,2,2,3), nrow = 2))
+for (nm in names(malformed)) {
+    err <- tryCatch({ dag_set(st, malformed[[nm]]); NULL },
+                    error = function(e) conditionMessage(e))
+    stopifnot(!is.null(err),                        # rejected
+              identical(dag_edgeM(st), before))     # and nothing changed
+}
+dag_set(st, good)                                   # still usable afterwards
+stopifnot(identical(dag_edgeM(st), before))
+cat("test_c_imec.R: malformed edge lists are rejected before any mutation\n")

@@ -213,6 +213,27 @@ idl_dag_can_reverse(const idl_dag *d, int u, int v) {
 /* the adjacency half of adding u -> v, shared by add and reverse */
 static void
 link_edge(idl_dag *d, int u, int v) {
+    /* Two invariants, both checked before any list is reserved, so a rejected
+       arc leaves the DAG exactly as it was -- the same all-or-nothing property
+       the reserves below give against a longjmp. Together they cost one
+       comparison and one bitset probe, on a path already O(|delta| + |D|)
+       words, which is below what the search's timings can resolve.
+
+       No self-loop: u would be pushed into its own pa[u] and ch[u], making it
+       its own parent and child. The ancestor and descendant closures maintained
+       by the caller take u's own bit for granted, so the graph would not even
+       be recognisably cyclic afterwards -- it would just be wrong.
+
+       No arc already present: pushing it a second time would leave a duplicate
+       in pa[v], pas[v] and ch[u] and count it twice in nedges, while pab and
+       adj -- being bitsets -- would merely be set again. The vectors and the
+       bitsets would then disagree, and nothing downstream would notice, since
+       every query goes through one or the other. */
+    if (u == v)
+        error("idl_dag: self-loops are not allowed (u = v = %d)", u + 1);
+    if (idl_dag_has_edge(d, u, v))
+        error("idl_dag: arc %d -> %d is already present", u + 1, v + 1);
+
     /* reserve every list first: R_Realloc longjmps on failure, and doing
        this up front is what keeps a move all-or-nothing. past this point
        nothing below can fail. */
@@ -231,6 +252,15 @@ link_edge(idl_dag *d, int u, int v) {
 
 static void
 unlink_edge(idl_dag *d, int u, int v) {
+    /* the arc has to be there. ivec_erase() on an absent element and
+       idl_bs_clear() of an unset bit are both silent no-ops, but nedges-- is
+       not, so removing an arc that was never added leaves the count low while
+       every list and bitset still looks right -- the one piece of state with
+       no redundancy to check it against. Raised before anything is touched,
+       so a rejected removal leaves the DAG exactly as it was. */
+    if (!idl_dag_has_edge(d, u, v))
+        error("idl_dag: arc %d -> %d is not present", u + 1, v + 1);
+
     ivec_erase(&d->pa[v], u);
     ivec_erase(&d->pas[v], u);
     d->pav_stamp[v]++;                    /* pa(v) changed    */

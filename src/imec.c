@@ -2,6 +2,7 @@
 #include <Rinternals.h>
 #include <limits.h>
 #include <R_ext/Random.h>
+#include <R_ext/Utils.h>
 #include <string.h>
 #include "dag.h"
 #include "dag_R.h"
@@ -46,10 +47,62 @@
  * Rebuild the DAG from an edge list: remove everything, then add the new arcs
  * in a topological order of the target graph, so no intermediate state can be
  * cyclic and idl_dag_add_edge's precondition always holds.
+ *
+ * The whole edge list is validated -- no repeated arc, and a full topological
+ * order exists -- BEFORE the old graph is touched, so a rejected list leaves
+ * the state exactly as it was found. Validating on the way in, as an earlier
+ * version did, meant a cyclic list raised only after the old arcs had been
+ * removed and the acyclic prefix inserted, leaving the external pointer
+ * holding neither the old graph nor the requested one; a repeated arc was not
+ * detected at all, and was inserted twice.
+ *
+ * Arcs are bucketed by tail, which makes both passes O(V + E) and lets the
+ * insertion below visit them in exactly the order the single-pass version did:
+ * vertices in the order the queue produces them, and within a vertex the order
+ * the arcs appear in the input. That order is observable -- it fixes the layout
+ * of each ch[] vector, hence the order neighbourhoods are enumerated and the
+ * random stream consumed -- so it is preserved deliberately.
  */
 static void
 set_edges(idl_dag *d, const int *from, const int *to, int n) {
     int p = d->p;
+
+    int *tstart = (int *) R_alloc((size_t) p + 1, sizeof(int));
+    int *tlist  = (int *) R_alloc((size_t) (n > 0 ? n : 1), sizeof(int));
+    int *indeg  = (int *) R_alloc((size_t) p, sizeof(int));
+    memset(tstart, 0, ((size_t) p + 1) * sizeof(int));
+    memset(indeg, 0, (size_t) p * sizeof(int));
+    for (int e = 0; e < n; e++) { tstart[from[e] + 1]++; indeg[to[e]]++; }
+    for (int v = 0; v < p; v++) tstart[v + 1] += tstart[v];
+    int *fill = (int *) R_alloc((size_t) p, sizeof(int));
+    memcpy(fill, tstart, (size_t) p * sizeof(int));
+    for (int e = 0; e < n; e++) tlist[fill[from[e]]++] = to[e];
+
+    /* no arc given twice; sorted on a copy, so tlist keeps the input order */
+    int *scratch = (int *) R_alloc((size_t) (n > 0 ? n : 1), sizeof(int));
+    for (int u = 0; u < p; u++) {
+        int b = tstart[u], f = tstart[u + 1];
+        if (f - b < 2) continue;
+        memcpy(scratch, tlist + b, (size_t) (f - b) * sizeof(int));
+        R_isort(scratch, f - b);
+        for (int j = 1; j < f - b; j++)
+            if (scratch[j] == scratch[j - 1])
+                error("set_edges: arc %d -> %d given more than once",
+                      u + 1, scratch[j] + 1);
+    }
+
+    /* acyclic, and the order the arcs will be inserted in */
+    int *queue = (int *) R_alloc((size_t) p, sizeof(int));
+    int qh = 0, qt = 0;
+    for (int v = 0; v < p; v++) if (indeg[v] == 0) queue[qt++] = v;
+    while (qh < qt) {
+        int u = queue[qh++];
+        for (int j = tstart[u]; j < tstart[u + 1]; j++)
+            if (--indeg[tlist[j]] == 0) queue[qt++] = tlist[j];
+    }
+    if (qt < p) error("set_edges: target edge list is cyclic");
+
+    /* ---- validated; only now is the old graph destroyed --------------- */
     int nold = d->nedges;
     int *of = (int *) R_alloc((size_t) (nold > 0 ? nold : 1), sizeof(int));
     int *ot = (int *) R_alloc((size_t) (nold > 0 ? nold : 1), sizeof(int));
@@ -60,25 +113,11 @@ set_edges(idl_dag *d, const int *from, const int *to, int n) {
     }
     for (int e = 0; e < k; e++) idl_dag_remove_edge(d, of[e], ot[e]);
 
-    int *indeg = (int *) R_alloc((size_t) p, sizeof(int));
-    memset(indeg, 0, (size_t) p * sizeof(int));
-    for (int e = 0; e < n; e++) indeg[to[e]]++;
-    int *queue = (int *) R_alloc((size_t) p, sizeof(int));
-    int qh = 0, qt = 0;
-    for (int v = 0; v < p; v++) if (indeg[v] == 0) queue[qt++] = v;
-    char *done = (char *) R_alloc((size_t) p, sizeof(char));
-    memset(done, 0, (size_t) p);
-    while (qh < qt) {
-        int u = queue[qh++];
-        done[u] = 1;
-        for (int e = 0; e < n; e++) {
-            if (from[e] != u) continue;
-            idl_dag_add_edge(d, from[e], to[e]);
-            if (--indeg[to[e]] == 0) queue[qt++] = to[e];
-        }
+    for (int i = 0; i < p; i++) {
+        int u = queue[i];
+        for (int j = tstart[u]; j < tstart[u + 1]; j++)
+            idl_dag_add_edge(d, u, tlist[j]);
     }
-    for (int v = 0; v < p; v++)
-        if (!done[v]) error("set_edges: target edge list is cyclic");
 }
 
 /* the member of the class selected by pick[c] in each component */
@@ -551,9 +590,11 @@ C_dag_imec_members(SEXP st, SEXP tgt_R, SEXP maxmem_R) {
 SEXP
 C_dag_set_edges(SEXP st, SEXP em_R) {
     idl_dag *d = idlBNs_dag_from_extptr(st);
-    if (TYPEOF(em_R) != INTSXP)
-        error("C_dag_set_edges: 'em' must be an integer matrix");
-    int n = (int) (XLENGTH(em_R) / 2);
+    /* shape checked before anything else: the arc count came from
+       XLENGTH()/2, which reads a matrix of any other shape as pairs */
+    if (TYPEOF(em_R) != INTSXP || !isMatrix(em_R) || nrows(em_R) != 2)
+        error("C_dag_set_edges: 'em' must be a 2-row integer matrix");
+    int n = ncols(em_R);
     const int *a = INTEGER(em_R);
     void *vmax = vmaxget();
     int *from = (int *) R_alloc((size_t) (n > 0 ? n : 1), sizeof(int));
