@@ -31,7 +31,22 @@ typedef struct {
     int      cap;
     cp_node *node;
     int      ok;        /* 0 once anything overflowed or exceeded a bound  */
+    int      inexact;   /* 1 once a count stopped being exact in a double  */
 } cp_ctx;
+
+/*
+ * Sampling and unranking need the counts to be EXACT, not merely finite: a
+ * clique is chosen by comparing a uniform integer against cumulative weights,
+ * and a rank is decoded by subtracting them. Doubles hold integers exactly up
+ * to 2^53, and cp_fac() is exact up to 18! = 6.4e15; past either, the weights
+ * are rounded and the draw is no longer uniform on the class. cp_build() sets
+ * ctx->inexact when it crosses one of those, and the samplers decline rather
+ * than return a draw they cannot vouch for. COUNTING is unaffected -- an
+ * approximate double is the expected answer for a class of 10^30 members, and
+ * counting such classes is the point of the algorithm.
+ */
+#define CP_EXACT_MAX 9007199254740992.0   /* 2^53 */
+#define CP_FAC_EXACT 18                   /* largest n with n! exact         */
 
 /* Build the memo for the component `uni`; returns its node id, or -1 on
    failure. Allocation is R_alloc'd, so nothing needs freeing. */

@@ -487,7 +487,8 @@ sample_and_apply(idl_dag *d, const iess *G, int rng) {
         memset(&ctxs[c], 0, sizeof(cp_ctx)); ctxs[c].ok = 1;
         cp_vset uni = (cc[c].m == 64) ? ~(cp_vset) 0 : (((cp_vset) 1 << cc[c].m) - 1);
         ids[c] = cp_build(&ctxs[c], cc[c].adj, cc[c].m, uni);
-        if (ids[c] < 0) return 0;
+        /* exact counts, or decline: see cliquepick.h */
+        if (ids[c] < 0 || ctxs[c].inexact) return 0;
     }
 
     /* Nothing between GetRNGstate() and PutRNGstate() can longjmp: cp_sample()
@@ -642,7 +643,8 @@ C_dag_imec_members(SEXP st, SEXP tgt_R, SEXP maxmem_R) {
         memset(&ctxs[c], 0, sizeof(cp_ctx)); ctxs[c].ok = 1;
         cp_vset uni = (cc[c].m == 64) ? ~(cp_vset) 0 : (((cp_vset) 1 << cc[c].m) - 1);
         ids[c] = cp_build(&ctxs[c], cc[c].adj, cc[c].m, uni);
-        if (ids[c] < 0) { vmaxset(vmax); return R_NilValue; }
+        /* exact counts, or decline: see cliquepick.h */
+        if (ids[c] < 0 || ctxs[c].inexact) { vmaxset(vmax); return R_NilValue; }
         total *= ctxs[c].node[ids[c]].total;
     }
     if (!R_FINITE(total) || (!ISNA(max_mem) && total > max_mem) ||

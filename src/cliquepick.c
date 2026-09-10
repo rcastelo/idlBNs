@@ -368,12 +368,14 @@ cp_build(cp_ctx *ctx, const cp_vset *adj, int m, cp_vset uni) {
             fps[a + 1] = cp_popcount(chain[a]);
         }
         nd->cl[v] = K[v];
+        if (cp_popcount(K[v]) > CP_FAC_EXACT) ctx->inexact = 1;
         nd->w[v]  = prod * cp_phi(cp_popcount(K[v]), fps, nch + 1);
         total += nd->w[v];
     }
     nd = &ctx->node[id];
     nd->total = total;
     if (!R_FINITE(total) || total < 0.0) { ctx->ok = 0; return -1; }
+    if (total > CP_EXACT_MAX) ctx->inexact = 1;
     return id;
 }
 
@@ -420,11 +422,24 @@ cp_sample(cp_ctx *ctx, int id, int *ord, int *tick) {
        free of RNG contact and the two engines' streams aligned. */
     int j = 0;
     if (nd->ncl > 1) {
-        double u = unif_rand() * nd->total, acc = 0.0;
+        /*
+         * An exact uniform integer on {0, ..., total-1}, not unif_rand()
+         * scaled by total. unif_rand() lives on a grid of about 2^-32 under
+         * Mersenne-Twister, so scaling it spreads at most 2^32 distinct
+         * values over [0, total) and a branch narrower than total * 2^-32 can
+         * contain no grid point at all -- unreachable, however positive its
+         * weight. At total = 2^40 the top 256 units of the range cannot be
+         * reached, and a 13-vertex clique already has 13! = 6.2e9 > 2^32.
+         * R_unif_index() instead draws enough random bits and rejects, so
+         * every branch gets exactly its share. cp_build() has already
+         * refused anything above 2^53, where the weights themselves would
+         * stop being exact.
+         */
+        double u = R_unif_index(nd->total), acc = 0.0;
         j = nd->ncl - 1;
         for (int i = 0; i < nd->ncl; i++) {
             acc += nd->w[i];
-            if (u <= acc) { j = i; break; }
+            if (u < acc) { j = i; break; }
         }
     }
 
@@ -739,7 +754,9 @@ C_cp_amo_list(SEXP A_R, SEXP limit_R) {
         memset(&ctxs[c], 0, sizeof(cp_ctx)); ctxs[c].ok = 1;
         cp_vset uni = (ms[c] == 64) ? ~(cp_vset) 0 : (((cp_vset) 1 << ms[c]) - 1);
         ids[c] = cp_build(&ctxs[c], ab + (size_t) c * 64, ms[c], uni);
-        if (ids[c] < 0) { vmaxset(vmax); return R_NilValue; }
+        /* the counts must be exact for a uniform draw or a decoded rank;
+           counting alone tolerates rounding (cliquepick.h) */
+        if (ids[c] < 0 || ctxs[c].inexact) { vmaxset(vmax); return R_NilValue; }
         total *= ctxs[c].node[ids[c]].total;
     }
     if (!R_FINITE(total) || (!ISNA(limit) && total > limit) ||
@@ -815,7 +832,9 @@ C_cp_amo_sample(SEXP A_R) {
         memset(&ctxs[c], 0, sizeof(cp_ctx)); ctxs[c].ok = 1;
         cp_vset uni = (ms[c] == 64) ? ~(cp_vset) 0 : (((cp_vset) 1 << ms[c]) - 1);
         ids[c] = cp_build(&ctxs[c], ab + (size_t) c * 64, ms[c], uni);
-        if (ids[c] < 0) { vmaxset(vmax); return R_NilValue; }
+        /* the counts must be exact for a uniform draw or a decoded rank;
+           counting alone tolerates rounding (cliquepick.h) */
+        if (ids[c] < 0 || ctxs[c].inexact) { vmaxset(vmax); return R_NilValue; }
     }
 
     /* Nothing between GetRNGstate() and PutRNGstate() can longjmp: cp_sample()

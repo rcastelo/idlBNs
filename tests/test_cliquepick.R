@@ -132,3 +132,45 @@ local({
     stopifnot(t8 > 0, t9 < 25 * t8)
 })
 cat("test_cliquepick.R: listing is output-proportional\n")
+
+## The clique is chosen with an EXACT uniform integer, and the counts must be
+## exact for that to mean anything.
+##
+## unif_rand() lives on a ~2^-32 grid under Mersenne-Twister, so the old
+## `unif_rand() * total` spread at most 2^32 distinct values over [0, total):
+## at total = 2^40 the top 256 units of the range were unreachable, and any
+## branch narrower than total * 2^-32 could hold no grid point at all,
+## however positive its weight. A 13-vertex clique already has 13! > 2^32.
+## R_unif_index() draws bits and rejects instead, so every branch gets its
+## share exactly. Above 2^53 -- or a clique past 18!, where cp_fac() stops
+## being exact -- the weights themselves round, and the samplers decline
+## rather than return a draw they cannot vouch for. COUNTING still answers.
+local({
+    K <- function(m) { A <- matrix(TRUE, m, m); diag(A) <- FALSE; A }
+    ## exact side of both boundaries: draws, and the count is m!
+    for (m in c(13L, 18L)) {
+        stopifnot(isTRUE(all.equal(.Call(idlBNs:::C_cp_amo_count, K(m)),
+                                   factorial(m))),
+                  !is.null(.Call(idlBNs:::C_cp_amo_sample, K(m))))
+    }
+    ## past it: declines, but counting is unaffected -- an approximate double
+    ## is the expected answer for a class of 10^18 members
+    for (m in c(20L, 25L)) {
+        stopifnot(isTRUE(all.equal(.Call(idlBNs:::C_cp_amo_count, K(m)),
+                                   factorial(m))),
+                  is.null(.Call(idlBNs:::C_cp_amo_sample, K(m))),
+                  is.null(.Call(idlBNs:::C_cp_amo_list, K(m), Inf)))
+    }
+    ## and the draw is uniform where a clique choice is actually made: this
+    ## component has several maximal cliques, so cp_sample() weights them
+    U <- matrix(FALSE, 6, 6)
+    for (e in list(c(1,2), c(2,3), c(1,3), c(3,4), c(4,5), c(4,6), c(5,6)))
+        U[e[1], e[2]] <- U[e[2], e[1]] <- TRUE
+    n <- .Call(idlBNs:::C_cp_amo_count, U)
+    set.seed(1)
+    tab <- table(replicate(120000,
+                 paste(.Call(idlBNs:::C_cp_amo_sample, U), collapse = ",")))
+    stopifnot(length(tab) == n,
+              stats::chisq.test(as.vector(tab))$p.value > 1e-4)
+})
+cat("test_cliquepick.R: exact weighted choice, and declines when counts round\n")

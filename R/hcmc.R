@@ -56,12 +56,18 @@
 #' equivalent: the walk is a random walk on the class, so its equilibrium is
 #' proportional to the number of (\emph{I}-)covered arcs of each member and is
 #' not uniform for any value of `r`.  The exact draw has no limit on the size
-#' of the class, and none on the number of vertices in the DAG; its one
-#' implementation limit is that vertex sets within an undirected chain
-#' component are 64-bit masks, so a component of more than 64 vertices makes it
-#' decline and that draw reverts to the walk, which is counted in
-#' `sampler.fallbacks`. Components that large need a DAG with almost no
-#' immoralities; the largest seen for random DAGs up to \eqn{p = 500} is 16.
+#' of the class, and none on the number of vertices in the DAG. It declines,
+#' reverting to the walk and counting the draw in `sampler.fallbacks`, in two
+#' cases. First, vertex sets within an undirected chain component are 64-bit
+#' masks, so a component of more than 64 vertices is out of reach; components
+#' that large need a DAG with almost no immoralities, and the largest seen for
+#' random DAGs up to \eqn{p = 500} is 16. Second, uniformity needs the
+#' per-component counts to be \emph{exact}, because the draw compares a
+#' uniform integer against cumulative counts: doubles hold integers exactly
+#' only to \eqn{2^{53}}, and a clique of more than 18 vertices has a
+#' factorial past that, so beyond either bound the draw is declined rather
+#' than made with rounded weights. Counting is unaffected and still answers
+#' for a class of any size.
 #'
 #' @param escape (Default `"trials"`) A character string selecting what happens
 #' at a local maximum. `"trials"` re-randomises the current DAG within its
