@@ -118,6 +118,17 @@ set_edges(idl_dag *d, const int *from, const int *to, int n) {
         for (int j = tstart[u]; j < tstart[u + 1]; j++)
             idl_dag_add_edge(d, u, tlist[j]);
     }
+
+    /* Inserting by topological source order reproduces each vertex's child
+       sequence but not its parent insertion order, so a rebuild is not the
+       identity on pa[] even when handed the edge list just read out of the
+       graph. The original order cannot be recovered from an edge matrix at
+       all -- it is the history of the search, while the matrix groups arcs by
+       tail -- so make the rebuild canonical instead: ascending, which is what
+       the R engine's rebuild from an adjacency matrix produces. A rebuild is
+       then idempotent and history-independent, and the exhaustive escape's
+       restore leaves the same state in both engines. */
+    idl_dag_canonical_order(d);
 }
 
 /* the member of the class selected by pick[c] in each component */
@@ -532,7 +543,8 @@ C_dag_imec_size(SEXP st, SEXP tgt_R) {
 /*
  * C_dag_imec_members -- every member of the class, each as a 2 x m integer
  * matrix in C_dag_edgeM() format. Returns NULL when the class has more than
- * maxmem members. The DAG state is left exactly as it was found.
+ * maxmem members. The DAG state is not touched at all -- not saved and put
+ * back, but never written in the first place.
  *
  * The class size is computed FIRST, by Clique-Picking and without enumerating
  * anything, and the budget is applied to it before a single member is built.
@@ -571,15 +583,16 @@ C_dag_imec_members(SEXP st, SEXP tgt_R, SEXP maxmem_R) {
     }
     int ntot = (int) total;
 
-    /* remember the DAG we were handed, to restore it at the end */
-    int nold = d->nedges;
-    int *of = (int *) R_alloc((size_t) (nold > 0 ? nold : 1), sizeof(int));
-    int *ot = (int *) R_alloc((size_t) (nold > 0 ? nold : 1), sizeof(int));
-    { int k = 0;
-      for (int u = 0; u < d->p; u++) {
-          const idl_ivec *chu = &d->ch[u];
-          for (int j = 0; j < chu->n; j++) { of[k] = u; ot[k] = chu->v[j]; k++; } } }
-
+    /* Nothing below mutates the DAG: ie_build() reads it, and each member is
+       emitted as an edge matrix rather than applied. An earlier version
+       enumerated by orienting the state in place and captured the arcs here
+       to put back afterwards; that capture-and-restore outlived its reason
+       and was not free. set_edges() rebuilds by topological source order,
+       which reproduces each vertex's child sequence but NOT its parent
+       insertion order, so restoring perturbed pa[] -- the sequence handed to
+       the score function -- in 119 of 200 states tested. An exhaustive escape
+       that found no improving move still changed the arithmetic of every
+       later score. */
     int *pos = (int *) R_alloc((size_t) d->p, sizeof(int));
     int ord[64];
     SEXP ans = PROTECT(allocVector(VECSXP, ntot));
@@ -615,7 +628,6 @@ C_dag_imec_members(SEXP st, SEXP tgt_R, SEXP maxmem_R) {
         SET_VECTOR_ELT(ans, t, em);
         UNPROTECT(3);
     }
-    set_edges(d, of, ot, nold);
     UNPROTECT(1);
     vmaxset(vmax);
     return ans;
