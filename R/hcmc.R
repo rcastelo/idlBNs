@@ -530,11 +530,12 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
         cli_progress_done("{algname} algorithm completed")
     }
 
-    if (verbose && (sampler.fallbacks > 0L || escape.fallbacks > 0L))
-        cli_alert_warning(paste("exact machinery declined {sampler.fallbacks}",
-                                "time{?s} while sampling and {escape.fallbacks}",
-                                "time{?s} while escaping; those steps used the",
-                                "rcar() walk and the MAXTRIALS budget instead"))
+    if (verbose && (sampler.fallbacks > 0L || escape.fallbacks > 0L)) {
+        msg <- paste("exact sampling fell back to RCAR {sampler.fallbacks}",
+                     "time{?s}; exhaustive enumeration fell back the MAXTRIALS",
+                     "budget {escape.fallbacks} time{?s}")
+        cli_alert_warning(msg)
+    }
 
     list(dag=dag, sco=s1, sampler.fallbacks=sampler.fallbacks,
          escape.fallbacks=escape.fallbacks)
