@@ -187,7 +187,8 @@ static inline int ie_isnbr(const iess *G, int u, int v) {
 /*
  * Per-vertex membership in the target family, as a word array: an arc u -> v is
  * protected by the targets exactly when the two masks differ, which is the
- * |I ^ {u, v}| = 1 condition. Costs O(p * K / 64) instead of the p^2 matrix.
+ * condition that some I contains exactly one of u and v. Costs O(p * K / 64)
+ * instead of the p^2 matrix.
  */
 static int
 build_tmask(SEXP tgt, int p, uint64_t **maskp) {

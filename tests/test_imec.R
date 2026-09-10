@@ -28,8 +28,27 @@ gnel   <- function(A) { nn <- as.character(seq_len(nrow(A)))
     dimnames(A) <- list(nn, nn); as(as(A * 1, "graphAM"), "graphNEL") }
 rdag   <- function(p, prob) { o <- sample(p); A <- matrix(FALSE, p, p)
     for (i in 1:(p-1)) for (j in (i+1):p) if (runif(1) < prob) A[o[i], o[j]] <- TRUE; A }
-rtgts  <- function(p, k) if (k == 0) list(integer(0)) else
-    c(list(integer(0)), lapply(sample(p, k), function(v) as.integer(v)))
+## Target families. Single-vertex interventions are the easy case: whenever
+## either endpoint of an arc is targeted the two have different membership
+## masks, so the arc is target-protected. A target containing BOTH endpoints
+## gives them equal masks and leaves the arc unprotected -- a different branch
+## of .protects() / tm_protects() that single-vertex families never reach. So
+## draw some targets as the two ends of an actual arc, some as random sets of
+## two or three, and some as single vertices.
+rtgts  <- function(p, k, A = NULL) {
+    if (k == 0) return(list(integer(0)))
+    arcs <- if (is.null(A)) NULL else which(A, arr.ind = TRUE)
+    one <- function(i) {
+        u <- runif(1)
+        if (!is.null(arcs) && nrow(arcs) > 0 && u < 0.40)
+            as.integer(sort(arcs[sample(nrow(arcs), 1), ]))
+        else if (u < 0.70)
+            as.integer(sort(sample(p, min(p, sample(2:3, 1)))))
+        else
+            as.integer(sample(p, 1))
+    }
+    c(list(integer(0)), lapply(seq_len(k), one))
+}
 key    <- function(A) paste(which(A), collapse = ",")
 acyc   <- function(A) { a <- A; repeat { b <- a | ((a %*% a) > 0)
     if (all(b == a)) break; a <- b }; !any(diag(a)) }
@@ -61,7 +80,7 @@ brute <- function(A0, tg) {
 ## 1. the I-essential graph, against pcalg -------------------------------------
 set.seed(1)
 for (it in 1:150) {
-    p <- sample(4:8, 1); A <- rdag(p, 0.3); tg <- rtgts(p, sample(0:3, 1))
+    p <- sample(4:8, 1); A <- rdag(p, 0.3); tg <- rtgts(p, sample(0:3, 1), A)
     ref <- as(as(dag2essgraph(gnel(A), targets = tg), "graphNEL"), "matrix") > 0
     dimnames(ref) <- NULL
     stopifnot(all(iess(A, tg) == ref))
@@ -70,7 +89,7 @@ for (it in 1:150) {
 ## 2. the class itself, against brute force ------------------------------------
 set.seed(2)
 for (it in 1:80) {
-    p <- sample(5:7, 1); A <- rdag(p, 0.35); tg <- rtgts(p, sample(0:2, 1))
+    p <- sample(5:7, 1); A <- rdag(p, 0.35); tg <- rtgts(p, sample(0:2, 1), A)
     L <- idlBNs:::imec.list.ref(A, tg); if (is.null(L)) next
     B <- brute(A, tg)
     stopifnot(setequal(names(B), vapply(L, key, "")),
@@ -81,7 +100,7 @@ for (it in 1:80) {
 set.seed(3)
 found <- 0
 while (found < 3) {
-    p <- sample(5:7, 1); A <- rdag(p, 0.45); tg <- rtgts(p, 1)
+    p <- sample(5:7, 1); A <- rdag(p, 0.45); tg <- rtgts(p, 1, A)
     cs <- idlBNs:::imec.size(A, tg)
     if (is.na(cs) || cs < 5) next
     found <- found + 1
@@ -93,7 +112,7 @@ while (found < 3) {
 ## 4. an I-covered arc reversal does not leave the I-equivalence class ---------
 set.seed(4)
 for (it in 1:100) {
-    p <- sample(5:8, 1); A <- rdag(p, 0.35); tg <- rtgts(p, sample(1:2, 1))
+    p <- sample(5:8, 1); A <- rdag(p, 0.35); tg <- rtgts(p, sample(1:2, 1), A)
     ut <- sort(unique(unlist(tg))); E <- which(A, arr.ind = TRUE)
     ref <- iess(A, tg)
     for (e in seq_len(nrow(E))) {

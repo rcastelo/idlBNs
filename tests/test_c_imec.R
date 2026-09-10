@@ -34,12 +34,31 @@ em2adj <- function(em, p) { A <- matrix(FALSE, p, p)
 key    <- function(A) paste(which(A), collapse = ",")
 rdag   <- function(p, prob) { o <- sample(p); A <- matrix(FALSE, p, p)
     for (i in 1:(p-1)) for (j in (i+1):p) if (runif(1) < prob) A[o[i], o[j]] <- TRUE; A }
-rtgts  <- function(p, k) if (k == 0) list(integer(0)) else
-    c(list(integer(0)), lapply(sample(p, k), function(v) as.integer(v)))
+## Target families. Single-vertex interventions are the easy case: whenever
+## either endpoint of an arc is targeted the two have different membership
+## masks, so the arc is target-protected. A target containing BOTH endpoints
+## gives them equal masks and leaves the arc unprotected -- a different branch
+## of .protects() / tm_protects() that single-vertex families never reach. So
+## draw some targets as the two ends of an actual arc, some as random sets of
+## two or three, and some as single vertices.
+rtgts  <- function(p, k, A = NULL) {
+    if (k == 0) return(list(integer(0)))
+    arcs <- if (is.null(A)) NULL else which(A, arr.ind = TRUE)
+    one <- function(i) {
+        u <- runif(1)
+        if (!is.null(arcs) && nrow(arcs) > 0 && u < 0.40)
+            as.integer(sort(arcs[sample(nrow(arcs), 1), ]))
+        else if (u < 0.70)
+            as.integer(sort(sample(p, min(p, sample(2:3, 1)))))
+        else
+            as.integer(sample(p, 1))
+    }
+    c(list(integer(0)), lapply(seq_len(k), one))
+}
 
 set.seed(7)
 for (it in 1:150) {
-    p <- sample(4:8, 1); A <- rdag(p, 0.4); tg <- rtgts(p, sample(0:2, 1))
+    p <- sample(4:8, 1); A <- rdag(p, 0.4); tg <- rtgts(p, sample(0:2, 1), A)
     st <- dag_new(p); dag_set(st, adj2em(A))
     stopifnot(identical(em2adj(dag_edgeM(st), p), A))     # set_edges round trip
 

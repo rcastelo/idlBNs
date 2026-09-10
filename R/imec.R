@@ -22,7 +22,7 @@
 ## undirected edge is A[i, j] && A[j, i].
 
 ## an arrow u -> v is protected by the targets when some target tells the two
-## apart, i.e. |I ^ {u, v}| = 1 for some I in the family
+## apart, i.e. exactly one of u and v belongs to some I in the family of targets.
 .protects <- function(targets, u, v)
     any(vapply(targets, function(I) ((u %in% I) + (v %in% I)) == 1L, TRUE))
 
