@@ -603,7 +603,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
 
 .check_escape.max <- function(escape.max) {
     if (!is.numeric(escape.max) || length(escape.max) != 1 ||
-        is.na(escape.max) || escape.max <= 0 ||
+        is.nan(escape.max) || escape.max <= 0 ||
         escape.max != floor(escape.max)) {
         msg <- paste("The 'escape.max' argument must be either a positive",
                      "integer scalar or NA/Inf, which imply no limit.")
