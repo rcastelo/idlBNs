@@ -335,12 +335,30 @@ ie_build(const idl_dag *d, SEXP tgt, iess *G) {
  */
 typedef struct { int m; int *v; cp_vset adj[64]; } chaincomp;
 
+/*
+ * How many of those a graph on p vertices can have. ie_components() keeps
+ * only components of at least two vertices, and components are disjoint, so
+ * the count is at most floor(p / 2); the + 1 keeps the allocation non-zero at
+ * p = 1. At 528 bytes apiece this is worth halving: p entries came to 21 MB
+ * at p = 40000. ie_components() rechecks the bound before it writes, so the
+ * tighter allocation cannot be overrun if that invariant ever changes.
+ */
+#define CHAINCOMP_CAP(p) ((size_t) ((p) / 2 + 1))
+
 static int
 ie_components(const iess *G, chaincomp *cc, int *ncomp) {
     int p = G->p;
     char *seen = (char *) R_alloc((size_t) p, sizeof(char));
     int *stack = (int *) R_alloc((size_t) p, sizeof(int));
     int *loc = (int *) R_alloc((size_t) p, sizeof(int));
+    /* One traversal buffer, reused by every component, with only the n
+       vertices actually found copied out and kept. Giving each component its
+       own p-element buffer instead cost Theta(p^2): a graph whose chain
+       components are all small -- a perfect matching being the extreme, p/2
+       components of two vertices -- allocated p/2 buffers of p integers, 800
+       MB at p = 20000, to hold p integers' worth of vertices. Scratch is now
+       Theta(p) and what is retained is sum(n) <= p. */
+    int *buf = (int *) R_alloc((size_t) p, sizeof(int));
     memset(seen, 0, (size_t) p);
     int nc = 0;
     for (int v0 = 0; v0 < p; v0++) {
@@ -350,23 +368,28 @@ ie_components(const iess *G, chaincomp *cc, int *ncomp) {
             if (G->undir[G->sarc[k]]) { has = 1; break; }
         if (!has) { seen[v0] = 1; continue; }
         int top = 0, n = 0;
-        int *vs = (int *) R_alloc((size_t) p, sizeof(int));
-        seen[v0] = 1; stack[top++] = v0; vs[n++] = v0;
+        seen[v0] = 1; stack[top++] = v0; buf[n++] = v0;
         while (top > 0) {
             int w = stack[--top];
             for (int k = G->sstart[w]; k < G->sstart[w + 1]; k++) {
                 if (!G->undir[G->sarc[k]]) continue;
                 int z = G->slist[k];
-                if (!seen[z]) { seen[z] = 1; stack[top++] = z; vs[n++] = z; }
+                if (!seen[z]) { seen[z] = 1; stack[top++] = z; buf[n++] = z; }
             }
         }
         if (n < 2) continue;
         if (n > 64) return 0;
         for (int a = 1; a < n; a++) {
-            int x = vs[a], b = a - 1;
-            while (b >= 0 && vs[b] > x) { vs[b + 1] = vs[b]; b--; }
-            vs[b + 1] = x;
+            int x = buf[a], b = a - 1;
+            while (b >= 0 && buf[b] > x) { buf[b + 1] = buf[b]; b--; }
+            buf[b + 1] = x;
         }
+        /* kept: exactly the n vertices of this component, never p */
+        int *vs = (int *) R_alloc((size_t) n, sizeof(int));
+        memcpy(vs, buf, (size_t) n * sizeof(int));
+        if ((size_t) nc >= CHAINCOMP_CAP(p))
+            error("ie_components: more than %d chain components on %d "
+                  "vertices", (int) CHAINCOMP_CAP(p), p);
         chaincomp *C = &cc[nc];
         C->m = n; C->v = vs;
         for (int a = 0; a < n; a++) loc[vs[a]] = a;
@@ -391,7 +414,7 @@ ie_components(const iess *G, chaincomp *cc, int *ncomp) {
 static int
 sample_and_apply(idl_dag *d, const iess *G, int rng) {
     int p = d->p;
-    chaincomp *cc = (chaincomp *) R_alloc((size_t) (p > 0 ? p : 1), sizeof(chaincomp));
+    chaincomp *cc = (chaincomp *) R_alloc(CHAINCOMP_CAP(p), sizeof(chaincomp));
     int nc = 0;
     if (!ie_components(G, cc, &nc)) return 0;
     if (nc == 0) return 1;                       /* the class is a singleton */
@@ -475,7 +498,7 @@ C_dag_imec_size(SEXP st, SEXP tgt_R) {
     void *vmax = vmaxget();
     iess G;
     ie_build(d, tgt_R, &G);
-    chaincomp *cc = (chaincomp *) R_alloc((size_t) (d->p > 0 ? d->p : 1), sizeof(chaincomp));
+    chaincomp *cc = (chaincomp *) R_alloc(CHAINCOMP_CAP(d->p), sizeof(chaincomp));
     int nc = 0;
     if (!ie_components(&G, cc, &nc)) { vmaxset(vmax); return ScalarReal(NA_REAL); }
     double sz = 1.0;
@@ -511,7 +534,7 @@ C_dag_imec_members(SEXP st, SEXP tgt_R, SEXP maxmem_R) {
 
     iess G;
     ie_build(d, tgt_R, &G);
-    chaincomp *cc = (chaincomp *) R_alloc((size_t) (d->p > 0 ? d->p : 1), sizeof(chaincomp));
+    chaincomp *cc = (chaincomp *) R_alloc(CHAINCOMP_CAP(d->p), sizeof(chaincomp));
     int nc = 0;
     if (!ie_components(&G, cc, &nc)) { vmaxset(vmax); return R_NilValue; }
 
