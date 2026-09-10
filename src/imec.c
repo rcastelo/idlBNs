@@ -20,8 +20,10 @@
  * (JMLR 2023), after Hauser & Buehlmann (2012), the undirected components of
  * an I-essential graph are chordal and a DAG lies in the class iff it is
  * obtained by acyclic moral orientations of those components INDEPENDENTLY of
- * each other. So |[D]_I| is a product of per-component AMO counts and one
- * independent uniform draw per component is uniform on the class.
+ * each other. So |[D]_I| is a product of per-component AMO counts, and
+ * drawing one member of each component independently is uniform on the class.
+ * (One member, that is -- not one call on R's generator; see the RNG contract
+ * on C_dag_imec_sample below.)
  *
  * TWO ORDERING RULES, so that this engine and the R one stay bit-identical
  * and tests/test_search_engines.R keeps passing:
@@ -548,9 +550,26 @@ sample_and_apply(idl_dag *d, const iess *G, int rng) {
  * tgt_R     VECSXP       the target family, a list of 1-based integer vectors
  *
  * Returns TRUE when it sampled, FALSE when some component was too large and
- * the caller must fall back to C_dag_rcar. Consumes exactly one R_unif_index()
- * per component, in component order, matching imec.sample() in R/imec.R
- * (rule 4). Nothing that can longjmp happens between Get- and PutRNGstate().
+ * the caller must fall back to C_dag_rcar.
+ *
+ * THE RNG CONTRACT is stream equivalence with imec.sample() in R/imec.R, not
+ * a fixed number of draws. There is no counting it: cp_sample() spends one
+ * unif_rand() choosing a clique (and none at all when the node has just one),
+ * then R_unif_index() per Fisher-Yates step -- itself 1 to 3 unif_rand()
+ * calls under sample.kind = "Rejection" -- repeated for as many permutations
+ * as the forbidden-prefix test rejects, and then recurses into every
+ * subproblem. So the total depends on the component, on the draw, and on how
+ * many rejections it takes: over 400 seeds a complete component of 5 vertices
+ * consumed between 4 and 13 unif_rand() calls, and an 8-vertex path between
+ * 2 and 7.
+ *
+ * What holds instead, and what the tests pin, is that BOTH engines reach the
+ * same cp_sample() with the same components in the same order (rule 2), so
+ * they consume the same draws in the same sequence and leave .Random.seed in
+ * the same place. tests/test_c_imec.R section 3 asserts exactly that, on the
+ * value and on the seed; section 7 adds that a declined draw consumes
+ * nothing at all. Nothing that can longjmp happens between Get- and
+ * PutRNGstate() -- see cp_sample(), which reports failure by return value.
  */
 SEXP
 C_dag_imec_sample(SEXP st, SEXP tgt_R) {
