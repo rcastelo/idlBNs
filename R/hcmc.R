@@ -51,7 +51,13 @@
 #' The walk produced by the RCAR algorithm and the exact draw are not
 #' equivalent: the walk is a random walk on the class, so its equilibrium is
 #' proportional to the number of (\emph{I}-)covered arcs of each member and is
-#' not uniform for any value of `r`.
+#' not uniform for any value of `r`.  The exact draw has no limit on the size
+#' of the class, and none on the number of vertices in the DAG; its one
+#' implementation limit is that vertex sets within an undirected chain
+#' component are 64-bit masks, so a component of more than 64 vertices makes it
+#' decline and that draw reverts to the walk, which is counted in
+#' `sampler.fallbacks`.  Components that large need a DAG with almost no
+#' immoralities; the largest seen for random DAGs up to \eqn{p = 500} is 16.
 #'
 #' @param escape (Default `"trials"`) A character string selecting what happens
 #' at a local maximum. `"trials"` re-randomises the current DAG within its
@@ -59,26 +65,21 @@
 #' \emph{every} member of the class and takes the best move available from any
 #' of them, which settles the question of whether the search is really at a
 #' local maximum of the class; `MAXTRIALS` is then unused. It falls back to
-#' `"trials"` for a class the enumeration cannot handle, i.e. one larger than
-#' `escape.max` or containing a chain component larger than `max.class.size`.
+#' `"trials"` in the two cases the enumeration declines, both counted in
+#' `escape.fallbacks`: a class larger than `escape.max`, and a class whose size
+#' cannot be computed at all because some chain component has more than 64
+#' vertices. The second is the 64-bit mask limit described under `sampler`, and
+#' applies here whichever `sampler` is in use, since the escape enumerates the
+#' class regardless of how the search moves within it.
 #'
-#' @param max.class.size (Default 8) Positive integer scalar giving the largest
-#' undirected chain component the `escape="exhaustive"` enumeration will
-#' handle. It does \emph{not} limit `sampler="exact"`, which draws uniformly
-#' whatever the size of the class. That sampler carries an implementation
-#' limit of its own, unrelated to this one: it represents vertex sets within a
-#' chain component as 64-bit masks, so a component of more than 64 vertices
-#' makes it decline and the draw reverts to the `"rcar"` walk, which is
-#' counted in `sampler.fallbacks`. Components that large need a DAG with
-#' almost no immoralities; the largest seen for random DAGs up to
-#' \eqn{p = 500} is 16. The number of vertices in the whole DAG is
-#' unrestricted throughout.
-#'
-#' @param escape.max (Default 64) Positive numeric scalar giving the largest
+#' @param escape.max (Default 512) Positive numeric scalar giving the largest
 #' (\emph{I}-)equivalence class the `escape="exhaustive"` enumeration will
 #' walk. That escape scores one whole neighbourhood per member, so its cost
-#' grows linearly in the size of the class, which is why it is bounded by the
-#' class size and not only by `max.class.size`.
+#' grows linearly in the size of the class, which is why it is the class size
+#' that is bounded. Producing the members is not itself the expensive part:
+#' each one is generated directly from its index in the class, so listing
+#' costs one step per member listed and no more. What `escape.max` bounds is
+#' therefore the scoring, not the enumeration.
 #'
 #' @return A list with the following components: `dag`, a
 #' [`graphNEL`][graph::graphNEL-class] object with the structure of the learned
@@ -178,23 +179,23 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                  scorefun=iBIC, MAXTRIALS=5, verbose=TRUE,
                  engine=c("C", "R"),
                  sampler=c("rcar", "exact"), escape=c("trials", "exhaustive"),
-                 max.class.size=8L, escape.max=64) {
+                 escape.max=512) {
 
     engine <- match.arg(engine)
     sampler <- match.arg(sampler)
     escape <- match.arg(escape)
-    ## Two different limits, because the two features scale differently.
-    ##
-    ## max.class.size caps the CHAIN COMPONENT the sampler will enumerate: the
-    ## cost of one draw is the cost of enumerating that component's acyclic
-    ## moral orientations, which is at worst m! for a complete component.
-    ##
-    ## escape.max caps the CLASS SIZE the exhaustive escape will walk: that
+    ## escape.max caps the CLASS SIZE the exhaustive escape will walk. That
     ## escape scores one whole neighbourhood per member, which at p = 200 is
     ## about 10 ms, so its cost is linear in |[D]_I| with a large constant and
-    ## has to be bounded by the class size rather than by a component's.
-    ## Above it the search falls back to the MAXTRIALS budget.
-    max.class.sizeI <- as.integer(max.class.size)
+    ## has to be bounded by the class size. The size is known exactly and
+    ## cheaply before anything is enumerated, so a class over budget costs
+    ## nothing to refuse; above it the search falls back to the MAXTRIALS
+    ## budget. Sampling needs no limit of this kind at all.
+    ##
+    ## Listing the members is now output-proportional -- each is decoded
+    ## directly from its index in the class, one step per member -- rather than
+    ## Theta(m!), so the bound is purely about the scoring it feeds and can sit
+    ## far higher than the enumeration once allowed.
     escape.maxD <- as.double(escape.max)
     dat <- .check_input_data(dat)
     dag <- graphNEL(colnames(dat), edgemode="directed")
@@ -322,7 +323,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
             if (sampler == "exact") {
                 ## falls back to the walk when a chain component exceeds the
                 ## 64 vertices the exact sampler represents as a bitmask
-                if (!.Call(C_dag_imec_sample, st, targets, max.class.sizeI)) {
+                if (!.Call(C_dag_imec_sample, st, targets)) {
                     sampler.fallbacks <- sampler.fallbacks + 1L
                     .Call(C_dag_rcar, st, rlen, utargets)
                 }
@@ -351,7 +352,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
             } else if (escape == "exhaustive" &&
                        !is.null(mm <- {
                            m0 <- .Call(C_dag_imec_members, st, targets,
-                                       max.class.sizeI, escape.maxD)
+                                       escape.maxD)
                            if (is.null(m0))
                                escape.fallbacks <- escape.fallbacks + 1L
                            m0
@@ -390,7 +391,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
             } else if (trials < MAXTRIALS) {
                 s1 <- s0
                 if (sampler == "exact") {
-                    if (!.Call(C_dag_imec_sample, st, targets, max.class.sizeI)) {
+                    if (!.Call(C_dag_imec_sample, st, targets)) {
                         sampler.fallbacks <- sampler.fallbacks + 1L
                         .Call(C_dag_rcar, st, rlen, utargets)
                     }
@@ -413,7 +414,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
             s0 <- s1
             rcar.out <- if (sampler == "exact")
                 isample.move(dag, targets, utargets, anc, pasets, vidx, vnames,
-                             vidx.nodes, r, max.class.size)
+                             vidx.nodes, r)
             else rcar(dag, r, utargets, anc, pasets, vidx)
             if (isTRUE(rcar.out$fallback))
                 sampler.fallbacks <- sampler.fallbacks + 1L
@@ -453,7 +454,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
             } else if (escape == "exhaustive" &&
                        !is.null(mm <- {
                            m0 <- imec.members(dag, targets, vnames, vidx.nodes,
-                                              max.class.size, escape.max)
+                                              escape.max)
                            if (is.null(m0))
                                escape.fallbacks <- escape.fallbacks + 1L
                            m0
@@ -499,7 +500,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                 s1 <- s0
                 rcar.out <- if (sampler == "exact")
                     isample.move(dag, targets, utargets, anc, pasets, vidx, vnames,
-                                 vidx.nodes, r, max.class.size)
+                                 vidx.nodes, r)
                 else rcar(dag, r, utargets, anc, pasets, vidx)
                 if (isTRUE(rcar.out$fallback))
                     sampler.fallbacks <- sampler.fallbacks + 1L

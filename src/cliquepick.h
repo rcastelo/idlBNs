@@ -44,4 +44,11 @@ double cp_count(cp_ctx *ctx, int id);
  */
 void   cp_sample(cp_ctx *ctx, int id, int *ord, int *tick);
 
+/*
+ * The k-th member of the class rooted at `id`, 0-based, as a topological order
+ * written into ord[] from *tick. Enumerating a class of c members costs c
+ * calls, i.e. time proportional to the output. Valid for k < cp_count(ctx, id).
+ */
+void   cp_member(cp_ctx *ctx, int id, double k, int *ord, int *tick);
+
 #endif /* IDLBNS_CLIQUEPICK_H */

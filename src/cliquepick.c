@@ -445,6 +445,119 @@ cp_sample(cp_ctx *ctx, int id, int *ord, int *tick) {
         cp_sample(ctx, nd->sp[j][c], ord, tick);
 }
 
+/* --------------------------------------------------------- enumeration */
+
+/*
+ * The k-th member of the class, 0-based, written into ord[] as a vertex order.
+ *
+ * This is "unranking" in the sense of the combinatorial-generation literature
+ * (Nijenhuis & Wilf 1978; Kreher & Stinson 1999): fix a linear order on a set
+ * of N objects, and rank/unrank are the two directions of the bijection with
+ * {0, ..., N-1}, unranking returning the k-th object without generating the
+ * k-1 before it. The term is ours, not Wienobst et al.'s -- the paper counts
+ * (Proposition 25) and samples, and does not enumerate -- but their
+ * decomposition is what makes it available here.
+ *
+ * This is cp_sample() with the random draws replaced by the digits of k: the
+ * class is a disjoint union over clique nodes, and within a node a product of
+ * allowed permutations and independent subproblem choices, so k decodes as a
+ * mixed-radix index. Enumerating a class of c members therefore costs c
+ * unranks -- proportional to the output, where enumerating permutations of the
+ * component was Theta(m!) however few members the class had.
+ *
+ * Only called once the whole class is known to fit the caller's budget, so
+ * every count in play is small and the long arithmetic cannot overflow.
+ */
+/* the counts are integers held as doubles, so round rather than truncate: a
+   weight arriving as 3.9999999999 would otherwise shift every block boundary
+   and hand the decoder an index past the end of its clique */
+static inline long cp_rnd(double x) { return (long) (x + 0.5); }
+
+static void
+cp_unrank(cp_ctx *ctx, int id, long k, int *ord, int *tick) {
+    const cp_node *nd = &ctx->node[id];
+
+    int j = 0;
+    for (; j < nd->ncl - 1; j++) {
+        long w = cp_rnd(nd->w[j]);
+        if (k < w) break;
+        k -= w;
+    }
+
+    long prod = 1;
+    for (int c = 0; c < nd->nsp[j]; c++)
+        prod *= cp_rnd(ctx->node[nd->sp[j][c]].total);
+    long pi = k / prod, rest = k % prod;
+
+    int K[CP_MAXV], len = 0;
+    for (cp_vset c = nd->cl[j]; c; c &= c - 1) K[len++] = cp_first(c);
+    int o[CP_MAXV];
+    for (int i = 0; i < len; i++) o[K[i]] = len + 1;
+    for (int a = nd->nfp[j] - 1; a >= 0; a--) {
+        int sz = cp_popcount(nd->fp[j][a]);
+        for (cp_vset c = nd->fp[j][a]; c; c &= c - 1) o[cp_first(c)] = sz;
+    }
+
+    /*
+     * The pi-th allowed permutation of the clique. Backtracking with the
+     * forbidden-prefix test applied at every position: once the running
+     * maximum of o equals the current position the prefix is forbidden, and so
+     * is every completion of it, so the subtree is skipped rather than
+     * generated and rejected.
+     */
+    int perm[CP_MAXV], mxs[CP_MAXV + 1], choice[CP_MAXV];
+    char used[CP_MAXV];
+    memset(used, 0, sizeof used);   /* indexed by vertex, not by position */
+    mxs[0] = 0;
+    long seen = 0;
+    int d = 0, done = 0;
+    choice[0] = -1;
+    while (d >= 0) {
+        int v = -1;
+        for (int i = choice[d] + 1; i < len; i++)
+            if (!used[K[i]]) { v = i; break; }
+        if (v < 0) {                        /* level exhausted, back up */
+            choice[d] = -1;
+            d--;
+            if (d >= 0) used[K[choice[d]]] = 0;
+            continue;
+        }
+        choice[d] = v;
+        int mx = mxs[d];
+        if (o[K[v]] > mx) mx = o[K[v]];
+        if (mx == d + 1) continue;          /* forbidden prefix: prune */
+        used[K[v]] = 1;
+        mxs[d + 1] = mx;
+        perm[d] = K[v];
+        if (d == len - 1) {                 /* a complete allowed permutation */
+            if (seen == pi) { done = 1; break; }
+            seen++;
+            used[K[v]] = 0;
+            continue;
+        }
+        d++;
+        choice[d] = -1;
+    }
+
+    if (!done)               /* the clique had fewer allowed permutations than
+                                the decoded index: never silently emit garbage */
+        error("cp_unrank: index %ld past the %ld allowed permutations of a "
+              "clique of size %d", pi, seen, len);
+
+    for (int i = 0; i < len; i++) ord[(*tick)++] = perm[i];
+
+    for (int c = 0; c < nd->nsp[j]; c++) {
+        long tc = cp_rnd(ctx->node[nd->sp[j][c]].total);
+        cp_unrank(ctx, nd->sp[j][c], rest % tc, ord, tick);
+        rest /= tc;
+    }
+}
+
+void
+cp_member(cp_ctx *ctx, int id, double k, int *ord, int *tick) {
+    cp_unrank(ctx, id, (long) k, ord, tick);
+}
+
 /* ------------------------------------------------------- R entry points */
 
 /*
@@ -521,6 +634,64 @@ C_cp_amo_count(SEXP A_R) {
     }
     vmaxset(vmax);
     return ScalarReal(tot);
+}
+
+/*
+ * C_cp_amo_list -- every AMO of an undirected chordal graph, each as a 1-based
+ * order over all p vertices, or NULL when there are more than `limit` of them.
+ * The count is taken first, so an over-budget class costs no enumeration.
+ */
+SEXP
+C_cp_amo_list(SEXP A_R, SEXP limit_R) {
+    double limit = asReal(limit_R);
+    void *vmax = vmaxget();
+    int p, nc, **vs, *ms; cp_vset *ab;
+    if (!cp_read_components(A_R, &p, NULL, &vs, &ms, &ab, &nc)) {
+        vmaxset(vmax); return R_NilValue;
+    }
+    cp_ctx *ctxs = (cp_ctx *) R_alloc((size_t) (nc > 0 ? nc : 1), sizeof(cp_ctx));
+    int *ids = (int *) R_alloc((size_t) (nc > 0 ? nc : 1), sizeof(int));
+    double total = 1.0;
+    for (int c = 0; c < nc; c++) {
+        memset(&ctxs[c], 0, sizeof(cp_ctx)); ctxs[c].ok = 1;
+        cp_vset uni = (ms[c] == 64) ? ~(cp_vset) 0 : (((cp_vset) 1 << ms[c]) - 1);
+        ids[c] = cp_build(&ctxs[c], ab + (size_t) c * 64, ms[c], uni);
+        if (ids[c] < 0) { vmaxset(vmax); return R_NilValue; }
+        total *= ctxs[c].node[ids[c]].total;
+    }
+    if (!R_FINITE(total) || (!ISNA(limit) && total > limit) ||
+        total > (double) INT_MAX) { vmaxset(vmax); return R_NilValue; }
+    int ntot = (int) total;
+
+    char *inc = (char *) R_alloc((size_t) (p > 0 ? p : 1), sizeof(char));
+    int *pos = (int *) R_alloc((size_t) (p > 0 ? p : 1), sizeof(int));
+    int ord[CP_MAXV];
+    SEXP ans = PROTECT(allocVector(VECSXP, ntot));
+    for (int t = 0; t < ntot; t++) {
+        memset(inc, 0, (size_t) p);
+        long rest = t;
+        for (int c = 0; c < nc; c++) {
+            long tc = cp_rnd(ctxs[c].node[ids[c]].total);
+            int tick = 0;
+            cp_member(&ctxs[c], ids[c], (double) (rest % tc), ord, &tick);
+            rest /= tc;
+            if (tick != ms[c])
+                error("C_cp_amo_list: member covered %d of %d vertices", tick, ms[c]);
+            for (int i = 0; i < tick; i++) { pos[vs[c][ord[i]]] = i; inc[vs[c][ord[i]]] = 1; }
+        }
+        SEXP o = PROTECT(allocVector(INTSXP, p));
+        int *oo = INTEGER(o); int k = 0;
+        for (int c = 0; c < nc; c++)
+            for (int i = 0; i < ms[c]; i++)
+                for (int j = 0; j < ms[c]; j++)
+                    if (pos[vs[c][j]] == i) { oo[k++] = vs[c][j] + 1; break; }
+        for (int v = 0; v < p; v++) if (!inc[v]) oo[k++] = v + 1;
+        SET_VECTOR_ELT(ans, t, o);
+        UNPROTECT(1);
+    }
+    UNPROTECT(1);
+    vmaxset(vmax);
+    return ans;
 }
 
 /*

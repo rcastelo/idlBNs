@@ -176,32 +176,13 @@
 ## ---------------------------------------------------------------------------
 ## public interface
 
-## Decompose the I-equivalence class of `dag` into its independent pieces.
-## Returns NULL for `amos` of any component too large to enumerate; callers
-## then fall back to the rcar() walk rather than sampling a wrong distribution.
-imec.decompose <- function(A, targets = list(integer(0)), max.size = 8L) {
-    E <- .iessgraph(A, targets)
-    comps <- .uccgs(E)
-    U <- E & t(E)
-    amos <- lapply(comps, function(vs) .amos(U, vs, max.size))
-    list(directed = E & !t(E), comps = comps, amos = amos,
-         enumerable = !any(vapply(amos, is.null, TRUE)))
-}
-
-## |[D]_I|, exactly.  NA when some component exceeds max.size.
-imec.size <- function(A, targets = list(integer(0)), max.size = 8L, dec = NULL) {
-    if (is.null(dec)) dec <- imec.decompose(A, targets, max.size)
-    if (!dec$enumerable) return(NA_real_)
-    prod(vapply(dec$amos, length, 1L))
-}
-
 ## One draw, uniform on [D]_I, by Clique-Picking (src/cliquepick.c): the class
 ## factorises over the chain components of the I-essential graph, and the C
 ## routine returns a topological order whose induced orientation of each
 ## component is uniform among its acyclic moral orientations.  There is no
 ## component-size limit; both engines call this same code, which is what keeps
 ## their random streams aligned.
-imec.sample <- function(A, targets = list(integer(0)), max.size = 8L, dec = NULL) {
+imec.sample <- function(A, targets = list(integer(0))) {
     p <- nrow(A)
     if (p > 64L) return(NULL)
     E <- .iessgraph(A, targets)
@@ -218,30 +199,50 @@ imec.sample <- function(A, targets = list(integer(0)), max.size = 8L, dec = NULL
 }
 
 ## |[D]_I| by Clique-Picking, in polynomial time and with no size limit.
-imec.size.exact <- function(A, targets = list(integer(0))) {
+imec.size <- function(A, targets = list(integer(0))) {
     if (nrow(A) > 64L) return(NA_real_)
     E <- .iessgraph(A, targets)
     .Call(C_cp_amo_count, E & t(E))
 }
 
-## the enumerate-and-deduplicate sampler, kept as the test reference only
-imec.sample.ref <- function(A, targets = list(integer(0)), max.size = 8L, dec = NULL) {
-    if (is.null(dec)) dec <- imec.decompose(A, targets, max.size)
-    if (!dec$enumerable) return(NULL)
-    out <- dec$directed
-    for (j in seq_along(dec$amos))
-        out <- out | dec$amos[[j]][[sample.int(length(dec$amos[[j]]), 1L)]]
-    out
+## Every member of [D]_I, or NULL when there are more than `max.members` of
+## them. The count is taken first, so nothing is built for a class that will
+## be refused; each member is then decoded directly from its index in the
+## class ("unranking"), one step per member, never by generating permutations.
+imec.list <- function(A, targets = list(integer(0)), max.members = Inf) {
+    p <- nrow(A)
+    if (p > 64L) return(NULL)
+    E <- .iessgraph(A, targets)
+    U <- E & t(E)
+    orders <- .Call(C_cp_amo_list, U, as.double(max.members))
+    if (is.null(orders)) return(NULL)
+    dirpart <- E & !t(E)
+    ij <- which(U & upper.tri(U), arr.ind = TRUE)
+    lapply(orders, function(ord) {
+        pos <- integer(p); pos[ord] <- seq_len(p)
+        out <- dirpart
+        if (nrow(ij))
+            out[cbind(ifelse(pos[ij[, 1]] < pos[ij[, 2]], ij[, 1], ij[, 2]),
+                      ifelse(pos[ij[, 1]] < pos[ij[, 2]], ij[, 2], ij[, 1]))] <- TRUE
+        out
+    })
 }
 
-## every member of [D]_I.  NULL when the class is not enumerable.
-imec.list <- function(A, targets = list(integer(0)), max.size = 8L, dec = NULL) {
-    if (is.null(dec)) dec <- imec.decompose(A, targets, max.size)
-    if (!dec$enumerable) return(NULL)
-    out <- list(dec$directed)
-    for (j in seq_along(dec$amos)) {
-        nxt <- vector("list", length(out) * length(dec$amos[[j]])); i <- 0L
-        for (base in out) for (o in dec$amos[[j]]) { i <- i + 1L; nxt[[i]] <- base | o }
+## The enumerate-and-deduplicate listing, retained ONLY as a test reference for
+## the Clique-Picking enumerator: it walks the m! vertex orderings of each
+## component, so it is unusable in the search but is an independent check on
+## small components.
+imec.list.ref <- function(A, targets = list(integer(0)), max.size = 8L) {
+    p <- nrow(A)
+    E <- .iessgraph(A, targets)
+    U <- E & t(E)
+    comps <- .uccgs(E)
+    amos <- lapply(comps, function(vs) .amos(U, vs, max.size))
+    if (any(vapply(amos, is.null, TRUE))) return(NULL)
+    out <- list(E & !t(E))
+    for (j in seq_along(amos)) {
+        nxt <- vector("list", length(out) * length(amos[[j]])); i <- 0L
+        for (base in out) for (o in amos[[j]]) { i <- i + 1L; nxt[[i]] <- base | o }
         out <- nxt
     }
     out
@@ -278,12 +279,13 @@ imec.list <- function(A, targets = list(integer(0)), max.size = 8L, dec = NULL) 
 ## A uniform draw from the I-equivalence class of `dag`, returned in the same
 ## shape as rcar(): the DAG plus the ancestor matrix and parent sets, which are
 ## rebuilt because an arbitrary jump invalidates the incremental updates.
-## Falls back to rcar() when some chain component is too large to enumerate.
+## Falls back to rcar() only when a chain component exceeds the 64 vertices the
+## sampler represents as a bitmask.
 isample.move <- function(dag, targets, utargets, anc, pasets, vidx, vnames,
-                         vidx.nodes, r = 20L, max.size = 8L) {
+                         vidx.nodes, r = 20L) {
     p <- length(vnames)
     A <- .adj.from.dag(dag, p)
-    B <- imec.sample(A, targets, max.size)
+    B <- imec.sample(A, targets)
     if (is.null(B))
         return(c(rcar(dag, r, utargets, anc, pasets, vidx), list(fallback = TRUE)))
     list(dag = .dag.from.adj(B, vnames), anc = .anc.from.adj(B, vnames),
@@ -291,15 +293,13 @@ isample.move <- function(dag, targets, utargets, anc, pasets, vidx, vnames,
 }
 
 ## Every member of the I-equivalence class of `dag`, each with its bookkeeping.
-## NULL when the class is not enumerable.
-imec.members <- function(dag, targets, vnames, vidx.nodes, max.size = 8L,
-                         max.members = Inf) {
+## NULL when the class has more than `max.members` of them; the count is taken
+## before anything is built.
+imec.members <- function(dag, targets, vnames, vidx.nodes, max.members = Inf) {
     p <- length(vnames)
     A <- .adj.from.dag(dag, p)
-    dec <- imec.decompose(A, targets, max.size)
-    if (!dec$enumerable) return(NULL)
-    if (imec.size(A, targets, max.size, dec = dec) > max.members) return(NULL)
-    L <- imec.list(A, targets, max.size, dec = dec)
+    L <- imec.list(A, targets, max.members)
+    if (is.null(L)) return(NULL)
     lapply(L, function(B) list(dag = .dag.from.adj(B, vnames),
                                anc = .anc.from.adj(B, vnames),
                                pasets = .pasets.from.adj(B, vidx.nodes)))

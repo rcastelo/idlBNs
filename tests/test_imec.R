@@ -71,7 +71,7 @@ for (it in 1:150) {
 set.seed(2)
 for (it in 1:80) {
     p <- sample(5:7, 1); A <- rdag(p, 0.35); tg <- rtgts(p, sample(0:2, 1))
-    L <- idlBNs:::imec.list(A, tg); if (is.null(L)) next
+    L <- idlBNs:::imec.list.ref(A, tg); if (is.null(L)) next
     B <- brute(A, tg)
     stopifnot(setequal(names(B), vapply(L, key, "")),
               isTRUE(all.equal(idlBNs:::imec.size(A, tg), length(B))))
@@ -82,12 +82,11 @@ set.seed(3)
 found <- 0
 while (found < 3) {
     p <- sample(5:7, 1); A <- rdag(p, 0.45); tg <- rtgts(p, 1)
-    dec <- idlBNs:::imec.decompose(A, tg)
-    cs <- idlBNs:::imec.size(A, tg, dec = dec)
+    cs <- idlBNs:::imec.size(A, tg)
     if (is.na(cs) || cs < 5) next
     found <- found + 1
-    draws <- replicate(6000, key(idlBNs:::imec.sample(A, tg, dec = dec)))
-    tab <- table(factor(draws, levels = vapply(idlBNs:::imec.list(A, tg, dec = dec), key, "")))
+    draws <- replicate(6000, key(idlBNs:::imec.sample(A, tg)))
+    tab <- table(factor(draws, levels = vapply(idlBNs:::imec.list(A, tg), key, "")))
     stopifnot(all(tab > 0), chisq.test(tab)$p.value > 1e-4)
 }
 

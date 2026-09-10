@@ -38,12 +38,13 @@ extern SEXP C_dag_check(SEXP);
 extern SEXP C_dag_nh(SEXP, SEXP, SEXP);
 extern SEXP C_dag_cedges(SEXP, SEXP);
 extern SEXP C_dag_rcar(SEXP, SEXP, SEXP);
-extern SEXP C_dag_imec_sample(SEXP, SEXP, SEXP);
-extern SEXP C_dag_imec_size(SEXP, SEXP, SEXP);
-extern SEXP C_dag_imec_members(SEXP, SEXP, SEXP, SEXP);
+extern SEXP C_dag_imec_sample(SEXP, SEXP);
+extern SEXP C_dag_imec_size(SEXP, SEXP);
+extern SEXP C_dag_imec_members(SEXP, SEXP, SEXP);
 extern SEXP C_dag_set_edges(SEXP, SEXP);
 extern SEXP C_cp_amo_count(SEXP);
 extern SEXP C_cp_amo_sample(SEXP);
+extern SEXP C_cp_amo_list(SEXP, SEXP);
 extern SEXP C_sccache_new(SEXP);
 extern SEXP C_sccache_dump(SEXP);
 extern SEXP C_sccache_stats(SEXP);
@@ -77,12 +78,13 @@ static const R_CallMethodDef CallEntries[] = {
     {"C_dag_nh",            (DL_FUNC) &C_dag_nh,            3},
     {"C_dag_cedges",        (DL_FUNC) &C_dag_cedges,        2},
     {"C_dag_rcar",          (DL_FUNC) &C_dag_rcar,          3},
-    {"C_dag_imec_sample",   (DL_FUNC) &C_dag_imec_sample,   3},
-    {"C_dag_imec_size",     (DL_FUNC) &C_dag_imec_size,     3},
-    {"C_dag_imec_members",  (DL_FUNC) &C_dag_imec_members,  4},
+    {"C_dag_imec_sample",   (DL_FUNC) &C_dag_imec_sample,   2},
+    {"C_dag_imec_size",     (DL_FUNC) &C_dag_imec_size,     2},
+    {"C_dag_imec_members",  (DL_FUNC) &C_dag_imec_members,  3},
     {"C_dag_set_edges",     (DL_FUNC) &C_dag_set_edges,     2},
     {"C_cp_amo_count",      (DL_FUNC) &C_cp_amo_count,      1},
     {"C_cp_amo_sample",     (DL_FUNC) &C_cp_amo_sample,     1},
+    {"C_cp_amo_list",       (DL_FUNC) &C_cp_amo_list,       2},
     {"C_sccache_new",       (DL_FUNC) &C_sccache_new,       1},
     {"C_sccache_dump",      (DL_FUNC) &C_sccache_dump,      1},
     {"C_sccache_stats",     (DL_FUNC) &C_sccache_stats,     1},

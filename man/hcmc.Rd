@@ -15,8 +15,7 @@ hcmc(
   engine = c("C", "R"),
   sampler = c("rcar", "exact"),
   escape = c("trials", "exhaustive"),
-  max.class.size = 8L,
-  escape.max = 64
+  escape.max = 512
 )
 }
 \arguments{
@@ -66,7 +65,13 @@ Clique-Picking algorithm of Wienöbst \emph{et al.} (2023), and ignores \code{r}
 The walk produced by the RCAR algorithm and the exact draw are not
 equivalent: the walk is a random walk on the class, so its equilibrium is
 proportional to the number of (\emph{I}-)covered arcs of each member and is
-not uniform for any value of \code{r}.}
+not uniform for any value of \code{r}.  The exact draw has no limit on the size
+of the class, and none on the number of vertices in the DAG; its one
+implementation limit is that vertex sets within an undirected chain
+component are 64-bit masks, so a component of more than 64 vertices makes it
+decline and that draw reverts to the walk, which is counted in
+\code{sampler.fallbacks}.  Components that large need a DAG with almost no
+immoralities; the largest seen for random DAGs up to \eqn{p = 500} is 16.}
 
 \item{escape}{(Default \code{"trials"}) A character string selecting what happens
 at a local maximum. \code{"trials"} re-randomises the current DAG within its
@@ -74,26 +79,21 @@ class and retries, up to \code{MAXTRIALS} times. \code{"exhaustive"} instead exa
 \emph{every} member of the class and takes the best move available from any
 of them, which settles the question of whether the search is really at a
 local maximum of the class; \code{MAXTRIALS} is then unused. It falls back to
-\code{"trials"} for a class the enumeration cannot handle, i.e. one larger than
-\code{escape.max} or containing a chain component larger than \code{max.class.size}.}
+\code{"trials"} in the two cases the enumeration declines, both counted in
+\code{escape.fallbacks}: a class larger than \code{escape.max}, and a class whose size
+cannot be computed at all because some chain component has more than 64
+vertices. The second is the 64-bit mask limit described under \code{sampler}, and
+applies here whichever \code{sampler} is in use, since the escape enumerates the
+class regardless of how the search moves within it.}
 
-\item{max.class.size}{(Default 8) Positive integer scalar giving the largest
-undirected chain component the \code{escape="exhaustive"} enumeration will
-handle. It does \emph{not} limit \code{sampler="exact"}, which draws uniformly
-whatever the size of the class. That sampler carries an implementation
-limit of its own, unrelated to this one: it represents vertex sets within a
-chain component as 64-bit masks, so a component of more than 64 vertices
-makes it decline and the draw reverts to the \code{"rcar"} walk, which is
-counted in \code{sampler.fallbacks}. Components that large need a DAG with
-almost no immoralities; the largest seen for random DAGs up to
-\eqn{p = 500} is 16. The number of vertices in the whole DAG is
-unrestricted throughout.}
-
-\item{escape.max}{(Default 64) Positive numeric scalar giving the largest
+\item{escape.max}{(Default 512) Positive numeric scalar giving the largest
 (\emph{I}-)equivalence class the \code{escape="exhaustive"} enumeration will
 walk. That escape scores one whole neighbourhood per member, so its cost
-grows linearly in the size of the class, which is why it is bounded by the
-class size and not only by \code{max.class.size}.}
+grows linearly in the size of the class, which is why it is the class size
+that is bounded. Producing the members is not itself the expensive part:
+each one is generated directly from its index in the class, so listing
+costs one step per member listed and no more. What \code{escape.max} bounds is
+therefore the scoring, not the enumeration.}
 }
 \value{
 A list with the following components: \code{dag}, a
