@@ -318,6 +318,8 @@ cp_build(cp_ctx *ctx, const cp_vset *adj, int m, cp_vset uni) {
     nd->sp  = (int **)    R_alloc((size_t) ncl, sizeof(int *));
     nd->nfp = (int *)     R_alloc((size_t) ncl, sizeof(int));
     nd->fp  = (cp_vset **)R_alloc((size_t) ncl, sizeof(cp_vset *));
+    nd->gtab = (double **) R_alloc((size_t) ncl, sizeof(double *));
+    for (int v = 0; v < ncl; v++) nd->gtab[v] = NULL;
 
     double total = 0.0;
     for (int v = 0; v < ncl; v++) {
@@ -482,9 +484,58 @@ cp_sample(cp_ctx *ctx, int id, int *ord, int *tick) {
    and hand the decoder an index past the end of its clique */
 static inline long cp_rnd(double x) { return (long) (x + 0.5); }
 
+/*
+ * g[d][k] = how many orderings of the len - d vertices left after a prefix of
+ * length d avoid every forbidden prefix X_k, ..., X_l. Built once per clique,
+ * on the first unrank of it, and then shared by every later one.
+ *
+ * The rows come from Lemma 22 read one constraint at a time. memo[i] -- the
+ * orderings that remain once X_i has been placed, avoiding X_j \ X_i for
+ * j > i -- does not depend on d, so it is computed once; then for each d,
+ *
+ *     g[d][l+1] = (len - d)!
+ *     g[d][k]   = g[d][k+1] - (|X_k| - d)! * memo[k]   when |X_k| > d,
+ *                 g[d][k+1]                            otherwise,
+ *
+ * which is O(len * l) after an O(l^2) pass for memo, rather than an O(l^2)
+ * evaluation of cp_phi() for every (d, k) pair.
+ */
+static const double *
+cp_gtab(cp_ctx *ctx, int id, int j, int len, const int *o) {
+    cp_node *nd = &ctx->node[id];
+    if (nd->gtab[j] != NULL) return nd->gtab[j];
+    (void) o;
+
+    int nsz = nd->nfp[j];
+    int fps[CP_MAXV + 2];
+    fps[0] = 0;
+    for (int a = 0; a < nsz; a++) fps[a + 1] = cp_popcount(nd->fp[j][a]);
+
+    double memo[CP_MAXV + 2];
+    for (int i = nsz; i >= 0; i--) {
+        double t = cp_fac(len - fps[i]);
+        for (int b = i + 1; b <= nsz; b++)
+            t -= cp_fac(fps[b] - fps[i]) * memo[b];
+        memo[i] = t;
+    }
+
+    int stride = nsz + 2;
+    double *g = (double *) R_alloc((size_t)(len + 1) * stride, sizeof(double));
+    for (int d = 0; d <= len; d++) {
+        double *row = g + (size_t) d * stride;
+        row[nsz + 1] = cp_fac(len - d);
+        for (int a = nsz; a >= 1; a--)
+            row[a] = (fps[a] > d) ? row[a + 1] - cp_fac(fps[a] - d) * memo[a]
+                                  : row[a + 1];
+        row[0] = row[1];
+    }
+    nd->gtab[j] = g;
+    return g;
+}
+
 static void
 cp_unrank(cp_ctx *ctx, int id, long k, int *ord, int *tick) {
-    const cp_node *nd = &ctx->node[id];
+    cp_node *nd = &ctx->node[id];
 
     int j = 0;
     for (; j < nd->ncl - 1; j++) {
@@ -508,50 +559,58 @@ cp_unrank(cp_ctx *ctx, int id, long k, int *ord, int *tick) {
     }
 
     /*
-     * The pi-th allowed permutation of the clique. Backtracking with the
-     * forbidden-prefix test applied at every position: once the running
-     * maximum of o equals the current position the prefix is forbidden, and so
-     * is every completion of it, so the subtree is skipped rather than
-     * generated and rejected.
+     * The pi-th allowed permutation of the clique, by counting rather than by
+     * walking the pi permutations before it.
+     *
+     * At each position the candidates are tried in K order, and for each the
+     * number of allowed completions is looked up; if pi is at least that
+     * many, the whole subtree is skipped by subtracting it. So the cost is
+     * O(len^2) table lookups per member, independent of pi, and listing c
+     * members costs O(c) unranks. Walking to the pi-th permutation instead
+     * made a listing quadratic in c: a complete component of 8 vertices took
+     * 7.1 s for its 40320 members, 0.18 ms each against 0.003 ms at m = 6.
+     *
+     * cp_gtab() supplies the counts. Only the SIZES of the forbidden
+     * prefixes matter, never which vertices they contain, because the chain
+     * is nested: a prefix of length d contains X_i exactly when the running
+     * maximum of o[] over it is at most |X_i|, which is the mx carried below.
      */
-    int perm[CP_MAXV], mxs[CP_MAXV + 1], choice[CP_MAXV];
+    const double *g = cp_gtab(ctx, id, j, len, o);
+    int nsz = nd->nfp[j];
+    int fps[CP_MAXV + 2];
+    fps[0] = 0;
+    for (int a = 0; a < nsz; a++) fps[a + 1] = cp_popcount(nd->fp[j][a]);
+    int stride = nsz + 2;
+
+    int perm[CP_MAXV];
     char used[CP_MAXV];
     memset(used, 0, sizeof used);   /* indexed by vertex, not by position */
-    mxs[0] = 0;
-    long seen = 0;
-    int d = 0, done = 0;
-    choice[0] = -1;
-    while (d >= 0) {
-        int v = -1;
-        for (int i = choice[d] + 1; i < len; i++)
-            if (!used[K[i]]) { v = i; break; }
-        if (v < 0) {                        /* level exhausted, back up */
-            choice[d] = -1;
-            d--;
-            if (d >= 0) used[K[choice[d]]] = 0;
-            continue;
+    long rest_pi = pi;
+    int mx = 0;
+    for (int d = 0; d < len; d++) {
+        int chosen = -1;
+        for (int i = 0; i < len; i++) {
+            int v = K[i];
+            if (used[v]) continue;
+            int mx2 = o[v] > mx ? o[v] : mx;
+            if (mx2 == d + 1) continue;         /* forbidden prefix: skip */
+            /* allowed completions of this prefix: the constraints still in
+               play are those X with |X| > d+1 and |X| >= mx2 */
+            int k0 = nsz + 1, want = (mx2 > d + 1) ? mx2 : d + 1;
+            for (int a = 1; a <= nsz; a++)
+                if (fps[a] >= want) { k0 = a; break; }
+            double cnt = g[(size_t)(d + 1) * stride + k0];
+            long c = (long) (cnt + 0.5);
+            if (rest_pi < c) { chosen = v; mx = mx2; break; }
+            rest_pi -= c;
         }
-        choice[d] = v;
-        int mx = mxs[d];
-        if (o[K[v]] > mx) mx = o[K[v]];
-        if (mx == d + 1) continue;          /* forbidden prefix: prune */
-        used[K[v]] = 1;
-        mxs[d + 1] = mx;
-        perm[d] = K[v];
-        if (d == len - 1) {                 /* a complete allowed permutation */
-            if (seen == pi) { done = 1; break; }
-            seen++;
-            used[K[v]] = 0;
-            continue;
-        }
-        d++;
-        choice[d] = -1;
+        if (chosen < 0)      /* the clique had fewer allowed permutations than
+                                the decoded index: never emit a partial order */
+            error("cp_unrank: index %ld past the allowed permutations of a "
+                  "clique of size %d", pi, len);
+        used[chosen] = 1;
+        perm[d] = chosen;
     }
-
-    if (!done)               /* the clique had fewer allowed permutations than
-                                the decoded index: never silently emit garbage */
-        error("cp_unrank: index %ld past the %ld allowed permutations of a "
-              "clique of size %d", pi, seen, len);
 
     for (int i = 0; i < len; i++) ord[(*tick)++] = perm[i];
 

@@ -113,3 +113,22 @@ for (U in pool(9, 0.5, 60, lo = 3L, hi = 6L, seed = 4)) {
 stopifnot(tested > 0)
 
 cat("test_cliquepick.R: OK\n")
+
+## Listing is proportional to the output, not quadratic in it. cp_unrank()
+## decodes a rank by counting allowed completions and skipping whole prefix
+## subtrees; walking to the rank-th permutation instead made a listing cost
+## O(c^2), which for a complete component of 8 vertices was 7.1 s for its
+## 40320 members (0.18 ms each, against 0.003 ms at m = 6). The guard below
+## is deliberately loose -- it is a complexity check, not a timing pin.
+local({
+    Km <- function(m) { U <- matrix(TRUE, m, m); diag(U) <- FALSE; U }
+    tm <- function(m) { U <- Km(m)
+        min(replicate(3, system.time(
+            .Call(idlBNs:::C_cp_amo_list, U, Inf))[["elapsed"]])) }
+    ## |class| grows 9-fold from m = 8 to m = 9 (8! to 9!). Linear listing
+    ## costs about 9x, quadratic about 81x; m = 6 and 7 are below the timer's
+    ## resolution, so the two measurable sizes are the ones compared.
+    t8 <- tm(8L); t9 <- tm(9L)
+    stopifnot(t8 > 0, t9 < 25 * t8)
+})
+cat("test_cliquepick.R: listing is output-proportional\n")

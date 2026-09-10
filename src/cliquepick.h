@@ -21,6 +21,7 @@ typedef struct {
     int    **sp;        /* ncl arrays of subproblem node ids               */
     int     *nfp;       /* ncl forbidden-prefix chain lengths              */
     cp_vset **fp;       /* ncl arrays of nested prefix sets, ascending     */
+    double  **gtab;     /* ncl count tables, built on first unrank, or NULL */
 } cp_node;
 
 typedef struct {
@@ -48,8 +49,10 @@ int    cp_sample(cp_ctx *ctx, int id, int *ord, int *tick);
 
 /*
  * The k-th member of the class rooted at `id`, 0-based, as a topological order
- * written into ord[] from *tick. Enumerating a class of c members costs c
- * calls, i.e. time proportional to the output. Valid for k < cp_count(ctx, id).
+ * written into ord[] from *tick. Each call is independent of k -- the rank is
+ * decoded by counting, never by walking the members before it -- so listing a
+ * class of c members costs c calls and is proportional to the output. Valid
+ * for k < cp_count(ctx, id).
  */
 void   cp_member(cp_ctx *ctx, int id, double k, int *ord, int *tick);
 
