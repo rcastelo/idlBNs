@@ -25,7 +25,11 @@
 #'
 #' @param MAXTRIALS (Default 5) Non-negative integer scalar indicating the
 #' maximum number of trials to escape from local maxima when `escape="trials"`.
-#' It is ignored when `escape="exhaustive"`.
+#' It is ignored when `escape="exhaustive"`, unless the exhaustive enumeration
+#' of the (\emph{I}-)equivalence class exceeds `escape.max` or a chain component
+#' has more than 64 vertices, in which case the the escape mechanism falls back
+#' to the RCAR algorithm for a maximum of `MAXTRIALS` trials. See the `escape`
+#' argument for details.
 #'
 #' @param scorefun (Default is [`iBIC`]) A function to calculate the goodness
 #' of fit (GoF) score of a DAG on a given data set.

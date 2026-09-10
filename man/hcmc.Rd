@@ -42,7 +42,11 @@ of fit (GoF) score of a DAG on a given data set.}
 
 \item{MAXTRIALS}{(Default 5) Non-negative integer scalar indicating the
 maximum number of trials to escape from local maxima when \code{escape="trials"}.
-It is ignored when \code{escape="exhaustive"}.}
+It is ignored when \code{escape="exhaustive"}, unless the exhaustive enumeration
+of the (\emph{I}-)equivalence class exceeds \code{escape.max} or a chain component
+has more than 64 vertices, in which case the the escape mechanism falls back
+to the RCAR algorithm for a maximum of \code{MAXTRIALS} trials. See the \code{escape}
+argument for details.}
 
 \item{verbose}{(Default TRUE) Show progress in the calculations.}
 
@@ -86,14 +90,16 @@ vertices. The second is the 64-bit mask limit described under \code{sampler}, an
 applies here whichever \code{sampler} is in use, since the escape enumerates the
 class regardless of how the search moves within it.}
 
-\item{escape.max}{(Default 512) Positive numeric scalar giving the largest
+\item{escape.max}{(Default 512) Positive integer scalar giving the largest
 (\emph{I}-)equivalence class the \code{escape="exhaustive"} enumeration will
 walk. That escape scores one whole neighbourhood per member, so its cost
 grows linearly in the size of the class, which is why it is the class size
 that is bounded. Producing the members is not itself the expensive part:
 each one is generated directly from its index in the class, so listing
 costs one step per member listed and no more. What \code{escape.max} bounds is
-therefore the scoring, not the enumeration.}
+therefore the scoring, not the enumeration. \code{NA} or \code{Inf} mean no limit,
+but the default of 512 is a safe value for the largest classes seen in
+random DAGs up to \eqn{p = 500} vertices.}
 }
 \value{
 A list with the following components: \code{dag}, a
