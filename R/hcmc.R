@@ -573,9 +573,10 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
     }
 
     for (i in seq_along(targets)) {
-        if (!is.numeric(targets[[i]])) {
+        if (!is.numeric(targets[[i]]) || any(!is.finite(targets[[i]])) ||
+            any(is.na(targets[[i]]))) {
             msg <- paste("Each element of the 'targets' list must be an",
-                         "integer vector.")
+                         "vector of finite positive integer values.")
             cli_abort(c("x"=msg))
         }
         if (!is.integer(targets[[i]])) {
