@@ -72,14 +72,16 @@
 #' applies here whichever `sampler` is in use, since the escape enumerates the
 #' class regardless of how the search moves within it.
 #'
-#' @param escape.max (Default 512) Positive numeric scalar giving the largest
+#' @param escape.max (Default 512) Positive integer scalar giving the largest
 #' (\emph{I}-)equivalence class the `escape="exhaustive"` enumeration will
 #' walk. That escape scores one whole neighbourhood per member, so its cost
 #' grows linearly in the size of the class, which is why it is the class size
 #' that is bounded. Producing the members is not itself the expensive part:
 #' each one is generated directly from its index in the class, so listing
 #' costs one step per member listed and no more. What `escape.max` bounds is
-#' therefore the scoring, not the enumeration.
+#' therefore the scoring, not the enumeration. `NA` or `Inf` mean no limit,
+#' but the default of 512 is a safe value for the largest classes seen in
+#' random DAGs up to \eqn{p = 500} vertices.
 #'
 #' @return A list with the following components: `dag`, a
 #' [`graphNEL`][graph::graphNEL-class] object with the structure of the learned
@@ -196,12 +198,12 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
     ## directly from its index in the class, one step per member -- rather than
     ## Theta(m!), so the bound is purely about the scoring it feeds and can sit
     ## far higher than the enumeration once allowed.
-    escape.maxD <- as.double(escape.max)
     dat <- .check_input_data(dat)
     dag <- graphNEL(colnames(dat), edgemode="directed")
     attr(dat, "sanitycheck") <- TRUE
 
     targets <- .check_targets(targets, ncol(dat))
+    escape.maxD <- .check_escape.max(escape.max)
     scorefun <- match.fun(scorefun)
 
     ## the r argument must be a finite non-negative integer scalar
@@ -592,4 +594,16 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
     }
 
     targets
+}
+
+.check_escape.max <- function(escape.max) {
+    if (!is.numeric(escape.max) || length(escape.max) != 1 ||
+        is.na(escape.max) || escape.max <= 0 ||
+        escape.max != floor(escape.max)) {
+        msg <- paste("The 'escape.max' argument must be either a positive",
+                     "integer scalar or NA/Inf, which imply no limit.")
+        cli_abort(c("x"=msg))
+    }
+
+    as.double(escape.max)
 }
