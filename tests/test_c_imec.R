@@ -132,7 +132,7 @@ mkem <- function(...) matrix(as.integer(c(...)), nrow = 2,
                              dimnames = list(c("from", "to"), NULL))
 st   <- dag_new(5L)
 good <- mkem(1,2, 2,3, 1,3, 4,5)
-dag_set(st, good)
+invisible(dag_set(st, good))
 before <- dag_edgeM(st)
 malformed <- list(
     cyclic     = mkem(1,2, 2,3, 3,1),      # cycle among three
@@ -151,6 +151,37 @@ for (nm in names(malformed)) {
     stopifnot(!is.null(err),                        # rejected
               identical(dag_edgeM(st), before))     # and nothing changed
 }
-dag_set(st, good)                                   # still usable afterwards
+invisible(dag_set(st, good))                        # still usable afterwards
 stopifnot(identical(dag_edgeM(st), before))
 cat("test_c_imec.R: malformed edge lists are rejected before any mutation\n")
+
+## 6: the exact sampler has NO whole-graph size limit -- the 64-bit vertex
+## sets are per chain component. R/imec.R used to guard with `p > 64L`, which
+## made the R engine fall back to rcar() for any DAG on more than 64 vertices,
+## however small its components: at p = 80 that was 288 fallbacks, a different
+## DAG, a different score and a different RNG state from the C engine, i.e. a
+## silent breach of the engines' documented equivalence.
+A <- matrix(FALSE, 65L, 65L)                     # no undirected component
+stopifnot(isTRUE(all.equal(idlBNs:::imec.size(A), 1)),
+          !is.null(idlBNs:::imec.sample(A)))
+A <- matrix(FALSE, 200L, 200L)                   # 100 components of two
+for (i in seq(1L, 199L, by = 2L)) A[i, i + 1L] <- TRUE
+stopifnot(isTRUE(all.equal(idlBNs:::imec.size(A), 2^100)),
+          !is.null(idlBNs:::imec.sample(A)))
+
+set.seed(21); p <- 70L; n <- 2000L
+o <- sample(p); B <- matrix(0, p, p)
+for (i in 1:(p-1)) for (j in (i+1):p)
+    if (runif(1) < 4/p) B[o[i], o[j]] <- runif(1, .5, 1.5)
+X <- matrix(0, n, p)
+for (v in o) X[, v] <- X %*% B[, v] + rnorm(n)
+colnames(X) <- as.character(seq_len(p))
+set.seed(5); hC <- hcmc(X, verbose = FALSE, engine = "C", sampler = "exact")
+seedC <- .Random.seed
+set.seed(5); hR <- hcmc(X, verbose = FALSE, engine = "R", sampler = "exact")
+stopifnot(identical(seedC, .Random.seed),                  # same random stream
+          isTRUE(all.equal(hC$sco, hR$sco)),
+          identical(sort(as.vector(graph::edgeMatrix(hC$dag))),
+                    sort(as.vector(graph::edgeMatrix(hR$dag)))),
+          hC$sampler.fallbacks == 0L, hR$sampler.fallbacks == 0L)
+cat("test_c_imec.R: exact sampling is unrestricted in p, engines still agree\n")

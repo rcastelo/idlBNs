@@ -579,14 +579,23 @@ cp_read_components(SEXP A_R, int *pp, int **comp_of, int ***vsets, int **msz,
     int *stack = (int *) R_alloc((size_t) p, sizeof(int));
     int *loc = (int *) R_alloc((size_t) p, sizeof(int));
     memset(seen, 0, (size_t) p);
-    int **vs = (int **) R_alloc((size_t) (p > 0 ? p : 1), sizeof(int *));
-    int *ms = (int *) R_alloc((size_t) (p > 0 ? p : 1), sizeof(int));
-    cp_vset *ab = (cp_vset *) R_alloc((size_t) (p > 0 ? p : 1) * 64, sizeof(cp_vset));
+    /* Only components of two or more vertices are kept, and they are
+       disjoint, so there are at most floor(p / 2) of them; the + 1 keeps the
+       allocation non-zero at p = 1. The traversal buffer is allocated once
+       and reused, with only the n vertices found copied out: giving each
+       traversal its own p-element buffer cost Theta(p^2), and did so even for
+       a graph with no undirected edges at all, since it was allocated before
+       the size of the component was known. */
+    size_t cap = (size_t) (p / 2 + 1);
+    int **vs = (int **) R_alloc(cap, sizeof(int *));
+    int *ms = (int *) R_alloc(cap, sizeof(int));
+    cp_vset *ab = (cp_vset *) R_alloc(cap * 64, sizeof(cp_vset));
+    int *buf = (int *) R_alloc((size_t) (p > 0 ? p : 1), sizeof(int));
     int nc = 0;
     for (int v0 = 0; v0 < p; v0++) {
         if (seen[v0]) continue;
         int top = 0, n = 0;
-        int *cur = (int *) R_alloc((size_t) p, sizeof(int));
+        int *cur = buf;
         seen[v0] = 1; stack[top++] = v0; cur[n++] = v0;
         while (top > 0) {
             int w = stack[--top];
@@ -603,6 +612,12 @@ cp_read_components(SEXP A_R, int *pp, int **comp_of, int ***vsets, int **msz,
             cur[j + 1] = x;
         }
         for (int i = 0; i < n; i++) loc[cur[i]] = i;
+        if ((size_t) nc >= cap)          /* cannot happen while n >= 2 holds */
+            error("cliquepick: more than %d components on %d vertices",
+                  (int) cap, p);
+        int *keep = (int *) R_alloc((size_t) n, sizeof(int));
+        memcpy(keep, cur, (size_t) n * sizeof(int));
+        cur = keep;
         cp_vset *adj = ab + (size_t) nc * 64;
         for (int i = 0; i < n; i++) adj[i] = 0;
         for (int i = 0; i < n; i++)

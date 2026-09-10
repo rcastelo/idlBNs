@@ -182,9 +182,15 @@
 ## component is uniform among its acyclic moral orientations.  There is no
 ## component-size limit; both engines call this same code, which is what keeps
 ## their random streams aligned.
+##
+## There is no whole-graph limit either. The 64-bit vertex sets are per chain
+## component, and C_cp_amo_sample() returns a full order of all p vertices,
+## the ones outside any component appended in index order, so a DAG of any
+## size whose components are each within 64 vertices is sampled exactly. An
+## earlier `if (p > 64L) return(NULL)` here made the R engine fall back for a
+## graph of 65 isolated vertices, which has no undirected component at all.
 imec.sample <- function(A, targets = list(integer(0))) {
     p <- nrow(A)
-    if (p > 64L) return(NULL)
     E <- .iessgraph(A, targets)
     U <- E & t(E)
     ord <- .Call(C_cp_amo_sample, U)
@@ -198,9 +204,10 @@ imec.sample <- function(A, targets = list(integer(0))) {
     out
 }
 
-## |[D]_I| by Clique-Picking, in polynomial time and with no size limit.
+## |[D]_I| by Clique-Picking, in polynomial time and with no size limit --
+## neither on the graph nor, beyond 64 vertices in one chain component, on the
+## components.
 imec.size <- function(A, targets = list(integer(0))) {
-    if (nrow(A) > 64L) return(NA_real_)
     E <- .iessgraph(A, targets)
     .Call(C_cp_amo_count, E & t(E))
 }
@@ -211,7 +218,6 @@ imec.size <- function(A, targets = list(integer(0))) {
 ## class ("unranking"), one step per member, never by generating permutations.
 imec.list <- function(A, targets = list(integer(0)), max.members = Inf) {
     p <- nrow(A)
-    if (p > 64L) return(NULL)
     E <- .iessgraph(A, targets)
     U <- E & t(E)
     orders <- .Call(C_cp_amo_list, U, as.double(max.members))
