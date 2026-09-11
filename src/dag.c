@@ -260,6 +260,33 @@ idl_dag_canonical_order(idl_dag *d) {
     }
 }
 
+/*
+ * Reserve room for pa_need[v] parents and ch_need[v] children at every
+ * vertex, so a subsequent rebuild cannot allocate.
+ *
+ * link_edge() is all-or-nothing against a failing R_Realloc for ONE arc, but
+ * a caller replacing the whole graph needs more than that: it removes every
+ * old arc and then adds the new ones, and a longjmp partway through the
+ * additions would leave a live DAG holding a prefix of the requested edge
+ * list -- neither the old graph nor the new one, and a caller that traps the
+ * error would carry on with it. Reserving first moves every allocation ahead
+ * of the first mutation, so the failure leaves the old graph untouched and
+ * the rebuild itself cannot fail. idl_dag_add_edge() allocates only through
+ * link_edge(), and the ancestor and descendant updates work in scratch
+ * buffers sized at idl_dag_alloc() time, so this covers all of it.
+ */
+void
+idl_dag_reserve(idl_dag *d, const int *pa_need, const int *ch_need) {
+    for (int v = 0; v < d->p; v++) {
+        if (pa_need[v] > 0) {
+            ivec_reserve(&d->pa[v], pa_need[v]);
+            ivec_reserve(&d->pas[v], pa_need[v]);
+        }
+        if (ch_need[v] > 0)
+            ivec_reserve(&d->ch[v], ch_need[v]);
+    }
+}
+
 /* the adjacency half of adding u -> v, shared by add and reverse */
 static void
 link_edge(idl_dag *d, int u, int v) {

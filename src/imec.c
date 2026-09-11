@@ -104,7 +104,24 @@ set_edges(idl_dag *d, const int *from, const int *to, int n) {
     }
     if (qt < p) error("set_edges: target edge list is cyclic");
 
-    /* ---- validated; only now is the old graph destroyed --------------- */
+    /*
+     * Reserve every list the rebuild will need BEFORE touching the graph.
+     * The additions below allocate, through ivec_reserve() inside
+     * link_edge(), and R_Realloc longjmps on failure; without this, a
+     * failure partway through would leave the DAG holding a prefix of the
+     * requested arcs, and a caller that traps the error would continue with
+     * it. With the capacity in hand the rebuild cannot fail, so the
+     * replacement is atomic against allocation failure as well as against a
+     * malformed edge list. Kahn consumed indeg[], so the in-degrees are
+     * recounted; out-degrees are the tail buckets.
+     */
+    int *outdeg = (int *) R_alloc((size_t) p, sizeof(int));
+    memset(indeg, 0, (size_t) p * sizeof(int));
+    for (int e = 0; e < n; e++) indeg[to[e]]++;
+    for (int v = 0; v < p; v++) outdeg[v] = tstart[v + 1] - tstart[v];
+    idl_dag_reserve(d, indeg, outdeg);
+
+    /* ---- reserved; only now is the old graph destroyed ---------------- */
     int nold = d->nedges;
     int *of = (int *) R_alloc((size_t) (nold > 0 ? nold : 1), sizeof(int));
     int *ot = (int *) R_alloc((size_t) (nold > 0 ? nold : 1), sizeof(int));

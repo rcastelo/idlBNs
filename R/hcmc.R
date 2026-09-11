@@ -624,9 +624,10 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
         cli_abort(c("x"=msg))
     } else if (length(targets) == 0) {
         targets <- list(integer(0))
-        cli_alert_warning("The 'targets' list is empty,replaced by"
-                          "'list(integer(0))', which implies all data",
-                          "are observational.")
+        msg <- paste("The 'targets' list is empty, replaced by",
+                     "'list(integer(0))', which implies all data",
+                     "are observational.")
+        cli_alert_warning(msg)
         return(targets)
     }
 

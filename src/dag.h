@@ -144,6 +144,9 @@ idl_dag_has_edge(const idl_dag *d, int u, int v) {
 int idl_tmask_build(SEXP tgt, int p, uint64_t **maskp);
 int idl_tmask_separates(const uint64_t *mask, int nw, int u, int v);
 
+/* reserve capacity for a whole-graph rebuild, so the rebuild cannot allocate */
+void idl_dag_reserve(idl_dag *d, const int *pa_need, const int *ch_need);
+
 /* put pa[] and ch[] into ascending order; the graph is unchanged */
 void idl_dag_canonical_order(idl_dag *d);
 
