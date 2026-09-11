@@ -316,6 +316,20 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
     ## and counted the same refusal MAXTRIALS + 1 times. The flag is cleared
     ## whenever a move actually leaves the class.
     escape.declined <- FALSE
+    ## The same for the exact sampler: its two decline conditions -- a chain
+    ## component past 64 vertices, and counts too large to stay exact -- are
+    ## properties of the I-essential graph, which is an invariant of the
+    ## class. So once it has declined, it declines for every within-class
+    ## trial that follows, and re-asking rebuilds the I-essential graph and
+    ## the Clique-Picking contexts to reach a settled answer: 90 us a call at
+    ## p = 200, against the 19 us of the walk it falls back to.
+    ##
+    ## Unlike the escape, though, every iteration really does make a draw, and
+    ## it is the walk that makes it. So the DECISION is cached while
+    ## sampler.fallbacks keeps counting one per draw -- the statistic is the
+    ## number of draws that were not uniform, and that is one per iteration
+    ## whether or not the reason was recomputed.
+    sampler.declined <- FALSE
 
     if (verbose) {
       algname <- if (identical(targets, list(integer(0)))) "HCMC" else "iHCMC"
@@ -340,15 +354,20 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
         st <- .Call(C_dag_new, ncol(dat))
         while (!local_maximum) {
             s0 <- s1
-            if (sampler == "exact") {
-                ## falls back to the walk when a chain component exceeds the
-                ## 64 vertices the exact sampler represents as a bitmask
-                if (!.Call(C_dag_imec_sample, st, targets)) {
+            ## the exact draw declines for a chain component past the 64
+            ## vertices it represents as a bitmask, or for counts too large
+            ## to stay exact; the decision is cached per class, the draw is
+            ## still counted per iteration
+            drew <- FALSE
+            if (sampler == "exact" && !sampler.declined) {
+                drew <- .Call(C_dag_imec_sample, st, targets)
+                if (!drew) sampler.declined <- TRUE
+            }
+            if (!drew) {
+                if (sampler == "exact")
                     sampler.fallbacks <- sampler.fallbacks + 1L
-                    .Call(C_dag_rcar, st, rlen, targets)
-                }
-            } else
                 .Call(C_dag_rcar, st, rlen, targets)
+            }
             ne <- .Call(C_dag_nh, st, 3L, targets)    ## 3 = ncr
             pasets <- .Call(C_dag_pasets, st)
             ## only the winner is needed, so the O(p) exact summation is
@@ -369,7 +388,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                     was_in_local_maximum <- FALSE
                 }
                 trials <- 0
-                escape.declined <- FALSE
+                escape.declined <- sampler.declined <- FALSE
             } else if (escape == "exhaustive" && !escape.declined &&
                        !is.null(mm <- {
                            m0 <- .Call(C_dag_imec_members, st, targets,
@@ -410,17 +429,20 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                     escapes <- escapes + 1
                     was_in_local_maximum <- FALSE
                     trials <- 0
-                    escape.declined <- FALSE
+                    escape.declined <- sampler.declined <- FALSE
                 }
             } else if (trials < MAXTRIALS) {
                 s1 <- s0
-                if (sampler == "exact") {
-                    if (!.Call(C_dag_imec_sample, st, targets)) {
+                drew <- FALSE
+                if (sampler == "exact" && !sampler.declined) {
+                    drew <- .Call(C_dag_imec_sample, st, targets)
+                    if (!drew) sampler.declined <- TRUE
+                }
+                if (!drew) {
+                    if (sampler == "exact")
                         sampler.fallbacks <- sampler.fallbacks + 1L
-                        .Call(C_dag_rcar, st, rlen, targets)
-                    }
-                } else
                     .Call(C_dag_rcar, st, rlen, targets)
+                }
                 local_maximum <- FALSE
                 was_in_local_maximum <- TRUE
                 trials <- trials + 1
@@ -436,11 +458,12 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
     } else {
         while (!local_maximum) {
             s0 <- s1
-            rcar.out <- if (sampler == "exact")
+            rcar.out <- if (sampler == "exact" && !sampler.declined)
                 isample.move(dag, targets, anc, pasets, vidx, vnames,
                              vidx.nodes, r)
             else rcar(dag, r, targets, anc, pasets, vidx)
-            if (isTRUE(rcar.out$fallback))
+            if (isTRUE(rcar.out$fallback)) sampler.declined <- TRUE
+            if (sampler == "exact" && sampler.declined)
                 sampler.fallbacks <- sampler.fallbacks + 1L
             dag <- rcar.out$dag
             anc <- rcar.out$anc
@@ -475,7 +498,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                     was_in_local_maximum <- FALSE
                 }
                 trials <- 0
-                escape.declined <- FALSE
+                escape.declined <- sampler.declined <- FALSE
             } else if (escape == "exhaustive" && !escape.declined &&
                        !is.null(mm <- {
                            m0 <- imec.members(dag, targets, vnames, vidx.nodes,
@@ -522,15 +545,16 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                     escapes <- escapes + 1
                     was_in_local_maximum <- FALSE
                     trials <- 0
-                    escape.declined <- FALSE
+                    escape.declined <- sampler.declined <- FALSE
                 }
             } else if (trials < MAXTRIALS) {
                 s1 <- s0
-                rcar.out <- if (sampler == "exact")
+                rcar.out <- if (sampler == "exact" && !sampler.declined)
                     isample.move(dag, targets, anc, pasets, vidx, vnames,
                                  vidx.nodes, r)
                 else rcar(dag, r, targets, anc, pasets, vidx)
-                if (isTRUE(rcar.out$fallback))
+                if (isTRUE(rcar.out$fallback)) sampler.declined <- TRUE
+                if (sampler == "exact" && sampler.declined)
                     sampler.fallbacks <- sampler.fallbacks + 1L
                 dag <- rcar.out$dag
                 anc <- rcar.out$anc

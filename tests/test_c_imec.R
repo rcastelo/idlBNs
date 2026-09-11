@@ -318,4 +318,23 @@ local({
                   identical(dagadj(a$dag), dagadj(b$dag)))
     }
 })
+## and the same for the exact sampler: its decline conditions are properties
+## of the I-essential graph, hence of the class, so once it has declined it
+## declines for every within-class trial. The DECISION is cached, but the
+## count is not: every iteration still makes a draw, and it is the walk that
+## makes it, so sampler.fallbacks must be one per draw exactly as before.
+local({
+    set.seed(2); p <- 80L; n <- 4000L
+    X <- matrix(0, n, p); X[, 1] <- rnorm(n)
+    for (v in 2:p) X[, v] <- 0.9 * X[, v-1] + rnorm(n) * 0.5
+    colnames(X) <- as.character(seq_len(p))
+    ## a chain has no immoralities, so its essential graph is one undirected
+    ## component of p > 64 vertices and the exact sampler must decline
+    set.seed(4); hC <- hcmc(X, verbose = FALSE, engine = "C", sampler = "exact")
+    set.seed(4); hR <- hcmc(X, verbose = FALSE, engine = "R", sampler = "exact")
+    stopifnot(hC$sampler.fallbacks > 0L,
+              identical(hC$sampler.fallbacks, hR$sampler.fallbacks),
+              identical(hC$sco, hR$sco),
+              identical(dagadj(hC$dag), dagadj(hR$dag)))
+})
 cat("test_c_imec.R: the exhaustive escape is attempted once per episode\n")
