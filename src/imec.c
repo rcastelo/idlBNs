@@ -194,6 +194,8 @@ static inline int ie_isnbr(const iess *G, int u, int v) {
  */
 int
 idl_tmask_build(SEXP tgt, int p, uint64_t **maskp) {
+    if (tgt != R_NilValue && TYPEOF(tgt) != VECSXP)
+        error("targets must be a list of integer vectors");
     R_xlen_t K = (tgt == R_NilValue) ? 0 : XLENGTH(tgt);
     int nw = (int) ((K + 63) / 64); if (nw < 1) nw = 1;
     uint64_t *mask = (uint64_t *) R_alloc((size_t) p * nw, sizeof(uint64_t));

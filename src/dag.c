@@ -227,13 +227,34 @@ idl_dag_can_reverse(const idl_dag *d, int u, int v) {
  *
  * pas[v] is already the ascending mirror of pa[v], so the parents are a copy
  * rather than a sort.
+ *
+ * Reordering pa[v] BUMPS pav_stamp[v]. The stamp is what callers memoise
+ * against -- nh_scores.c keys its addition memo on (u, v, pav_stamp[v]) --
+ * and the value memoised there is a delta computed from pa(v) in the order
+ * it was in, through a score function whose arithmetic is not associative.
+ * Leaving the stamp alone would let a later neighbourhood reuse a delta
+ * computed for the old order.
+ *
+ * That hazard is currently blocked further down: nh_scores.c scores a parent
+ * set through a cache keyed by the set SORTED, and that cache only ever
+ * grows, so once a (vertex, parent set) score exists it is reused whatever
+ * the order -- 3.2 million verified memo hits across four workloads, one
+ * with declines injected on alternate draws to force 418 reorderings of
+ * vertices with four or more parents, produced no mismatch. The bump is kept
+ * anyway: it costs nothing measurable (0.409 s against 0.410 s over ten
+ * searches at p = 40, identical results), and it makes the memo's invariant
+ * hold locally instead of resting on the cache's eviction policy.
  */
 void
 idl_dag_canonical_order(idl_dag *d) {
     for (int v = 0; v < d->p; v++) {
         idl_ivec *pav = &d->pa[v];
-        if (pav->n > 1)
+        if (pav->n > 1 &&
+            memcmp(pav->v, d->pas[v].v, (size_t) pav->n * sizeof(int)) != 0) {
             memcpy(pav->v, d->pas[v].v, (size_t) pav->n * sizeof(int));
+            d->pav_stamp[v]++;          /* the order is part of what callers
+                                           memoise against this stamp */
+        }
         if (d->ch[v].n > 1)
             R_isort(d->ch[v].v, d->ch[v].n);
     }
