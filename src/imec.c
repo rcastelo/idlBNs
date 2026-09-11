@@ -537,7 +537,40 @@ sample_and_apply(idl_dag *d, const iess *G, int rng) {
         else          { cf[nch] = v; ct[nch] = u; }
         nch++;
     }
+    /*
+     * Reserve before removing anything. Each reversal takes cf -> ct out and
+     * puts ct -> cf in, so cf gains a parent and ct gains a child; adding
+     * those gains to what each vertex already holds bounds the capacity the
+     * re-orientation can need (removals come first, so the peak is no higher
+     * than that). idl_dag_add_edge() allocates through ivec_reserve() inside
+     * link_edge(), and R_Realloc longjmps on failure: without this, a
+     * failure partway through would leave the caller's DAG with the changed
+     * arcs removed and only some of them put back -- neither the DAG it was
+     * handed nor the sampled member, and the search would carry on with it.
+     * With the capacity in hand the re-orientation cannot fail, so a failed
+     * draw leaves the DAG exactly as it was found.
+     */
+    if (nch > 0) {
+        int *pa_need = (int *) R_alloc((size_t) p, sizeof(int));
+        int *ch_need = (int *) R_alloc((size_t) p, sizeof(int));
+        for (int v = 0; v < p; v++) {
+            pa_need[v] = d->pa[v].n;
+            ch_need[v] = d->ch[v].n;
+        }
+        for (int e = 0; e < nch; e++) { pa_need[cf[e]]++; ch_need[ct[e]]++; }
+        idl_dag_reserve(d, pa_need, ch_need);
+    }
+
     for (int e = 0; e < nch; e++) idl_dag_remove_edge(d, cf[e], ct[e]);
+
+    /*
+     * The greedy pass below always completes: every arc still to be added
+     * belongs to the sampled member, and the arcs already in the DAG are the
+     * unchanged ones, which the member keeps too -- so the intermediate
+     * graph is a subgraph of an acyclic one, and idl_dag_can_add() cannot
+     * refuse. The error is kept as an assertion, not as a live path; were it
+     * ever to fire it would itself leave the DAG partially re-oriented.
+     */
     int left = nch;
     while (left > 0) {
         int progress = 0;
