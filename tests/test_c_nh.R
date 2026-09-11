@@ -115,17 +115,29 @@ shadow_nh <- function(p, nsteps, seed) {
   invisible(NULL)
 }
 
-## 200 steps at p = 8 and p = 12 is where child lists churn hardest
+## Short trajectories at every size and seed: these are what catch an
+## off-by-one in the enumeration, and they cost 0.2 s for the whole grid.
 for (p in c(4, 6, 8, 12))
-  for (nsteps in c(0, 1, 7, 200))
+  for (nsteps in c(0, 1, 7))
     for (seed in 1:4)
       shadow_nh(p, nsteps, seed)
+## Long trajectories are what churn the child lists, and the churn is hardest
+## at p = 8 and p = 12 -- which is where they now run. Sweeping 200 steps at
+## all four sizes and all four seeds instead cost 9.3 s of this file's 10.2,
+## re-walking short-graph behaviour the cheap cells above already cover.
+for (p in c(8, 12))
+  for (seed in 1:2)
+    shadow_nh(p, 200, seed)
 ## a couple of wider graphs, fewer steps, to exercise larger neighbourhoods
 for (p in c(20, 30))
   for (seed in 1:2)
     shadow_nh(p, 40, seed)
 
-stopifnot(nmoves > 2000L, ncmp > 5000L)
+## anti-vacuity: the sweep really did apply moves and compare neighbourhoods.
+## The thresholds sit just under what the grid above produces (1088 moves,
+## 8008 comparisons), so they still fail loudly if a cell is dropped by
+## accident, rather than being slack enough to hide it.
+stopifnot(nmoves > 1000L, ncmp > 7500L)
 ## the three anti-vacuity guards: the sweep must actually have produced
 ## non-ascending child lists, offered reversals, and seen covered arcs
 stopifnot(nonasc > 0L, nrev > 0L, ncov > 0L)

@@ -99,8 +99,15 @@ compare_rcar <- function(b, r, ut, seed) {
 set.seed(20260907)
 nrev <- 0L
 ncmp <- 0L
+## The sweep is 4 sizes x 3 arc sets x 4 values of r x 5 target families x 3
+## seeds. It used 6 arc sets and 5 seeds, which repeated each CONFIGURATION
+## ten times over and cost 5.3 s of this file's 6.3. Every dimension that
+## selects a code path -- r = 0 and r = 20 at the boundaries, and the five
+## target families including the two whose single target holds both ends of
+## an arc -- is still crossed in full; only the repetition per configuration
+## is lower.
 for (p in c(3, 5, 8, 12)) {
-  for (rep in 1:6) {
+  for (rep in 1:3) {
     cand <- which(upper.tri(matrix(0, p, p)), arr.ind=TRUE)
     cand <- cand[runif(nrow(cand)) < 0.5, , drop=FALSE]
     if (nrow(cand) == 0) next
@@ -112,7 +119,7 @@ for (p in c(3, 5, 8, 12)) {
                       list(integer(0), 1L, min(3L, p)),       # two singletons
                       list(integer(0), c(1L, min(2L, p))),    # BOTH ends
                       list(integer(0), c(1L, min(3L, p)), 2L)))
-        for (seed in 1:5) {
+        for (seed in 1:3) {
           rr <- compare_rcar(both(p, arcs), r, ut, seed)
           nrev <- nrev + rr
           ncmp <- ncmp + 1L

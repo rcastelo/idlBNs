@@ -117,8 +117,12 @@ cat(sprintf("cache backends: %d neighbourhoods, %d entries, contents identical\n
 ################################################################################
 
 nsearch <- 0L
+## Three sizes, two datasets each. A third seed added a third run of the same
+## comparison at every size and cost 3.5 s of this file's 4.0; the property
+## under test -- that both engines populate the cache with the same contents
+## in the same order -- does not need a third dataset to show itself.
 for (p in c(6, 10, 15))
-  for (seed in 1:3) {
+  for (seed in 1:2) {
     x <- mkdata(p, seed = seed)
     for (sf in list(iBIC, iBGe)) {
       ## drive the two engines and capture each one's cache
@@ -214,5 +218,68 @@ stopifnot(identical(h, e), identical(norm_hash(cs), norm_envs(csE)))
 allkeys <- unlist(lapply(sc_dump(cs), names))
 stopifnot(":" %in% allkeys)
 cat("empty parent set stored under \":\", matching the R key format\n")
+
+################################################################################
+## 6. the cache must STORE what it computes, at every parent-set size
+##
+## Section 3 already asserts that a second pass over the same neighbourhood is
+## all hits -- but it runs from the EMPTY graph, where the neighbourhood is
+## nothing but additions to empty parent sets, so every key it ever sees has
+## one parent or none. A cache that silently dropped entries above some size
+## would satisfy it. Injecting exactly that -- skip the put when the key has
+## two parents -- left every assertion in this file, and in test_c_memo.R,
+## passing: the engines agree because both read the same cache, and the miss
+## is invisible unless a key of that size is reached.
+##
+## So the same invariant runs here from a graph whose vertices already carry
+## two and three parents. The sizes actually reached are asserted, so the
+## fixture cannot quietly regress to the empty-graph case and take the
+## coverage with it.
+################################################################################
+
+local({
+    q <- 10L
+    x <- mkdata(q, seed = 13L)
+    attr(x$dat, "sanitycheck") <- TRUE
+    vn <- colnames(x$dat)
+    gs <- idlBNs:::.iBIC.global.sufstats(x$dat, x$targets, x$target.index)
+    cs <- sc_new(q)
+
+    ## a DAG with parent sets of size 0, 1, 2 and 3
+    arcs <- list(c(1, 4), c(2, 4), c(3, 4),        # pa(4) = {1,2,3}
+                 c(1, 5), c(2, 5),                 # pa(5) = {1,2}
+                 c(6, 7), c(6, 8), c(7, 8))        # pa(8) = {6,7}
+    g <- new("graphNEL", nodes = vn, edgemode = "directed")
+    pas <- idlBNs:::init.pasets(q)
+    anc <- idlBNs:::init.ancestors(vn)
+    for (a in arcs) {
+        g <- addEdge(vn[a[1]], vn[a[2]], g)
+        anc <- idlBNs:::add.ancestors(anc, vn[a[1]], vn[a[2]])
+        pas <- idlBNs:::add.pasets(pas, as.integer(a[1]), as.integer(a[2]))
+    }
+
+    ne <- idlBNs:::ncr.nh(g, anc, x$targets)
+    invisible(idlBNs:::.iBIC.nh.scores(ne$op, ne$u, ne$v, pas, gs, cs))
+    s1 <- sc_stats(cs)
+    ## the keys reached, so the fixture is provably exercising big parent sets
+    ksize <- function(k) if (!nzchar(k)) 0L
+                         else length(strsplit(k, ":", fixed = TRUE)[[1]])
+    sizes <- sort(unique(unlist(lapply(sc_dump(cs),
+                                       function(v) vapply(names(v), ksize, 0L)))))
+    stopifnot(max(sizes) >= 3L, 2L %in% sizes)
+
+    ## every key computed above must now BE there: a second pass adds no
+    ## misses and no entries, and hits instead
+    invisible(idlBNs:::.iBIC.nh.scores(ne$op, ne$u, ne$v, pas, gs, cs))
+    s2 <- sc_stats(cs)
+    stopifnot(s1[["misses"]] > 0,                       # it filled
+              s2[["hits"]] - s1[["hits"]] > 0,          # and then hit
+              s2[["misses"]] == s1[["misses"]],         # with no new misses
+              s2[["entries"]] == s1[["entries"]])       # and no new entries
+
+    cat(sprintf(paste("cache stores every size: keys up to %d parents,",
+                      "%.0f entries, 0 new misses on a repeat pass\n"),
+                max(sizes), s2[["entries"]]))
+})
 
 cat("all compiled score cache tests passed\n")

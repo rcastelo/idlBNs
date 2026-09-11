@@ -106,7 +106,29 @@ for (U in pool(9, 0.5, 60, lo = 3L, hi = 6L, seed = 4)) {
     tested <- tested + 1
     if (tested > 8) break
     keys <- brute(U)$keys
-    draws <- replicate(400 * n, amokey(ord2amo(U, cpsamp(U))))
+    ## Same draws, same keys, computed without rebuilding a matrix each time.
+    ## ord2amo() recomputed the edge index and allocated an m x m matrix per
+    ## draw, and that R overhead -- not the sampling -- was 4.7 s of this
+    ## file's 6.3. The orientation of an edge is decided entirely by which
+    ## endpoint comes first in the order, so the key is a vector expression
+    ## over a precomputed edge list. Nothing about the TEST changes: the same
+    ## 400 draws per class member, over the same eight components, compared
+    ## against the same brute-force key set. Trimming the draws instead would
+    ## have cost real power -- at 150 per member a sampler biased 3% toward
+    ## one clique goes undetected, where at 400 it is caught.
+    fastkey <- local({
+        m <- nrow(U); ei <- which(U & upper.tri(U), arr.ind = TRUE)
+        ia <- ei[, 1]; ib <- ei[, 2]
+        function(ord) {
+            pos <- integer(m); pos[ord] <- seq_len(m)
+            first <- pos[ia] < pos[ib]
+            idx <- ifelse(first, ia + (ib - 1L) * m, ib + (ia - 1L) * m)
+            paste0("o", paste(sort(idx), collapse = ","))
+        }
+    })
+    stopifnot(identical(fastkey(seq_len(nrow(U))),          # same as ord2amo
+                        amokey(ord2amo(U, seq_len(nrow(U))))))
+    draws <- replicate(400 * n, fastkey(cpsamp(U)))
     tab <- table(factor(draws, levels = keys))
     stopifnot(all(tab > 0), chisq.test(tab)$p.value > 1e-4)
 }
@@ -168,8 +190,14 @@ local({
         U[e[1], e[2]] <- U[e[2], e[1]] <- TRUE
     n <- .Call(idlBNs:::C_cp_amo_count, U)
     set.seed(1)
+    ## 120000 draws, keyed by a base-7 encoding of the order rather than by
+    ## paste(collapse = ","): the same draws and the same categories, without
+    ## the per-draw string build. The count is not negotiable -- against a
+    ## sampler biased 3% toward one clique, 120000 draws catch it and 30000
+    ## do not -- so the saving has to come from the cost per draw.
+    w <- 7^(seq_len(6L) - 1L)
     tab <- table(replicate(120000,
-                 paste(.Call(idlBNs:::C_cp_amo_sample, U), collapse = ",")))
+                 sum(.Call(idlBNs:::C_cp_amo_sample, U) * w)))
     stopifnot(length(tab) == n,
               stats::chisq.test(as.vector(tab))$p.value > 1e-4)
 })
