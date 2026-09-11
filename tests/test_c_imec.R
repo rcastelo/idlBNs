@@ -379,3 +379,34 @@ local({
               identical(dag_edgeM(st), em))
 })
 cat("test_c_imec.R: a fruitless exhaustive escape restores the order too\n")
+
+## 10: the target family is checked whether or not the DAG has arcs.
+## ie_build() reads the targets only where it needs them, which is past the
+## no-arc short circuit, so an arcless DAG used to accept a target argument
+## that was not a list at all -- a string, a bare integer vector, a list
+## holding a string -- and return an answer, while the same argument was
+## rejected the moment the graph had one arc.
+local({
+    mk <- function(q, arcs = NULL) {
+        st <- dag_new(q)
+        if (!is.null(arcs))
+            invisible(dag_set(st, matrix(as.integer(arcs), nrow = 2,
+                              dimnames = list(c("from", "to"), NULL))))
+        st
+    }
+    bad <- list("x", 1:3, list(integer(0), "v2"), list(integer(0), list(1L)))
+    ent <- list(function(st, t) .Call(idlBNs:::C_dag_imec_size, st, t),
+                function(st, t) .Call(idlBNs:::C_dag_imec_sample, st, t),
+                function(st, t) .Call(idlBNs:::C_dag_imec_members, st, t, 64))
+    refused <- function(f, st, t)
+        inherits(tryCatch(f(st, t), error = function(e) e), "error")
+    for (t in bad) for (f in ent)
+        stopifnot(refused(f, mk(3L), t),                 # arcless
+                  refused(f, mk(3L, c(1, 2)), t))        # one arc
+    ## and a well-formed family is still accepted on an arcless DAG, as is NULL
+    st <- mk(3L)
+    stopifnot(isTRUE(all.equal(.Call(idlBNs:::C_dag_imec_size, st,
+                                     list(integer(0), 1L)), 1)),
+              isTRUE(all.equal(.Call(idlBNs:::C_dag_imec_size, st, NULL), 1)))
+})
+cat("test_c_imec.R: targets are validated with or without arcs\n")

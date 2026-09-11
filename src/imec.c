@@ -338,9 +338,17 @@ ie_build(const idl_dag *d, SEXP tgt, iess *G) {
         }
     }
 
-    if (na == 0) return;
-
+    /*
+     * The target family is validated BEFORE the no-arc short circuit. It used
+     * to be read only where it is needed, below, so an arcless DAG accepted a
+     * target argument that was not a list at all -- a string, a bare integer
+     * vector, a list holding a string -- and returned an answer, while the
+     * very same argument was rejected as soon as the graph had one arc. The
+     * masks cost O(p) to build and go unused when there are no arcs.
+     */
     uint64_t *tmask; int nw = idl_tmask_build(tgt, p, &tmask);
+
+    if (na == 0) return;
     int *fl = (int *) R_alloc((size_t) na, sizeof(int));
     char *wasund = (char *) R_alloc((size_t) na, sizeof(char));
     for (int e = 0; e < na; e++)
@@ -631,6 +639,8 @@ sample_and_apply(idl_dag *d, const iess *G, int rng) {
  */
 SEXP
 C_dag_imec_sample(SEXP st, SEXP tgt_R) {
+    if (tgt_R != R_NilValue && TYPEOF(tgt_R) != VECSXP)
+        error("C_dag_imec_sample: 'targets' must be a list of integer vectors");
     idl_dag *d = idlBNs_dag_from_extptr(st);
     void *vmax = vmaxget();
     iess G;
@@ -647,6 +657,8 @@ C_dag_imec_sample(SEXP st, SEXP tgt_R) {
  */
 SEXP
 C_dag_imec_size(SEXP st, SEXP tgt_R) {
+    if (tgt_R != R_NilValue && TYPEOF(tgt_R) != VECSXP)
+        error("C_dag_imec_size: 'targets' must be a list of integer vectors");
     idl_dag *d = idlBNs_dag_from_extptr(st);
     void *vmax = vmaxget();
     iess G;
@@ -769,6 +781,8 @@ C_dag_restore_state(SEXP st, SEXP em_R, SEXP pasets_R) {
  */
 SEXP
 C_dag_imec_members(SEXP st, SEXP tgt_R, SEXP maxmem_R) {
+    if (tgt_R != R_NilValue && TYPEOF(tgt_R) != VECSXP)
+        error("C_dag_imec_members: 'targets' must be a list of integer vectors");
     idl_dag *d = idlBNs_dag_from_extptr(st);
     double max_mem = asReal(maxmem_R);
     void *vmax = vmaxget();
