@@ -564,7 +564,9 @@ rcar <- function(dag, r, targets, anc, pasets, vidx) {
 #' observational. With a population model in `x` there are no rows to label,
 #' so it is instead one observation count per element of `targets`, and the
 #' notional sample size -- which is what sets the score's penalty term -- is
-#' their sum.
+#' their sum. It may then be omitted, in which case [`population`]'s own `n`
+#' and `C` supply the size and how it is split between observational and
+#' interventional environments.
 #'
 #' @param scorefun (Default is [`iBIC`]) A function to calculate the goodness
 #' of fit (GoF) score of a DAG on a given data set.
@@ -590,7 +592,7 @@ rcar <- function(dag, r, targets, anc, pasets, vidx) {
 #' @importFrom stats setNames
 #' @export
 hillclimbing <- function(x, targets=list(integer(0)),
-                         target.index=rep(1L, nrow(x)),  scorefun=iBIC,
+                         target.index=NULL,  scorefun=iBIC,
                          verbose=TRUE, engine=c("C", "R")) {
 
     engine <- match.arg(engine)
@@ -600,6 +602,7 @@ hillclimbing <- function(x, targets=list(integer(0)),
     attr(x, "sanitycheck") <- TRUE
 
     targets <- .check_targets(targets, ncol(x))
+    target.index <- .resolve.target.index(x, targets, target.index)
     scorefun <- match.fun(scorefun)
 
     ## the attributes that decide which engine can run, extracted before the

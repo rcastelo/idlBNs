@@ -115,6 +115,27 @@
 #'
 #' @param x A `GaussParDAG` object from the \pkg{pcalg} package: the
 #' generative model.
+#' @param n (Default `NULL`) The notional sample size the population stands
+#' in for. It is not cosmetic: the score's penalty is a function of it, so it
+#' is what decides between nested models in the limit, and there is no
+#' defensible default. Setting it lets `target.index` be omitted, in which
+#' case the size is split equally across the environments in `targets`; pass
+#' `target.index` instead to allocate it unequally.
+#'
+#' @param C (Default 1) How much data an observational environment carries
+#' relative to each interventional one, as in Wang, Solus, Yang and Uhler
+#' (2017). With `k` interventional environments the notional size `n` is split
+#' in proportion to \eqn{(C, 1, \ldots, 1)}, so the observational stratum gets
+#' \eqn{C/(C+k)} of it and each interventional stratum \eqn{1/(C+k)}. An
+#' environment counts as observational when its target is empty, so the split
+#' does not depend on the order of `targets`, and `C` is inert when every
+#' environment is of one kind. The default 1 is an equal split.
+#'
+#' This is the quantity their counterexample turns on: the graph they exhibit
+#' is a population local maximum for 2-14\% of edge-weight draws at `C = 1` and
+#' for 68-96\% at `C = 50`. It is used only when `target.index` is omitted;
+#' passing counts states the allocation outright.
+#'
 #' @param ivent.value The value an intervened variable is set to. It affects
 #' the score of the variables that are \emph{not} intervened, because pooling
 #' environments whose means differ widens the covariance their scores are
@@ -127,14 +148,19 @@
 #' there being no rows to count.
 #'
 #' @export
-population <- function(x, ivent.value = 0, ivent.var = 0) {
+population <- function(x, n = NULL, C = 1, ivent.value = 0, ivent.var = 0) {
     if (!inherits(x, "GaussParDAG"))
         cli_abort(c("x" = "'x' must be a pcalg::GaussParDAG object"))
+    if (!is.null(n) && (!is.numeric(n) || length(n) != 1L || !is.finite(n) || n <= 0))
+        cli_abort(c("x" = "'n' must be NULL or a positive finite numeric scalar"))
+    if (!is.numeric(C) || length(C) != 1L || !is.finite(C) || C <= 0)
+        cli_abort(c("x" = "'C' must be a positive finite numeric scalar"))
     if (!is.numeric(ivent.value) || length(ivent.value) != 1L ||
         !is.numeric(ivent.var) || length(ivent.var) != 1L || ivent.var < 0)
         cli_abort(c("x" = paste("'ivent.value' must be a numeric scalar and",
                                 "'ivent.var' a non-negative numeric scalar")))
-    structure(list(model = x, ivent.value = ivent.value, ivent.var = ivent.var,
+    structure(list(model = x, n = n, C = C,
+                   ivent.value = ivent.value, ivent.var = ivent.var,
                    nodes = .pop.nodes(x), p = x$node.count()),
               class = "idlBNsPopulation")
 }
@@ -203,4 +229,38 @@ dimnames.idlBNsPopulation <- function(x) list(NULL, x$nodes)
          data.count = vapply(pv$v, function(e) e$N, 0), aw = aw,
          T0scale = T0scale, TN = TN, awpN = awpN,
          scoreconstvec = scoreconstvec)
+}
+
+
+## Resolve an omitted target.index.
+##
+## The formal default used to be rep(1L, nrow(x)), which a population object
+## cannot satisfy: it has no rows, nrow() is NA by construction, and the
+## default blew up inside rep() with "invalid 'times' argument" before any
+## check could say something useful.
+##
+## For data the behaviour is unchanged. For a population model there is no
+## defensible default, because the notional sample size sets the score's
+## penalty and therefore decides between nested models -- inventing one would
+## silently change the answer. So it has to be stated, either as n on the
+## population object (split equally here) or as explicit counts.
+.resolve.target.index <- function(x, targets, target.index) {
+    if (!is.null(target.index))
+        return(target.index)
+    if (.is.population(x)) {
+        px <- .as.population(x)
+        if (is.null(px$n))
+            cli_abort(c("x" = paste("With a population model in 'x' the notional",
+                                    "sample size has to be given, because the",
+                                    "score's penalty depends on it."),
+                        "i" = paste("Either set 'n' in population(), or pass one",
+                                    "observation count per element of 'targets'",
+                                    "in 'target.index'.")))
+        ## split n in proportion to (C, 1, ..., 1): an environment is
+        ## observational when its target is empty, so this does not depend on
+        ## the order of targets, and C is inert when they are all one kind
+        w <- ifelse(vapply(targets, function(I) length(I) == 0L, TRUE), px$C, 1)
+        return(px$n * w / sum(w))
+    }
+    rep(1L, nrow(x))
 }

@@ -35,7 +35,9 @@
 #' observational. With a population model in `x` there are no rows to label,
 #' so it is instead one observation count per element of `targets`, and the
 #' notional sample size -- which is what sets the score's penalty term -- is
-#' their sum.
+#' their sum. It may then be omitted, in which case [`population`]'s own `n`
+#' and `C` supply the size and how it is split between observational and
+#' interventional environments.
 #'
 #' @param cached.scores (Default `NULL`) An optional list of environment
 #' objects, containing cached scores per parent set for each vertex in `g`. If
@@ -133,7 +135,7 @@
 #' @importFrom graph edgeMatrix numNodes
 #' @export
 iBIC <- function(g, x, targets=list(integer(0)),
-                 target.index=rep(1L, nrow(x)),
+                 target.index=NULL,
                  cached.scores=NULL, global.sufstats=NULL,
                  engine=c("C", "R"), pasets=NULL) {
 
@@ -143,6 +145,8 @@ iBIC <- function(g, x, targets=list(integer(0)),
         x <- .check_input_data(x)
         .check_g_dat_consistency(g, x)
     }
+    target.index <- .resolve.target.index(x, targets, target.index)
+    target.index <- .resolve.target.index(x, targets, target.index)
 
     if (is.null(pasets))
         pasets <- .build_pasets(g, x)
@@ -459,7 +463,9 @@ attr(iBIC, "global.sufstats.fun") <- .iBIC.global.sufstats
 #' observational. With a population model in `x` there are no rows to label,
 #' so it is instead one observation count per element of `targets`, and the
 #' notional sample size -- which is what sets the score's penalty term -- is
-#' their sum.
+#' their sum. It may then be omitted, in which case [`population`]'s own `n`
+#' and `C` supply the size and how it is split between observational and
+#' interventional environments.
 #'
 #' @param cached.scores An optional list of environment objects, containing
 #' cached scores per parent set for each vertex in `g`. If `NULL` (default),
@@ -554,7 +560,7 @@ attr(iBIC, "global.sufstats.fun") <- .iBIC.global.sufstats
 #' @importFrom graph numNodes edgeMatrix
 #' @export
 iBGe <- function(g, x, targets=list(integer(0)),
-                 target.index=rep(1L, nrow(x)),
+                 target.index=NULL,
                  cached.scores=NULL, global.sufstats=NULL,
                  pasets=NULL, engine=c("C", "R")) {
 

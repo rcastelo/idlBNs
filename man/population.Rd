@@ -4,11 +4,32 @@
 \alias{population}
 \title{Describe a population rather than a sample}
 \usage{
-population(x, ivent.value = 0, ivent.var = 0)
+population(x, n = NULL, C = 1, ivent.value = 0, ivent.var = 0)
 }
 \arguments{
 \item{x}{A \code{GaussParDAG} object from the \pkg{pcalg} package: the
 generative model.}
+
+\item{n}{(Default \code{NULL}) The notional sample size the population stands
+in for. It is not cosmetic: the score's penalty is a function of it, so it
+is what decides between nested models in the limit, and there is no
+defensible default. Setting it lets \code{target.index} be omitted, in which
+case the size is split equally across the environments in \code{targets}; pass
+\code{target.index} instead to allocate it unequally.}
+
+\item{C}{(Default 1) How much data an observational environment carries
+relative to each interventional one, as in Wang, Solus, Yang and Uhler
+(2017). With \code{k} interventional environments the notional size \code{n} is split
+in proportion to \eqn{(C, 1, \ldots, 1)}, so the observational stratum gets
+\eqn{C/(C+k)} of it and each interventional stratum \eqn{1/(C+k)}. An
+environment counts as observational when its target is empty, so the split
+does not depend on the order of \code{targets}, and \code{C} is inert when every
+environment is of one kind. The default 1 is an equal split.
+
+This is the quantity their counterexample turns on: the graph they exhibit
+is a population local maximum for 2-14\\% of edge-weight draws at \code{C = 1} and
+for 68-96\\% at \code{C = 50}. It is used only when \code{target.index} is omitted;
+passing counts states the allocation outright.}
 
 \item{ivent.value}{The value an intervened variable is set to. It affects
 the score of the variables that are \emph{not} intervened, because pooling

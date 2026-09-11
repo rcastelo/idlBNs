@@ -116,6 +116,66 @@ stopifnot(inherits(idlBNs:::.as.population(G), "idlBNsPopulation"),
 stopifnot(inherits(tryCatch(hcmc(PM, targets = TG, target.index = rep(1L, 10),
                                  verbose = FALSE), error = function(e) e), "error"))
 
+## Omitting target.index. The formal default used to be rep(1L, nrow(x)),
+## which a population object cannot satisfy -- nrow() is NA by construction --
+## so it died inside rep() with "invalid 'times' argument" before any check
+## could say anything useful. There is no defensible default count either,
+## because the notional sample size sets the score's penalty and so decides
+## between nested models; it has to be stated, on the object or in the call.
+for (f in list(hcmc, hillclimbing)) {
+    e <- tryCatch(f(PM, targets = TG, verbose = FALSE), error = function(e) e)
+    stopifnot(inherits(e, "error"),
+              grepl("sample size", conditionMessage(e)))   # and says why
+}
+e <- tryCatch(iBIC(mkg(DAGS[[1]]), PM, targets = TG), error = function(e) e)
+stopifnot(inherits(e, "error"), grepl("sample size", conditionMessage(e)))
+
+## with n on the object it is split equally, and explicit counts still win
+PMn <- population(G, n = 4 * sum(CNT), ivent.value = IV, ivent.var = TV)
+set.seed(5); a <- hcmc(PMn, targets = TG, verbose = FALSE)
+set.seed(5); b <- hcmc(PMn, targets = TG, verbose = FALSE,
+                       target.index = rep(4 * sum(CNT) / length(TG), length(TG)))
+set.seed(5); d <- hcmc(PMn, targets = TG, target.index = CNT, verbose = FALSE)
+stopifnot(identical(a$sco, b$sco), !identical(a$sco, d$sco))
+## C: how much data an observational environment carries relative to each
+## interventional one, the quantity Wang, Solus, Yang and Uhler's
+## counterexample turns on. n is split in proportion to (C, 1, ..., 1), which
+## is the weighting analysis/33, /43 and /45 use, so the population path
+## reproduces their convention exactly. (The finite-sample allocator in
+## analysis/34 and /44 rounds the same proportions to whole rows; here there
+## are no rows, so the split stays real-valued.)
+ti <- function(k, Cv, n = 8000) {
+    tg <- if (k == 0) list(integer(0))
+          else c(list(integer(0)), lapply(seq_len(k), function(i) as.integer(i)))
+    idlBNs:::.resolve.target.index(population(G, n = n, C = Cv), tg, NULL)
+}
+stopifnot(isTRUE(all.equal(ti(3, 5), 8000 * c(5, 1, 1, 1) / 8)),
+          isTRUE(all.equal(ti(1, 50), 8000 * c(50, 1) / 51)),
+          isTRUE(all.equal(ti(3, 1), rep(2000, 4))),   # C = 1 is the equal split
+          isTRUE(all.equal(ti(0, 50), 8000)))          # inert with no interventions
+## an environment is observational because its target is empty, not because of
+## where it sits in the list
+a <- idlBNs:::.resolve.target.index(population(G, n = 900, C = 7),
+                                    list(integer(0), 2L, 3L), NULL)
+b <- idlBNs:::.resolve.target.index(population(G, n = 900, C = 7),
+                                    list(2L, integer(0), 3L), NULL)
+stopifnot(identical(sort(a), sort(b)), which.max(a) == 1L, which.max(b) == 2L)
+## C only proportions; without n there is still nothing to scale
+stopifnot(inherits(tryCatch(hcmc(population(G, C = 5), targets = TG,
+                                 verbose = FALSE), error = function(e) e), "error"),
+          inherits(tryCatch(population(G, C = 0), error = function(e) e), "error"))
+## and explicit counts still win over C
+set.seed(5); u <- hcmc(population(G, n = 1000, C = 5, ivent.value = IV),
+                       targets = TG, verbose = FALSE)
+set.seed(5); v <- hcmc(population(G, n = 1000, C = 5, ivent.value = IV),
+                       targets = TG, target.index = c(400, 300, 300), verbose = FALSE)
+stopifnot(!identical(u$sco, v$sco))
+
+## and the data path is untouched by the change of default
+XX <- matrix(rnorm(120 * P), 120, P, dimnames = list(NULL, as.character(seq_len(P))))
+stopifnot(is.finite(hcmc(XX, verbose = FALSE)$sco),
+          is.finite(hillclimbing(XX, verbose = FALSE)$sco))
+
 truth <- as(dag2essgraph(mkg(G$weight.mat() != 0), targets = TG), "graphNEL")
 for (sf in list(iBIC, iBGe)) for (eng in c("C", "R")) {
     set.seed(5)

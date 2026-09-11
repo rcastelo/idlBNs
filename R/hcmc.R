@@ -32,7 +32,9 @@
 #' observational. With a population model in `x` there are no rows to label,
 #' so it is instead one observation count per element of `targets`, and the
 #' notional sample size -- which is what sets the score's penalty term -- is
-#' their sum.
+#' their sum. It may then be omitted, in which case [`population`]'s own `n`
+#' and `C` supply the size and how it is split between observational and
+#' interventional environments.
 #'
 #' @param MAXTRIALS (Default 5) Non-negative integer scalar indicating the
 #' maximum number of trials to escape from local maxima when `escape="trials"`.
@@ -198,7 +200,7 @@
 #' @export
 #' @rdname hcmc
 hcmc <- function(x, r=20, targets=list(integer(0)),
-                 target.index=rep(1L, nrow(x)),
+                 target.index=NULL,
                  scorefun=iBIC, MAXTRIALS=5, verbose=TRUE,
                  engine=c("C", "R"),
                  sampler=c("rcar", "exact"), escape=c("trials", "exhaustive"),
@@ -224,6 +226,7 @@ hcmc <- function(x, r=20, targets=list(integer(0)),
     attr(x, "sanitycheck") <- TRUE
 
     targets <- .check_targets(targets, ncol(x))
+    target.index <- .resolve.target.index(x, targets, target.index)
     escape.maxD <- .check_escape.max(escape.max)
     scorefun <- match.fun(scorefun)
 

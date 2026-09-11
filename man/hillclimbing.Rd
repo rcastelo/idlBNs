@@ -7,7 +7,7 @@
 hillclimbing(
   x,
   targets = list(integer(0)),
-  target.index = rep(1L, nrow(x)),
+  target.index = NULL,
   scorefun = iBIC,
   verbose = TRUE,
   engine = c("C", "R")
@@ -37,7 +37,9 @@ there are no interventions in the data, i.e., the data is purely
 observational. With a population model in \code{x} there are no rows to label,
 so it is instead one observation count per element of \code{targets}, and the
 notional sample size -- which is what sets the score's penalty term -- is
-their sum.}
+their sum. It may then be omitted, in which case \code{\link{population}}'s own \code{n}
+and \code{C} supply the size and how it is split between observational and
+interventional environments.}
 
 \item{scorefun}{(Default is \code{\link{iBIC}}) A function to calculate the goodness
 of fit (GoF) score of a DAG on a given data set.}
