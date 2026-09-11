@@ -579,8 +579,8 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
 
     if (verbose && (sampler.fallbacks > 0L || escape.fallbacks > 0L)) {
         msg <- paste("exact sampling fell back to RCAR {sampler.fallbacks}",
-                     "time{?s}; exhaustive enumeration fell back the MAXTRIALS",
-                     "budget {escape.fallbacks} time{?s}")
+                     "time{?s}; exhaustive enumeration fell back to the",
+                     "MAXTRIALS budget {escape.fallbacks} time{?s}")
         cli_alert_warning(msg)
     }
 
