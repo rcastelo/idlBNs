@@ -652,6 +652,8 @@ cp_member(cp_ctx *ctx, int id, double k, int *ord, int *tick) {
 static int
 cp_read_components(SEXP A_R, int *pp, int **comp_of, int ***vsets, int **msz,
                    cp_vset **adjbuf, int *pnc) {
+    if (TYPEOF(A_R) != LGLSXP || !isMatrix(A_R))
+        error("cliquepick: expected a logical matrix");
     SEXP dim = getAttrib(A_R, R_DimSymbol);
     if (dim == R_NilValue || LENGTH(dim) != 2 || INTEGER(dim)[0] != INTEGER(dim)[1])
         error("cliquepick: expected a square matrix");
