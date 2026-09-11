@@ -165,6 +165,12 @@ Number of Edges = 4
 
 $sco
 [1] -50.0166
+
+$sampler.fallbacks
+[1] 0
+
+$escape.fallbacks
+[1] 0
 ```
 
 Calculate the structural Hamming distance (SHD) to the essential graph
@@ -309,7 +315,7 @@ style="width: auto !important; margin-left: auto; margin-right: auto;"}
 sessionInfo()
 R version 4.6.1 (2026-06-24)
 Platform: x86_64-pc-linux-gnu
-Running under: Ubuntu 24.04.4 LTS
+Running under: Ubuntu 24.04.5 LTS
 
 Matrix products: default
 BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3 
@@ -329,7 +335,7 @@ attached base packages:
 
 other attached packages:
  [1] kableExtra_1.4.1    cli_3.6.6           bench_1.1.4        
- [4] tibble_3.3.1        dplyr_1.2.1         idlBNs_1.1.0       
+ [4] tibble_3.3.1        dplyr_1.2.1         idlBNs_1.1.1       
  [7] pcalg_2.7-12        graph_1.90.0        BiocGenerics_0.58.1
 [10] generics_0.1.4      knitr_1.52         
 

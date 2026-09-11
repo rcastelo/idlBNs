@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">idlBNs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -186,7 +186,13 @@ the iBIC score is used in the search algorithm.</p>
 <span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a>Number of Edges <span class="ot">=</span> <span class="dv">4</span> </span>
 <span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a></span>
 <span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a><span class="sc">$</span>sco</span>
-<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a>[<span class="dv">1</span>] <span class="sc">-</span><span class="fl">50.0166</span></span></code></pre></div>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a>[<span class="dv">1</span>] <span class="sc">-</span><span class="fl">50.0166</span></span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a></span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a><span class="sc">$</span>sampler.fallbacks</span>
+<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a>[<span class="dv">1</span>] <span class="dv">0</span></span>
+<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a></span>
+<span id="cb6-14"><a href="#cb6-14" tabindex="-1"></a><span class="sc">$</span>escape.fallbacks</span>
+<span id="cb6-15"><a href="#cb6-15" tabindex="-1"></a>[<span class="dv">1</span>] <span class="dv">0</span></span></code></pre></div>
 <p>Calculate the structural Hamming distance (SHD) to the essential graph of the
 generative DAG structure <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>G</mi><annotation encoding="application/x-tex">G</annotation></semantics></math> using the function <code><a href="https://rdrr.io/pkg/pcalg/man/shd.html" class="external-link">shd()</a></code> from the <code>pcalg</code>
 package.</p>
@@ -901,7 +907,7 @@ iBIC
 <div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span>
 <span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a>R version <span class="dv">4</span>.<span class="fl">6.1</span> (<span class="dv">2026-06-24</span>)</span>
 <span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a>Platform<span class="sc">:</span> x86_64<span class="sc">-</span>pc<span class="sc">-</span>linux<span class="sc">-</span>gnu</span>
-<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a>Running under<span class="sc">:</span> Ubuntu <span class="dv">24</span>.<span class="fl">04.4</span> LTS</span>
+<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a>Running under<span class="sc">:</span> Ubuntu <span class="dv">24</span>.<span class="fl">04.5</span> LTS</span>
 <span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a></span>
 <span id="cb11-6"><a href="#cb11-6" tabindex="-1"></a>Matrix products<span class="sc">:</span> default</span>
 <span id="cb11-7"><a href="#cb11-7" tabindex="-1"></a>BLAS<span class="sc">:</span>   <span class="er">/</span>usr<span class="sc">/</span>lib<span class="sc">/</span>x86_64<span class="sc">-</span>linux<span class="sc">-</span>gnu<span class="sc">/</span>openblas<span class="sc">-</span>pthread<span class="sc">/</span>libblas.so<span class="fl">.3</span> </span>
@@ -921,7 +927,7 @@ iBIC
 <span id="cb11-21"><a href="#cb11-21" tabindex="-1"></a></span>
 <span id="cb11-22"><a href="#cb11-22" tabindex="-1"></a>other attached packages<span class="sc">:</span></span>
 <span id="cb11-23"><a href="#cb11-23" tabindex="-1"></a> [<span class="dv">1</span>] kableExtra_1.<span class="fl">4.1</span>    cli_3.<span class="fl">6.6</span>           bench_1.<span class="fl">1.4</span>        </span>
-<span id="cb11-24"><a href="#cb11-24" tabindex="-1"></a> [<span class="dv">4</span>] tibble_3.<span class="fl">3.1</span>        dplyr_1.<span class="fl">2.1</span>         idlBNs_1.<span class="fl">1.0</span>       </span>
+<span id="cb11-24"><a href="#cb11-24" tabindex="-1"></a> [<span class="dv">4</span>] tibble_3.<span class="fl">3.1</span>        dplyr_1.<span class="fl">2.1</span>         idlBNs_1.<span class="fl">1.1</span>       </span>
 <span id="cb11-25"><a href="#cb11-25" tabindex="-1"></a> [<span class="dv">7</span>] pcalg_2<span class="fl">.7</span><span class="dv">-12</span>        graph_1.<span class="fl">90.0</span>        BiocGenerics_0.<span class="fl">58.1</span></span>
 <span id="cb11-26"><a href="#cb11-26" tabindex="-1"></a>[<span class="dv">10</span>] generics_0.<span class="fl">1.4</span>      knitr_1<span class="fl">.52</span>         </span>
 <span id="cb11-27"><a href="#cb11-27" tabindex="-1"></a></span>

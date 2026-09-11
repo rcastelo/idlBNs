@@ -13,7 +13,7 @@ HCMC (iHCMC) on mixed observational and interventional Gaussian data
 
     <a class="navbar-brand me-2" href="../index.html">idlBNs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -56,7 +56,10 @@ HCMC (iHCMC) on mixed observational and interventional Gaussian data
 <span>  scorefun <span class="op">=</span> <span class="va">iBIC</span>,</span>
 <span>  MAXTRIALS <span class="op">=</span> <span class="fl">5</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  engine <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"C"</span>, <span class="st">"R"</span><span class="op">)</span></span>
+<span>  engine <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"C"</span>, <span class="st">"R"</span><span class="op">)</span>,</span>
+<span>  sampler <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"rcar"</span>, <span class="st">"exact"</span><span class="op">)</span>,</span>
+<span>  escape <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"trials"</span>, <span class="st">"exhaustive"</span><span class="op">)</span>,</span>
+<span>  escape.max <span class="op">=</span> <span class="fl">512</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -70,7 +73,9 @@ with data value records in the rows and random variables in the columns.</p></dd
 
 
 <dt id="arg-r">r<a class="anchor" aria-label="anchor" href="#arg-r"></a></dt>
-<dd><p>(Default 20) Maximum number of (<em>I</em>-)covered arc reversals.</p></dd>
+<dd><p>(Default 20) Non-negative integer scalar indicating the maximum
+number of (<em>I</em>-)covered arc reversals by the RCAR algorithm (Castelo
+and Kočka, 2003).</p></dd>
 
 
 <dt id="arg-targets">targets<a class="anchor" aria-label="anchor" href="#arg-targets"></a></dt>
@@ -94,8 +99,13 @@ of fit (GoF) score of a DAG on a given data set.</p></dd>
 
 
 <dt id="arg-maxtrials">MAXTRIALS<a class="anchor" aria-label="anchor" href="#arg-maxtrials"></a></dt>
-<dd><p>(Default 5) Maximum number of trials to escape from local
-maxima.</p></dd>
+<dd><p>(Default 5) Non-negative integer scalar indicating the
+maximum number of trials to escape from local maxima when <code>escape="trials"</code>.
+It is ignored when <code>escape="exhaustive"</code>, unless the exhaustive enumeration
+of the (<em>I</em>-)equivalence class exceeds <code>escape.max</code> or a chain component
+has more than 64 vertices, in which case the escape mechanism falls back to
+the RCAR algorithm for a maximum of <code>MAXTRIALS</code> trials. See the <code>escape</code>
+argument for details.</p></dd>
 
 
 <dt id="arg-verbose">verbose<a class="anchor" aria-label="anchor" href="#arg-verbose"></a></dt>
@@ -113,11 +123,73 @@ return the same result. <code>"C"</code> requires a <code>scorefun</code> able t
 neighbourhood at once, which <code><a href="iBIC.html">iBIC</a></code> and <code><a href="iBGe.html">iBGe</a></code> are; with any other
 score function the <code>"R"</code> engine is used regardless.</p></dd>
 
+
+<dt id="arg-sampler">sampler<a class="anchor" aria-label="anchor" href="#arg-sampler"></a></dt>
+<dd><p>(Default <code>"rcar"</code>) A character string selecting how the
+algorithm moves within the (<em>I</em>-)equivalence class of the current DAG.
+<code>"rcar"</code> performs the RCAR algorithm (a random walk of up to <code>r</code>
+(<em>I</em>-)covered arc reversals) of Castelo and Kočka (2003). <code>"exact"</code>
+instead draws a member of the class uniformly at random, by the
+Clique-Picking algorithm of Wienöbst <em>et al.</em> (2023), and ignores <code>r</code>.
+The walk produced by the RCAR algorithm and the exact draw are not
+equivalent: the walk is a random walk on the class, so its equilibrium is
+proportional to the number of (<em>I</em>-)covered arcs of each member and is
+not uniform for any value of <code>r</code>.  The exact draw has no limit on the size
+of the class, and none on the number of vertices in the DAG. It declines,
+reverting to the walk and counting the draw in <code>sampler.fallbacks</code>, in two
+cases. First, vertex sets within an undirected chain component are 64-bit
+masks, so a component of more than 64 vertices is out of reach; components
+that large need a DAG with almost no immoralities, and the largest seen for
+random DAGs up to \(p = 500\) is 16. Second, uniformity needs the
+per-component counts to be <em>exact</em>, because the draw compares a
+uniform integer against cumulative counts: doubles hold integers exactly
+only to \(2^{53}\), and a clique of more than 18 vertices has a
+factorial past that, so beyond either bound the draw is declined rather
+than made with rounded weights. Counting is unaffected and still answers
+for a class of any size.</p></dd>
+
+
+<dt id="arg-escape">escape<a class="anchor" aria-label="anchor" href="#arg-escape"></a></dt>
+<dd><p>(Default <code>"trials"</code>) A character string selecting what happens
+at a local maximum. <code>"trials"</code> re-randomises the current DAG within its
+class and retries, up to <code>MAXTRIALS</code> times. <code>"exhaustive"</code> instead examines
+<em>every</em> member of the class and takes the best move available from any
+of them, which settles the question of whether the search is really at a
+local maximum of the class; <code>MAXTRIALS</code> is then unused. It falls back to
+<code>"trials"</code> in the cases where the enumeration declines, counted in
+<code>escape.fallbacks</code>: a class larger than <code>escape.max</code> or <code>INT_MAX</code>, and a
+class whose size cannot be computed at all because some chain component has
+more than 64 vertices. The second is the 64-bit mask limit described under
+<code>sampler</code>, and applies here whichever <code>sampler</code> is in use, since the escape
+enumerates the class regardless of how the search moves within it.</p></dd>
+
+
+<dt id="arg-escape-max">escape.max<a class="anchor" aria-label="anchor" href="#arg-escape-max"></a></dt>
+<dd><p>(Default 512) Positive integer scalar giving the largest
+(<em>I</em>-)equivalence class the <code>escape="exhaustive"</code> enumeration will
+walk. That escape scores one whole neighbourhood per member, so its cost
+grows linearly in the size of the class, which is why it is the class size
+that is bounded. Producing the members is not itself the expensive part:
+each one is generated directly from its index in the class, so listing
+costs one step per member listed and no more. What <code>escape.max</code> bounds is
+therefore the scoring, not the enumeration. <code>NA</code> or <code>Inf</code> mean no limit,
+but the default of 512 is a safe value for the largest classes seen in
+random DAGs up to \(p = 500\) vertices.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A list containing a <code><a href="https://rdrr.io/pkg/graph/man/graphNEL-class.html" class="external-link">graphNEL</a></code> object with
-the structure of the learned DAG, and its corresponding score.</p>
+    <p>A list with the following components: <code>dag</code>, a
+<code><a href="https://rdrr.io/pkg/graph/man/graphNEL-class.html" class="external-link">graphNEL</a></code> object with the structure of the learned
+DAG; <code>sco</code>, its score; <code>sampler.fallbacks</code>, the number of draws for which
+<code>sampler="exact"</code> declined and the <code>"rcar"</code> walk was used instead; and
+<code>escape.fallbacks</code>, the number of local maxima at which
+<code>escape="exhaustive"</code> declined and the <code>MAXTRIALS</code> budget was used instead.
+Both counts are zero unless the corresponding exact method was selected, and
+a non-zero count means part of the run silently used the older machinery:
+the walk does not sample the (<em>I</em>-)equivalence class uniformly, so a
+result obtained with <code>sampler.fallbacks &gt; 0</code> is not the one
+<code>sampler="exact"</code> promises.</p>
     </div>
     <div class="section level2">
     <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>
@@ -126,6 +198,9 @@ Bayesian networks. <em>Journal of Machine Learning Research</em>, 4:527-574, 200
 <p>Castelo, R. Interventional idlBNs in DAG-space. In <em>Challenges
 and Algorithms for Knowledge Discovery from Data</em>, M. van Leeuwen and
 J.  Vreeken (eds.). LNCS 16067, Festschrift, Springer, 2026.</p>
+<p>Wienöbst, M., Bannach, M. and Liśkiewicz, M. Polynomial-time
+algorithms for counting and sampling Markov equivalent DAGs with
+applications. <em>Journal of Machine Learning Research</em>, 24(213):1-45, 2023.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
@@ -174,7 +249,7 @@ J.  Vreeken (eds.). LNCS 16067, Festschrift, Springer, 2026.</p>
 <span class="r-in"><span><span class="va">dhat.hcmc</span> <span class="op">&lt;-</span> <span class="fu">hcmc</span><span class="op">(</span><span class="va">dat</span><span class="op">)</span></span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Calculating global sufficient statistics</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> ⠙ Score -87.004214222737 Escapes 0 Trials 0</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BB00;">✔</span> Score -83.2933160642061 Escapes 0 Trials 0 <span style="color: #B2B2B2;">[46ms]</span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BB00;">✔</span> Score -83.2933160642061 Escapes 0 Trials 0 <span style="color: #B2B2B2;">[57ms]</span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-in"><span><span class="va">dhat.hcmc</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $dag</span>
@@ -184,6 +259,12 @@ J.  Vreeken (eds.). LNCS 16067, Festschrift, Springer, 2026.</p>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $sco</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] -83.29332</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $sampler.fallbacks</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $escape.fallbacks</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co">## calculate the structural Hamming distance (SHD) between the generative</span></span></span>
@@ -208,6 +289,12 @@ J.  Vreeken (eds.). LNCS 16067, Festschrift, Springer, 2026.</p>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $sco</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] -50.0166</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $sampler.fallbacks</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $escape.fallbacks</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co">## the estimated DAG is closer to the generative DAG (lower SHD value)</span></span></span>
 <span class="r-in"><span><span class="co">## than the one estimated by HCMC, which did not take into account the</span></span></span>
@@ -220,7 +307,7 @@ J.  Vreeken (eds.). LNCS 16067, Festschrift, Springer, 2026.</p>
 <span class="r-in"><span><span class="va">dhat.ihcmc2</span> <span class="op">&lt;-</span> <span class="fu">hcmc</span><span class="op">(</span><span class="va">dat</span>, targets<span class="op">=</span><span class="va">I</span>, target.index<span class="op">=</span><span class="va">tindex</span>, scorefun<span class="op">=</span><span class="va">iBGe</span><span class="op">)</span></span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Calculating global sufficient statistics</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> ⠙ Score -189.956899563879 Escapes 0 Trials 0</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BB00;">✔</span> Score -181.640790427507 Escapes 0 Trials 0 <span style="color: #B2B2B2;">[14ms]</span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BB00;">✔</span> Score -181.640790427507 Escapes 0 Trials 0 <span style="color: #B2B2B2;">[10ms]</span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/pkg/pcalg/man/shd.html" class="external-link">shd</a></span><span class="op">(</span><span class="va">e</span>, <span class="fu"><a href="https://rdrr.io/pkg/pcalg/man/dag2essgraph.html" class="external-link">dag2essgraph</a></span><span class="op">(</span><span class="va">dhat.ihcmc2</span><span class="op">$</span><span class="va">dag</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] 2</span>

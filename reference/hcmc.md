@@ -16,7 +16,10 @@ hcmc(
   scorefun = iBIC,
   MAXTRIALS = 5,
   verbose = TRUE,
-  engine = c("C", "R")
+  engine = c("C", "R"),
+  sampler = c("rcar", "exact"),
+  escape = c("trials", "exhaustive"),
+  escape.max = 512
 )
 ```
 
@@ -30,7 +33,9 @@ hcmc(
 
 - r:
 
-  (Default 20) Maximum number of (*I*-)covered arc reversals.
+  (Default 20) Non-negative integer scalar indicating the maximum number
+  of (*I*-)covered arc reversals by the RCAR algorithm (Castelo and
+  Kočka, 2003).
 
 - targets:
 
@@ -56,7 +61,13 @@ hcmc(
 
 - MAXTRIALS:
 
-  (Default 5) Maximum number of trials to escape from local maxima.
+  (Default 5) Non-negative integer scalar indicating the maximum number
+  of trials to escape from local maxima when `escape="trials"`. It is
+  ignored when `escape="exhaustive"`, unless the exhaustive enumeration
+  of the (*I*-)equivalence class exceeds `escape.max` or a chain
+  component has more than 64 vertices, in which case the escape
+  mechanism falls back to the RCAR algorithm for a maximum of
+  `MAXTRIALS` trials. See the `escape` argument for details.
 
 - verbose:
 
@@ -76,11 +87,75 @@ hcmc(
   [`iBGe`](https://rcastelo.github.io/idlBNs/reference/iBGe.md) are;
   with any other score function the `"R"` engine is used regardless.
 
+- sampler:
+
+  (Default `"rcar"`) A character string selecting how the algorithm
+  moves within the (*I*-)equivalence class of the current DAG. `"rcar"`
+  performs the RCAR algorithm (a random walk of up to `r` (*I*-)covered
+  arc reversals) of Castelo and Kočka (2003). `"exact"` instead draws a
+  member of the class uniformly at random, by the Clique-Picking
+  algorithm of Wienöbst *et al.* (2023), and ignores `r`. The walk
+  produced by the RCAR algorithm and the exact draw are not equivalent:
+  the walk is a random walk on the class, so its equilibrium is
+  proportional to the number of (*I*-)covered arcs of each member and is
+  not uniform for any value of `r`. The exact draw has no limit on the
+  size of the class, and none on the number of vertices in the DAG. It
+  declines, reverting to the walk and counting the draw in
+  `sampler.fallbacks`, in two cases. First, vertex sets within an
+  undirected chain component are 64-bit masks, so a component of more
+  than 64 vertices is out of reach; components that large need a DAG
+  with almost no immoralities, and the largest seen for random DAGs up
+  to \\p = 500\\ is 16. Second, uniformity needs the per-component
+  counts to be *exact*, because the draw compares a uniform integer
+  against cumulative counts: doubles hold integers exactly only to
+  \\2^{53}\\, and a clique of more than 18 vertices has a factorial past
+  that, so beyond either bound the draw is declined rather than made
+  with rounded weights. Counting is unaffected and still answers for a
+  class of any size.
+
+- escape:
+
+  (Default `"trials"`) A character string selecting what happens at a
+  local maximum. `"trials"` re-randomises the current DAG within its
+  class and retries, up to `MAXTRIALS` times. `"exhaustive"` instead
+  examines *every* member of the class and takes the best move available
+  from any of them, which settles the question of whether the search is
+  really at a local maximum of the class; `MAXTRIALS` is then unused. It
+  falls back to `"trials"` in the cases where the enumeration declines,
+  counted in `escape.fallbacks`: a class larger than `escape.max` or
+  `INT_MAX`, and a class whose size cannot be computed at all because
+  some chain component has more than 64 vertices. The second is the
+  64-bit mask limit described under `sampler`, and applies here
+  whichever `sampler` is in use, since the escape enumerates the class
+  regardless of how the search moves within it.
+
+- escape.max:
+
+  (Default 512) Positive integer scalar giving the largest
+  (*I*-)equivalence class the `escape="exhaustive"` enumeration will
+  walk. That escape scores one whole neighbourhood per member, so its
+  cost grows linearly in the size of the class, which is why it is the
+  class size that is bounded. Producing the members is not itself the
+  expensive part: each one is generated directly from its index in the
+  class, so listing costs one step per member listed and no more. What
+  `escape.max` bounds is therefore the scoring, not the enumeration.
+  `NA` or `Inf` mean no limit, but the default of 512 is a safe value
+  for the largest classes seen in random DAGs up to \\p = 500\\
+  vertices.
+
 ## Value
 
-A list containing a
+A list with the following components: `dag`, a
 [`graphNEL`](https://rdrr.io/pkg/graph/man/graphNEL-class.html) object
-with the structure of the learned DAG, and its corresponding score.
+with the structure of the learned DAG; `sco`, its score;
+`sampler.fallbacks`, the number of draws for which `sampler="exact"`
+declined and the `"rcar"` walk was used instead; and `escape.fallbacks`,
+the number of local maxima at which `escape="exhaustive"` declined and
+the `MAXTRIALS` budget was used instead. Both counts are zero unless the
+corresponding exact method was selected, and a non-zero count means part
+of the run silently used the older machinery: the walk does not sample
+the (*I*-)equivalence class uniformly, so a result obtained with
+`sampler.fallbacks > 0` is not the one `sampler="exact"` promises.
 
 ## References
 
@@ -90,6 +165,10 @@ networks. *Journal of Machine Learning Research*, 4:527-574, 2003.
 Castelo, R. Interventional idlBNs in DAG-space. In *Challenges and
 Algorithms for Knowledge Discovery from Data*, M. van Leeuwen and J.
 Vreeken (eds.). LNCS 16067, Festschrift, Springer, 2026.
+
+Wienöbst, M., Bannach, M. and Liśkiewicz, M. Polynomial-time algorithms
+for counting and sampling Markov equivalent DAGs with applications.
+*Journal of Machine Learning Research*, 24(213):1-45, 2023.
 
 ## See also
 
@@ -139,7 +218,7 @@ tindex <- rep(1:length(nbytgts), nbytgts)
 dhat.hcmc <- hcmc(dat)
 #> ℹ Calculating global sufficient statistics
 #> ⠙ Score -87.004214222737 Escapes 0 Trials 0
-#> ✔ Score -83.2933160642061 Escapes 0 Trials 0 [46ms]
+#> ✔ Score -83.2933160642061 Escapes 0 Trials 0 [57ms]
 #> 
 dhat.hcmc
 #> $dag
@@ -149,6 +228,12 @@ dhat.hcmc
 #> 
 #> $sco
 #> [1] -83.29332
+#> 
+#> $sampler.fallbacks
+#> [1] 0
+#> 
+#> $escape.fallbacks
+#> [1] 0
 #> 
 
 ## calculate the structural Hamming distance (SHD) between the generative
@@ -173,6 +258,12 @@ dhat.ihcmc
 #> $sco
 #> [1] -50.0166
 #> 
+#> $sampler.fallbacks
+#> [1] 0
+#> 
+#> $escape.fallbacks
+#> [1] 0
+#> 
 
 ## the estimated DAG is closer to the generative DAG (lower SHD value)
 ## than the one estimated by HCMC, which did not take into account the
@@ -185,7 +276,7 @@ shd(e, dag2essgraph(dhat.ihcmc$dag))
 dhat.ihcmc2 <- hcmc(dat, targets=I, target.index=tindex, scorefun=iBGe)
 #> ℹ Calculating global sufficient statistics
 #> ⠙ Score -189.956899563879 Escapes 0 Trials 0
-#> ✔ Score -181.640790427507 Escapes 0 Trials 0 [14ms]
+#> ✔ Score -181.640790427507 Escapes 0 Trials 0 [10ms]
 #> 
 shd(e, dag2essgraph(dhat.ihcmc2$dag))
 #> [1] 2
