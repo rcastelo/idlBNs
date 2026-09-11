@@ -520,12 +520,27 @@ cp_sample(cp_ctx *ctx, int id, int *ord, int *tick) {
  * component was Theta(m!) however few members the class had.
  *
  * Only called once the whole class is known to fit the caller's budget, so
- * every count in play is small and the long arithmetic cannot overflow.
+ * every count in play is small and the index arithmetic cannot overflow.
+ *
+ * The indices are int64_t, not long. long is 32 bits on LLP64 (Windows),
+ * where LONG_MAX and the INT_MAX ceiling that C_cp_amo_list() and
+ * C_dag_imec_members() impose on a class are the same number -- so the
+ * arithmetic was correct there but with no headroom at all, and raising
+ * that ceiling by one would have broken on one platform and not the other.
+ * (The conversion itself was never undefined: C truncates toward zero, and
+ * the integral part of INT_MAX + 0.5 is INT_MAX, which int32 represents.)
+ * A fixed-width type makes the range the same everywhere, and cp_rnd()
+ * refuses anything it cannot represent rather than letting the cast decide.
  */
 /* the counts are integers held as doubles, so round rather than truncate: a
    weight arriving as 3.9999999999 would otherwise shift every block boundary
    and hand the decoder an index past the end of its clique */
-static inline long cp_rnd(double x) { return (long) (x + 0.5); }
+static inline int64_t
+cp_rnd(double x) {
+    if (!(x >= 0.0) || x > 9007199254740992.0)   /* 2^53; NaN fails the first */
+        error("cliquepick: count %g is not a usable index", x);
+    return (int64_t) (x + 0.5);
+}
 
 /*
  * g[d][k] = how many orderings of the len - d vertices left after a prefix of
@@ -577,20 +592,20 @@ cp_gtab(cp_ctx *ctx, int id, int j, int len, const int *o) {
 }
 
 static void
-cp_unrank(cp_ctx *ctx, int id, long k, int *ord, int *tick) {
+cp_unrank(cp_ctx *ctx, int id, int64_t k, int *ord, int *tick) {
     cp_node *nd = &ctx->node[id];
 
     int j = 0;
     for (; j < nd->ncl - 1; j++) {
-        long w = cp_rnd(nd->w[j]);
+        int64_t w = cp_rnd(nd->w[j]);
         if (k < w) break;
         k -= w;
     }
 
-    long prod = 1;
+    int64_t prod = 1;
     for (int c = 0; c < nd->nsp[j]; c++)
         prod *= cp_rnd(ctx->node[nd->sp[j][c]].total);
-    long pi = k / prod, rest = k % prod;
+    int64_t pi = k / prod, rest = k % prod;
 
     int K[CP_MAXV], len = 0;
     for (cp_vset c = nd->cl[j]; c; c &= c - 1) K[len++] = cp_first(c);
@@ -628,7 +643,7 @@ cp_unrank(cp_ctx *ctx, int id, long k, int *ord, int *tick) {
     int perm[CP_MAXV];
     char used[CP_MAXV];
     memset(used, 0, sizeof used);   /* indexed by vertex, not by position */
-    long rest_pi = pi;
+    int64_t rest_pi = pi;
     int mx = 0;
     for (int d = 0; d < len; d++) {
         int chosen = -1;
@@ -643,14 +658,14 @@ cp_unrank(cp_ctx *ctx, int id, long k, int *ord, int *tick) {
             for (int a = 1; a <= nsz; a++)
                 if (fps[a] >= want) { k0 = a; break; }
             double cnt = g[(size_t)(d + 1) * stride + k0];
-            long c = (long) (cnt + 0.5);
+            int64_t c = cp_rnd(cnt);
             if (rest_pi < c) { chosen = v; mx = mx2; break; }
             rest_pi -= c;
         }
         if (chosen < 0)      /* the clique had fewer allowed permutations than
                                 the decoded index: never emit a partial order */
-            error("cp_unrank: index %ld past the allowed permutations of a "
-                  "clique of size %d", pi, len);
+            error("cp_unrank: index %.0f past the allowed permutations of a "
+                  "clique of size %d", (double) pi, len);
         used[chosen] = 1;
         perm[d] = chosen;
     }
@@ -658,7 +673,7 @@ cp_unrank(cp_ctx *ctx, int id, long k, int *ord, int *tick) {
     for (int i = 0; i < len; i++) ord[(*tick)++] = perm[i];
 
     for (int c = 0; c < nd->nsp[j]; c++) {
-        long tc = cp_rnd(ctx->node[nd->sp[j][c]].total);
+        int64_t tc = cp_rnd(ctx->node[nd->sp[j][c]].total);
         cp_unrank(ctx, nd->sp[j][c], rest % tc, ord, tick);
         rest /= tc;
     }
@@ -799,9 +814,9 @@ C_cp_amo_list(SEXP A_R, SEXP limit_R) {
     SEXP ans = PROTECT(allocVector(VECSXP, ntot));
     for (int t = 0; t < ntot; t++) {
         memset(inc, 0, (size_t) p);
-        long rest = t;
+        int64_t rest = t;
         for (int c = 0; c < nc; c++) {
-            long tc = cp_rnd(ctxs[c].node[ids[c]].total);
+            int64_t tc = cp_rnd(ctxs[c].node[ids[c]].total);
             int tick = 0;
             cp_member(&ctxs[c], ids[c], (double) (rest % tc), ord, &tick);
             rest /= tc;

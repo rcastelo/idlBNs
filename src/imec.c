@@ -813,9 +813,9 @@ C_dag_imec_members(SEXP st, SEXP tgt_R, SEXP maxmem_R) {
     for (int t = 0; t < ntot; t++) {
         /* decode t into one member index per component */
         memset(pos, 0, (size_t) d->p * sizeof(int));
-        long rest = t;
+        int64_t rest = t;
         for (int c = 0; c < nc; c++) {
-            long tc = (long) (ctxs[c].node[ids[c]].total + 0.5);
+            int64_t tc = (int64_t) (ctxs[c].node[ids[c]].total + 0.5);
             int tick = 0;
             cp_member(&ctxs[c], ids[c], (double) (rest % tc), ord, &tick);
             rest /= tc;
