@@ -5,10 +5,10 @@
 \title{The HCMC and iHCMC algorithms}
 \usage{
 hcmc(
-  dat,
+  x,
   r = 20,
   targets = list(integer(0)),
-  target.index = rep(1L, nrow(dat)),
+  target.index = rep(1L, nrow(x)),
   scorefun = iBIC,
   MAXTRIALS = 5,
   verbose = TRUE,
@@ -19,8 +19,15 @@ hcmc(
 )
 }
 \arguments{
-\item{dat}{A \code{data.frame} or \code{matrix} object, containing input Gaussian data,
-with data value records in the rows and random variables in the columns.}
+\item{x}{Either the data to learn from, or the population it would have
+come from. A \code{data.frame} or \code{matrix} of Gaussian data, with observations
+in the rows and random variables in the columns; or a population model
+built with \code{\link{population}}, in which case the search is scored in the
+large-sample limit instead of on a sample, which is what lets a run be read
+as the behaviour of the algorithm itself rather than of one dataset. A bare
+\code{GaussParDAG} from the \pkg{pcalg} package is accepted as a population
+model with a hard intervention to zero. See \code{target.index} for how the
+notional sample size is supplied.}
 
 \item{r}{(Default 20) Non-negative integer scalar indicating the maximum
 number of (\emph{I}-)covered arc reversals by the RCAR algorithm (Castelo
@@ -31,11 +38,15 @@ targets provided as a list of integer vectors. Its default value indicates
 that there are no interventions in the data, i.e., the data is purely
 observational.}
 
-\item{target.index}{(Default a unit vector) A vector of integers in
-one-to-one correspondence with the rows in \code{dat}, indicating which rows in
-the input data are intervened by which targets. Its default value indicates
-that there are no interventions in the data, i.e., the data is purely
-observational.}
+\item{target.index}{(Default a unit vector) How much data comes from each
+environment. With data in \code{x}, a vector of integers in one-to-one
+correspondence with the rows in \code{x}, indicating which rows in the input
+data are intervened by which targets; its default value indicates that
+there are no interventions in the data, i.e., the data is purely
+observational. With a population model in \code{x} there are no rows to label,
+so it is instead one observation count per element of \code{targets}, and the
+notional sample size -- which is what sets the score's penalty term -- is
+their sum.}
 
 \item{scorefun}{(Default is \code{\link{iBIC}}) A function to calculate the goodness
 of fit (GoF) score of a DAG on a given data set.}
@@ -152,19 +163,19 @@ nbytgts <- rep(floor(n / (k + 1)), k)
 nbytgts <- c(n - sum(nbytgts), nbytgts)
 
 ## simulate mixed observational and interventional data
-dat <- list()
+x <- list()
 for (v in seq_along(I)) {
     targets <- I[[v]]
-    dat[[v]] <- rmvnorm.ivent(nbytgts[v], Mg, target=targets,
+    x[[v]] <- rmvnorm.ivent(nbytgts[v], Mg, target=targets,
                               target.value=rep(2, length(targets)))
 }
-dat <- do.call("rbind", dat)
+x <- do.call("rbind", x)
 
 ## store the target index for each row of the data
 tindex <- rep(1:length(nbytgts), nbytgts)
 
 ## run the HCMC algorithm assuming all data were observational
-dhat.hcmc <- hcmc(dat)
+dhat.hcmc <- hcmc(x)
 dhat.hcmc
 
 ## calculate the structural Hamming distance (SHD) between the generative
@@ -174,7 +185,7 @@ shd(e, dag2essgraph(dhat.hcmc$dag))
 ## run the iHCMC algorithm informing the presence of interventional data
 ## using by the default the interventional BIC score (see the iBIC()
 ## function).
-dhat.ihcmc <- hcmc(dat, targets=I, target.index=tindex)
+dhat.ihcmc <- hcmc(x, targets=I, target.index=tindex)
 dhat.ihcmc
 
 ## the estimated DAG is closer to the generative DAG (lower SHD value)
@@ -184,7 +195,7 @@ shd(e, dag2essgraph(dhat.ihcmc$dag))
 
 ## run it again this time using the interventional BGe score (see the
 ## iBGe() function), which provides an estimate closer to the generative DAG
-dhat.ihcmc2 <- hcmc(dat, targets=I, target.index=tindex, scorefun=iBGe)
+dhat.ihcmc2 <- hcmc(x, targets=I, target.index=tindex, scorefun=iBGe)
 shd(e, dag2essgraph(dhat.ihcmc2$dag))
 
 }

@@ -5,8 +5,15 @@
 #' HCMC (iHCMC) on mixed observational and interventional Gaussian data
 #' (Castelo, 2026).
 #'
-#' @param dat A `data.frame` or `matrix` object, containing input Gaussian data,
-#' with data value records in the rows and random variables in the columns.
+#' @param x Either the data to learn from, or the population it would have
+#' come from. A `data.frame` or `matrix` of Gaussian data, with observations
+#' in the rows and random variables in the columns; or a population model
+#' built with [`population`], in which case the search is scored in the
+#' large-sample limit instead of on a sample, which is what lets a run be read
+#' as the behaviour of the algorithm itself rather than of one dataset. A bare
+#' `GaussParDAG` from the \pkg{pcalg} package is accepted as a population
+#' model with a hard intervention to zero. See `target.index` for how the
+#' notional sample size is supplied.
 #'
 #' @param r (Default 20) Non-negative integer scalar indicating the maximum
 #' number of (\emph{I}-)covered arc reversals by the RCAR algorithm (Castelo
@@ -17,11 +24,15 @@
 #' that there are no interventions in the data, i.e., the data is purely
 #' observational.
 #'
-#' @param target.index (Default a unit vector) A vector of integers in
-#' one-to-one correspondence with the rows in `dat`, indicating which rows in
-#' the input data are intervened by which targets. Its default value indicates
-#' that there are no interventions in the data, i.e., the data is purely
-#' observational.
+#' @param target.index (Default a unit vector) How much data comes from each
+#' environment. With data in `x`, a vector of integers in one-to-one
+#' correspondence with the rows in `x`, indicating which rows in the input
+#' data are intervened by which targets; its default value indicates that
+#' there are no interventions in the data, i.e., the data is purely
+#' observational. With a population model in `x` there are no rows to label,
+#' so it is instead one observation count per element of `targets`, and the
+#' notional sample size -- which is what sets the score's penalty term -- is
+#' their sum.
 #'
 #' @param MAXTRIALS (Default 5) Non-negative integer scalar indicating the
 #' maximum number of trials to escape from local maxima when `escape="trials"`.
@@ -144,19 +155,19 @@
 #' nbytgts <- c(n - sum(nbytgts), nbytgts)
 #'
 #' ## simulate mixed observational and interventional data
-#' dat <- list()
+#' x <- list()
 #' for (v in seq_along(I)) {
 #'     targets <- I[[v]]
-#'     dat[[v]] <- rmvnorm.ivent(nbytgts[v], Mg, target=targets,
+#'     x[[v]] <- rmvnorm.ivent(nbytgts[v], Mg, target=targets,
 #'                               target.value=rep(2, length(targets)))
 #' }
-#' dat <- do.call("rbind", dat)
+#' x <- do.call("rbind", x)
 #'
 #' ## store the target index for each row of the data
 #' tindex <- rep(1:length(nbytgts), nbytgts)
 #'
 #' ## run the HCMC algorithm assuming all data were observational
-#' dhat.hcmc <- hcmc(dat)
+#' dhat.hcmc <- hcmc(x)
 #' dhat.hcmc
 #'
 #' ## calculate the structural Hamming distance (SHD) between the generative
@@ -166,7 +177,7 @@
 #' ## run the iHCMC algorithm informing the presence of interventional data
 #' ## using by the default the interventional BIC score (see the iBIC()
 #' ## function).
-#' dhat.ihcmc <- hcmc(dat, targets=I, target.index=tindex)
+#' dhat.ihcmc <- hcmc(x, targets=I, target.index=tindex)
 #' dhat.ihcmc
 #'
 #' ## the estimated DAG is closer to the generative DAG (lower SHD value)
@@ -176,7 +187,7 @@
 #'
 #' ## run it again this time using the interventional BGe score (see the
 #' ## iBGe() function), which provides an estimate closer to the generative DAG
-#' dhat.ihcmc2 <- hcmc(dat, targets=I, target.index=tindex, scorefun=iBGe)
+#' dhat.ihcmc2 <- hcmc(x, targets=I, target.index=tindex, scorefun=iBGe)
 #' shd(e, dag2essgraph(dhat.ihcmc2$dag))
 #'
 #' @importFrom graph nodes edgeMatrix graphNEL
@@ -186,8 +197,8 @@
 #' @importFrom stats setNames
 #' @export
 #' @rdname hcmc
-hcmc <- function(dat, r=20, targets=list(integer(0)),
-                 target.index=rep(1L, nrow(dat)),
+hcmc <- function(x, r=20, targets=list(integer(0)),
+                 target.index=rep(1L, nrow(x)),
                  scorefun=iBIC, MAXTRIALS=5, verbose=TRUE,
                  engine=c("C", "R"),
                  sampler=c("rcar", "exact"), escape=c("trials", "exhaustive"),
@@ -208,11 +219,11 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
     ## directly from its index in the class, one step per member -- rather than
     ## Theta(m!), so the bound is purely about the scoring it feeds and can sit
     ## far higher than the enumeration once allowed.
-    dat <- .check_input_data(dat)
-    dag <- graphNEL(colnames(dat), edgemode="directed")
-    attr(dat, "sanitycheck") <- TRUE
+    x <- .check_input_data(x)
+    dag <- graphNEL(colnames(x), edgemode="directed")
+    attr(x, "sanitycheck") <- TRUE
 
-    targets <- .check_targets(targets, ncol(dat))
+    targets <- .check_targets(targets, ncol(x))
     escape.maxD <- .check_escape.max(escape.max)
     scorefun <- match.fun(scorefun)
 
@@ -262,7 +273,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
     ## the parent SET, so the cache is part of the arithmetic. See
     ## src/sccache.h and tests/test_c_cache.R.
     if (use.c)
-        cached.scores <- .Call(C_sccache_new, ncol(dat))
+        cached.scores <- .Call(C_sccache_new, ncol(x))
     else {
         if (!.load_suggested_package("RBGL")) {
             msg <- paste("The R engine requires the Bioconductor package",
@@ -270,7 +281,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
             cli_abort(c=("x"=msg))
         }
         cached.scores <- list()
-        for (i in seq_len(ncol(dat)))
+        for (i in seq_len(ncol(x)))
             cached.scores[[i]] <- new.env(hash=TRUE, parent=emptyenv())
     }
 
@@ -279,24 +290,26 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
     if (!is.null(global.sufstats.fun)) {
         if (verbose)
           cli_alert_info("Calculating global sufficient statistics")
-        global.sufstats <- global.sufstats.fun(dat, targets, target.index)
+        global.sufstats <- global.sufstats.fun(x, targets, target.index)
     }
 
-    anc <- init.ancestors(colnames(dat))
-    vidx <- setNames(seq_len(ncol(dat)), colnames(dat))
+    anc <- init.ancestors(colnames(x))
+    vidx <- setNames(seq_len(ncol(x)), colnames(x))
     ## nodes(dag) never changes during the search, only its edges do, so the
-    ## vertex names and the nodes(dag)-position -> dat-column map that
+    ## vertex names and the nodes(dag)-position -> x-column map that
     ## translate a move's integer u/v are built once here
     vnames <- nodes(dag)
     vidx.nodes <- unname(vidx[vnames])
-    pasets <- init.pasets(ncol(dat))
+    pasets <- init.pasets(ncol(x))
     ## assuming .check_targets() has been called
     ## length(0:r) is computed here, not as r + 1 in C: 0:r for a
     ## non-integer r is 0:floor(r) and for a negative r counts down, so the
     ## coercion stays where it already behaves correctly (see src/rcar.c)
     rlen <- length(0:r)
     s0 <- -Inf
-    s1 <- scorefun(g=dag, dat=dat, targets=targets, target.index=target.index,
+    ## g and x go POSITIONALLY: a user-supplied scorefun may still call its
+    ## second formal 'dat', and renaming ours must not break theirs
+    s1 <- scorefun(dag, x, targets=targets, target.index=target.index,
                    cached.scores=cached.scores, global.sufstats=global.sufstats)
     was_in_local_maximum <- local_maximum <- s1 < s0
     trials <- escapes <- avg_trials_per_escape <- 0
@@ -351,7 +364,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
     ## The escape bookkeeping (trials, escapes, avg_trials_per_escape) is
     ## identical in both and stays in R.
     if (use.c) {
-        st <- .Call(C_dag_new, ncol(dat))
+        st <- .Call(C_dag_new, ncol(x))
         while (!local_maximum) {
             s0 <- s1
             ## the exact draw declines for a chain component past the 64
@@ -454,7 +467,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
             } else
                 s1 <- s0
 
-            .debug_assertions(st, NULL, NULL, NULL, dat, vnames)
+            .debug_assertions(st, NULL, NULL, NULL, x, vnames)
 
             if (verbose)
                 cli_progress_update()
@@ -474,7 +487,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
             anc <- rcar.out$anc
             pasets <- rcar.out$pasets
             ne <- ncr.nh(dag, anc, targets)
-            sco <- score.nh(ne, dag, dat, targets, target.index, cached.scores,
+            sco <- score.nh(ne, dag, x, targets, target.index, cached.scores,
                             global.sufstats, pasets, vidx.nodes,
                             supports.pasets, scorefun, nh.scores.fun)
             b <- which.max(sco)
@@ -522,7 +535,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                 best.s <- s0; best <- NULL
                 for (M in mm) {
                     ne.m <- ncr.nh(M$dag, M$anc, targets)
-                    sco.m <- score.nh(ne.m, M$dag, dat, targets, target.index,
+                    sco.m <- score.nh(ne.m, M$dag, x, targets, target.index,
                                       cached.scores, global.sufstats, M$pasets,
                                       vidx.nodes, supports.pasets, scorefun,
                                       nh.scores.fun)
@@ -570,7 +583,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
             } else
                 s1 <- s0
 
-            .debug_assertions(NULL, dag, anc, pasets, dat, vnames)
+            .debug_assertions(NULL, dag, anc, pasets, x, vnames)
 
             if (verbose)
                 cli_progress_update()
@@ -595,6 +608,10 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
 
 #' @importFrom cli cli_abort
 .check_input_data <- function(dat) {
+    ## a population model stands in for the data; it reports ncol() and
+    ## colnames() like the matrix it replaces, so nothing downstream changes
+    if (.is.population(dat))
+        return(.as.population(dat))
     if (!is.data.frame(dat) && !is.matrix(dat)) {
         msg <- paste("Input data in 'dat' must be a data.frame or a",
                      "matrix object.")

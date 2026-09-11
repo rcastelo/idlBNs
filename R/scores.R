@@ -12,18 +12,30 @@
 #' @param g An acyclic directed graph (DAG) structure of the Bayesian network
 #' for which we want to calculate the score.
 #'
-#' @param dat A `data.frame` object with data records in the rows.
+#' @param x Either the data, or the population it would have come from. A
+#' `data.frame` or `matrix` of Gaussian data, with observations in the rows
+#' and random variables in the columns; or a population model built with
+#' [`population`], in which case the score is evaluated in the large-sample
+#' limit instead of on a sample. That is not a different score: it is the same
+#' arithmetic fed the sufficient statistics a sample of the given size would
+#' have in expectation. A bare `GaussParDAG` from the \pkg{pcalg} package is
+#' accepted as a population model with a hard intervention to zero. See
+#' `target.index` for how the notional sample size is supplied.
 #'
 #' @param targets (Default `list(integer(0))`) A `list` object with a family of
 #' targets provided as a list of integer vectors. Its default value indicates
 #' that there are no interventions in the data, i.e., the data is purely
 #' observational.
 #'
-#' @param target.index (Default a unit vector) A vector of integers in
-#' one-to-one correspondence with the rows in `dat`, indicating which rows in
-#' the input data are intervened by which targets. Its default value indicates
-#' that there are no interventions in the data, i.e., the data is purely
-#' observational.
+#' @param target.index (Default a unit vector) How much data comes from each
+#' environment. With data in `x`, a vector of integers in one-to-one
+#' correspondence with the rows in `x`, indicating which rows in the input
+#' data are intervened by which targets; its default value indicates that
+#' there are no interventions in the data, i.e., the data is purely
+#' observational. With a population model in `x` there are no rows to label,
+#' so it is instead one observation count per element of `targets`, and the
+#' notional sample size -- which is what sets the score's penalty term -- is
+#' their sum.
 #'
 #' @param cached.scores (Default `NULL`) An optional list of environment
 #' objects, containing cached scores per parent set for each vertex in `g`. If
@@ -37,7 +49,7 @@
 #' @param global.sufstats (Default `NULL`) An optional list of global sufficient
 #' statistics for the iBIC score, as returned by the `.iBIC.global.sufstats()`
 #' function, which do not depend on the structure of a specific DAG, but only
-#' on the input data (`dat`), the target vertices (`targets`) and the target
+#' on the input data (`x`), the target vertices (`targets`) and the target
 #' indices (`target.index`) of the interventions. If `NULL` (default), the
 #' `.iBIC.global.sufstats()` function is internally called.
 #'
@@ -46,7 +58,7 @@
 #' pure-R implementation and is provided for testing and verification.
 #'
 #' @param pasets (Default `NULL`) An optional list of parent sets, one per
-#' vertex in `g` in the order given by `colnames(dat)`, as internally built
+#' vertex in `g` in the order given by `colnames(x)`, as internally built
 #' by `iBIC()` from the structure of `g`. If `NULL` (default), it is
 #' internally computed from `g`. Search algorithms that maintain `pasets`
 #' incrementally across many calls (e.g. [hcmc()], [hillclimbing()]) can
@@ -93,14 +105,14 @@
 #' intdat <- data.frame(X1=X1, X2=X2, X3=X3)
 #'
 #' ## combine observational and interventional data
-#' dat <- rbind(obsdat, intdat)
+#' x <- rbind(obsdat, intdat)
 #'
 #' ## define the targets and target indices for the interventional data
 #' targets <- list(integer(0), 2L)
 #' target.index <- c(rep(1L, nobs), rep(2L, nint))
 #'
 #' ## calculate the interventional BIC score for the DAG and data set
-#' iBIC(g, dat, targets, target.index)
+#' iBIC(g, x, targets, target.index)
 #'
 #' ## create another Markov equivalent DAG by reversing the arc X1 -> X2
 #' ## to obtain X1 <- X2 -> X3
@@ -111,36 +123,36 @@
 #' ## calculate the interventional BIC score for the new DAG on the
 #' ## same data, notice that the score is different despite being a
 #' ## Markov equivalent DAG
-#' iBIC(g2, dat, targets, target.index)
+#' iBIC(g2, x, targets, target.index)
 #'
 #' ## this is not the case if we do not indicate the presence of interventions
 #' ## in the data
-#' iBIC(g, dat)
-#' iBIC(g2, dat)
+#' iBIC(g, x)
+#' iBIC(g2, x)
 #'
 #' @importFrom graph edgeMatrix numNodes
 #' @export
-iBIC <- function(g, dat, targets=list(integer(0)),
-                 target.index=rep(1L, nrow(dat)),
+iBIC <- function(g, x, targets=list(integer(0)),
+                 target.index=rep(1L, nrow(x)),
                  cached.scores=NULL, global.sufstats=NULL,
                  engine=c("C", "R"), pasets=NULL) {
 
     engine <- match.arg(engine)
 
-    if (is.null(attr(dat, "sanitycheck"))) {
-        dat <- .check_input_data(dat)
-        .check_g_dat_consistency(g, dat)
+    if (is.null(attr(x, "sanitycheck"))) {
+        x <- .check_input_data(x)
+        .check_g_dat_consistency(g, x)
     }
 
     if (is.null(pasets))
-        pasets <- .build_pasets(g, dat)
+        pasets <- .build_pasets(g, x)
     else if (!is.list(pasets) || length(pasets) != numNodes(g) ||
             any(vapply(pasets, function(x) !is.integer(x), logical(1))))
             cli_abort(c("x"="'pasets' must be a list of integer vectors"))
     .check_cached_scores(g, cached.scores)
 
     if (is.null(global.sufstats))
-        global.sufstats <- .iBIC.global.sufstats(dat, targets, target.index)
+        global.sufstats <- .iBIC.global.sufstats(x, targets, target.index)
 
     if (engine == "C")
         return(.Call(C_iBIC_score,
@@ -302,6 +314,10 @@ attr(iBIC, "nh.argmax.fun") <- .iBIC.nh.argmax
 #' @importFrom cli cli_abort
 .iBIC.global.sufstats <- function(dat, targets=list(integer(0)),
                                   target.index=rep(1L, nrow(dat))) {
+    ## a population model in place of data: the same statistics in the
+    ## large-sample limit, built in R/population.R
+    if (.is.population(dat))
+        return(.iBIC.population.sufstats(dat, targets, target.index))
     stopifnot(is.matrix(dat)) ## QC
     p <- ncol(dat)
     n <- nrow(dat)
@@ -420,18 +436,30 @@ attr(iBIC, "global.sufstats.fun") <- .iBIC.global.sufstats
 #' @param g An acyclic directed graph (DAG) structure of the Bayesian network
 #' for which we want to calculate the score.
 #'
-#' @param dat A `data.frame` object with data records in the rows.
+#' @param x Either the data, or the population it would have come from. A
+#' `data.frame` or `matrix` of Gaussian data, with observations in the rows
+#' and random variables in the columns; or a population model built with
+#' [`population`], in which case the score is evaluated in the large-sample
+#' limit instead of on a sample. That is not a different score: it is the same
+#' arithmetic fed the sufficient statistics a sample of the given size would
+#' have in expectation. A bare `GaussParDAG` from the \pkg{pcalg} package is
+#' accepted as a population model with a hard intervention to zero. See
+#' `target.index` for how the notional sample size is supplied.
 #'
 #' @param targets (Default `list(integer(0))`) A `list` object with a family of
 #' targets provided as a list of integer vectors. Its default value indicates
 #' that there are no interventions in the data, i.e., the data is purely
 #' observational.
 #'
-#' @param target.index (Default a unit vector) A vector of integers in
-#' one-to-one correspondence with the rows in `dat`, indicating which rows in
-#' the input data are intervened by which targets. Its default value indicates
-#' that there are no interventions in the data, i.e., the data is purely
-#' observational.
+#' @param target.index (Default a unit vector) How much data comes from each
+#' environment. With data in `x`, a vector of integers in one-to-one
+#' correspondence with the rows in `x`, indicating which rows in the input
+#' data are intervened by which targets; its default value indicates that
+#' there are no interventions in the data, i.e., the data is purely
+#' observational. With a population model in `x` there are no rows to label,
+#' so it is instead one observation count per element of `targets`, and the
+#' notional sample size -- which is what sets the score's penalty term -- is
+#' their sum.
 #'
 #' @param cached.scores An optional list of environment objects, containing
 #' cached scores per parent set for each vertex in `g`. If `NULL` (default),
@@ -445,12 +473,12 @@ attr(iBIC, "global.sufstats.fun") <- .iBIC.global.sufstats
 #' @param global.sufstats (Default `NULL`) An optional list of global sufficient
 #' statistics for the iBGe score, as returned by the `.iBGe.global.sufstats()`
 #' function, which do not depend on the structure of a specific DAG, but only
-#' on the input data (`dat`), the target vertices (`targets`) and the target
+#' on the input data (`x`), the target vertices (`targets`) and the target
 #' indices (`target.index`) of the interventions. If `NULL` (default), the
 #' `.iBGe.global.sufstats()` function is internally called.
 #'
 #' @param pasets (Default `NULL`) An optional list of parent sets, one per
-#' vertex in `g` in the order given by `colnames(dat)`, as internally built
+#' vertex in `g` in the order given by `colnames(x)`, as internally built
 #' by `iBGe()` from the structure of `g`. If `NULL` (default), it is
 #' internally computed from `g`. Search algorithms that maintain `pasets`
 #' incrementally across many calls (e.g. [hcmc()], [hillclimbing()]) can
@@ -497,14 +525,14 @@ attr(iBIC, "global.sufstats.fun") <- .iBIC.global.sufstats
 #' intdat <- data.frame(X1=X1, X2=X2, X3=X3)
 #'
 #' ## combine observational and interventional data
-#' dat <- rbind(obsdat, intdat)
+#' x <- rbind(obsdat, intdat)
 #'
 #' ## define the targets and target indices for the interventional data
 #' targets <- list(integer(0), 2L)
 #' target.index <- c(rep(1L, nobs), rep(2L, nint))
 #'
 #' ## calculate the interventional BGe score for the DAG and data set
-#' iBGe(g, dat, targets, target.index)
+#' iBGe(g, x, targets, target.index)
 #'
 #' ## create another Markov equivalent DAG by reversing the arc X1 -> X2
 #' ## to obtain X1 <- X2 -> X3
@@ -515,37 +543,37 @@ attr(iBIC, "global.sufstats.fun") <- .iBIC.global.sufstats
 #' ## calculate the interventional BGe score for the new DAG on the
 #' ## same data, notice that the score is different despite being a
 #' ## Markov equivalent DAG
-#' iBGe(g2, dat, targets, target.index)
+#' iBGe(g2, x, targets, target.index)
 #'
 #' ## this is not the case if we do not indicate the presence of interventions
 #' ## in the data
-#' iBGe(g, dat)
-#' iBGe(g2, dat)
+#' iBGe(g, x)
+#' iBGe(g2, x)
 #'
 #' @importFrom methods as
 #' @importFrom graph numNodes edgeMatrix
 #' @export
-iBGe <- function(g, dat, targets=list(integer(0)),
-                 target.index=rep(1L, nrow(dat)),
+iBGe <- function(g, x, targets=list(integer(0)),
+                 target.index=rep(1L, nrow(x)),
                  cached.scores=NULL, global.sufstats=NULL,
                  pasets=NULL, engine=c("C", "R")) {
 
     engine <- match.arg(engine)
 
-    if (is.null(attr(dat, "sanitycheck"))) {
-        dat <- .check_input_data(dat)
-        .check_g_dat_consistency(g, dat)
+    if (is.null(attr(x, "sanitycheck"))) {
+        x <- .check_input_data(x)
+        .check_g_dat_consistency(g, x)
     }
 
     if (is.null(pasets))
-        pasets <- .build_pasets(g, dat)
+        pasets <- .build_pasets(g, x)
     else if (!is.list(pasets) || length(pasets) != numNodes(g) ||
             any(vapply(pasets, function(x) !is.integer(x), logical(1))))
             cli_abort(c("x"="'pasets' must be a list of integer vectors"))
     .check_cached_scores(g, cached.scores)
 
     if (is.null(global.sufstats))
-        global.sufstats <- .iBGe.global.sufstats(dat, targets, target.index)
+        global.sufstats <- .iBGe.global.sufstats(x, targets, target.index)
 
     if (engine == "C")
         return(.Call(C_iBGe_score,
@@ -632,6 +660,10 @@ attr(iBGe, "nh.argmax.fun") <- .iBGe.nh.argmax
 ## and other stuff not exposed in the iBGe() function of this package
 .iBGe.global.sufstats <- function(dat, targets=list(integer(0)),
                                   target.index=rep(1L, nrow(dat))) {
+    ## a population model in place of data: the same statistics in the
+    ## large-sample limit, built in R/population.R
+    if (.is.population(dat))
+        return(.iBGe.population.sufstats(dat, targets, target.index))
     stopifnot(is.matrix(dat)) ## QC
     p <- ncol(dat)
     n <- nrow(dat)

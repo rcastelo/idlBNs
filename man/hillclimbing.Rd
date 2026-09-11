@@ -5,27 +5,39 @@
 \title{Straightforward (classical) hill-climbing algorithm}
 \usage{
 hillclimbing(
-  dat,
+  x,
   targets = list(integer(0)),
-  target.index = rep(1L, nrow(dat)),
+  target.index = rep(1L, nrow(x)),
   scorefun = iBIC,
   verbose = TRUE,
   engine = c("C", "R")
 )
 }
 \arguments{
-\item{dat}{A \code{data.frame} object with data records in the rows.}
+\item{x}{Either the data to learn from, or the population it would have
+come from. A \code{data.frame} or \code{matrix} of Gaussian data, with observations
+in the rows and random variables in the columns; or a population model
+built with \code{\link{population}}, in which case the search is scored in the
+large-sample limit instead of on a sample, which is what lets a run be read
+as the behaviour of the algorithm itself rather than of one dataset. A bare
+\code{GaussParDAG} from the \pkg{pcalg} package is accepted as a population
+model with a hard intervention to zero. See \code{target.index} for how the
+notional sample size is supplied.}
 
 \item{targets}{(Default \code{list(integer(0))}) A \code{list} object with a family of
 targets provided as a list of integer vectors. Its default value indicates
 that there are no interventions in the data, i.e., the data is purely
 observational.}
 
-\item{target.index}{(Default a unit vector) A vector of integers in
-one-to-one correspondence with the rows in \code{dat}, indicating which rows in
-the input data are intervened by which targets. Its default value indicates
-that there are no interventions in the data, i.e., the data is purely
-observational.}
+\item{target.index}{(Default a unit vector) How much data comes from each
+environment. With data in \code{x}, a vector of integers in one-to-one
+correspondence with the rows in \code{x}, indicating which rows in the input
+data are intervened by which targets; its default value indicates that
+there are no interventions in the data, i.e., the data is purely
+observational. With a population model in \code{x} there are no rows to label,
+so it is instead one observation count per element of \code{targets}, and the
+notional sample size -- which is what sets the score's penalty term -- is
+their sum.}
 
 \item{scorefun}{(Default is \code{\link{iBIC}}) A function to calculate the goodness
 of fit (GoF) score of a DAG on a given data set.}
