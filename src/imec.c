@@ -66,7 +66,7 @@
  * random stream consumed -- so it is preserved deliberately.
  */
 static void
-set_edges(idl_dag *d, const int *from, const int *to, int n) {
+set_edges_core(idl_dag *d, const int *from, const int *to, int n, int canonical) {
     int p = d->p;
 
     int *tstart = (int *) R_alloc((size_t) p + 1, sizeof(int));
@@ -147,7 +147,12 @@ set_edges(idl_dag *d, const int *from, const int *to, int n) {
        the R engine's rebuild from an adjacency matrix produces. A rebuild is
        then idempotent and history-independent, and the exhaustive escape's
        restore leaves the same state in both engines. */
-    idl_dag_canonical_order(d);
+    if (canonical) idl_dag_canonical_order(d);
+}
+
+static void
+set_edges(idl_dag *d, const int *from, const int *to, int n) {
+    set_edges_core(d, from, to, n, 1);
 }
 
 /* the member of the class selected by pick[c] in each component */
@@ -659,6 +664,93 @@ C_dag_imec_size(SEXP st, SEXP tgt_R) {
     }
     vmaxset(vmax);
     return ScalarReal(sz);
+}
+
+/*
+ * C_dag_restore_state -- put the DAG back exactly as it was, ORDER INCLUDED.
+ *
+ * C_dag_set_edges() restores the arc set but canonicalises pa[] and ch[],
+ * which is right when the caller is moving the DAG somewhere new and wants a
+ * history-independent state. It is wrong for an undo. The exhaustive escape
+ * walks the members of the class through the live DAG and, when none of them
+ * improves on where it started, puts the original back -- and with
+ * sampler = "rcar" that original carries a history-dependent order which the
+ * canonicalising setter silently replaced. The arc set came back; the order
+ * did not. Both orders are observable: ch[] is the order C_dag_edgeM() emits
+ * and hence the edge order of the graphNEL the search returns, and pa[] is
+ * what the score function sees.
+ *
+ * em_R      the arcs, in C_dag_edgeM() layout, which preserves ch[] order
+ * pasets_R  the parents of each vertex in pa[] order, from C_dag_pasets()
+ *
+ * ch[] comes back from the arc order in em_R, so the rebuild skips
+ * canonicalisation; pa[] is then written from pasets_R, which the edge
+ * matrix cannot express because it groups arcs by tail.
+ */
+SEXP
+C_dag_restore_state(SEXP st, SEXP em_R, SEXP pasets_R) {
+    idl_dag *d = idlBNs_dag_from_extptr(st);
+    if (TYPEOF(em_R) != INTSXP || !isMatrix(em_R) || nrows(em_R) != 2)
+        error("C_dag_restore_state: 'em' must be a 2-row integer matrix");
+    if (TYPEOF(pasets_R) != VECSXP || XLENGTH(pasets_R) != d->p)
+        error("C_dag_restore_state: 'pasets' must be a list of length %d", d->p);
+
+    int n = ncols(em_R);
+    const int *a = INTEGER(em_R);
+    void *vmax = vmaxget();
+    int *from = (int *) R_alloc((size_t) (n > 0 ? n : 1), sizeof(int));
+    int *to   = (int *) R_alloc((size_t) (n > 0 ? n : 1), sizeof(int));
+    for (int e = 0; e < n; e++) {
+        int u = a[2 * e], v = a[2 * e + 1];
+        if (u < 1 || u > d->p || v < 1 || v > d->p || u == v)
+            error("C_dag_restore_state: arc %d out of range", e + 1);
+        from[e] = u - 1; to[e] = v - 1;
+    }
+
+    /* validate every saved parent list against the arcs BEFORE mutating, so
+       a bad snapshot leaves the DAG alone, as everywhere else here */
+    int *cnt = (int *) R_alloc((size_t) d->p, sizeof(int));
+    char *seen = (char *) R_alloc((size_t) d->p, sizeof(char));
+    memset(cnt, 0, (size_t) d->p * sizeof(int));
+    memset(seen, 0, (size_t) d->p);
+    for (int e = 0; e < n; e++) cnt[to[e]]++;
+    for (int v = 0; v < d->p; v++) {
+        SEXP pv = VECTOR_ELT(pasets_R, v);
+        if (TYPEOF(pv) != INTSXP || LENGTH(pv) != cnt[v])
+            error("C_dag_restore_state: pasets[[%d]] has %d entries, the arcs give %d",
+                  v + 1, (pv == R_NilValue) ? 0 : LENGTH(pv), cnt[v]);
+        const int *pi = INTEGER(pv);
+        for (int j = 0; j < LENGTH(pv); j++) {
+            int u = pi[j] - 1;
+            if (u < 0 || u >= d->p || seen[u])
+                error("C_dag_restore_state: pasets[[%d]] is not a permutation of its parents",
+                      v + 1);
+            seen[u] = 1;
+        }
+        for (int j = 0; j < LENGTH(pv); j++) seen[pi[j] - 1] = 0;
+    }
+
+    set_edges_core(d, from, to, n, 0);      /* keeps ch[] as em_R orders it */
+
+    for (int v = 0; v < d->p; v++) {
+        SEXP pv = VECTOR_ELT(pasets_R, v);
+        int m = LENGTH(pv);
+        if (m < 1) continue;
+        const int *pi = INTEGER(pv);
+        idl_ivec *pav = &d->pa[v];
+        int changed = 0;
+        for (int j = 0; j < m; j++) {
+            int u = pi[j] - 1;
+            if (!idl_bs_test(d->pab + (size_t) v * d->W, u))
+                error("C_dag_restore_state: pasets[[%d]] names a non-parent", v + 1);
+            if (pav->v[j] != u) changed = 1;
+            pav->v[j] = u;
+        }
+        if (changed) d->pav_stamp[v]++;     /* the order is memoised against it */
+    }
+
+    vmaxset(vmax);
+    return R_NilValue;
 }
 
 /*

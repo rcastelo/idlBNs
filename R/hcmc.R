@@ -401,7 +401,12 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                        })) {
                 ## every member of the I-equivalence class, and the best move
                 ## available from any of them; no MAXTRIALS budget involved
+                ## the arcs AND both orders: the members below run through
+                ## the live DAG, and if none of them improves on where it
+                ## started the original has to come back exactly, order
+                ## included -- C_dag_set_edges() would canonicalise it
                 here <- .Call(C_dag_edgeM, st)
+                here.pas <- .Call(C_dag_pasets, st)
                 best.s <- s0; best <- NULL
                 for (em in mm) {
                     .Call(C_dag_set_edges, st, em)
@@ -418,7 +423,7 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
                     }
                 }
                 if (is.null(best)) {
-                    .Call(C_dag_set_edges, st, here)
+                    .Call(C_dag_restore_state, st, here, here.pas)
                     local_maximum <- TRUE
                     s1 <- s0
                 } else {

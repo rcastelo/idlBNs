@@ -338,3 +338,44 @@ local({
               identical(dagadj(hC$dag), dagadj(hR$dag)))
 })
 cat("test_c_imec.R: the exhaustive escape is attempted once per episode\n")
+
+## 9: an exhaustive escape that finds nothing must leave the DAG exactly as it
+## found it -- ORDER included. It walks the members through the live DAG, so
+## it has to put the original back, and C_dag_set_edges() canonicalises pa[]
+## and ch[] as it rebuilds. With sampler = "rcar" nothing else canonicalises,
+## so the undo silently replaced a history-dependent order: the arc set came
+## back, the order did not, and the two engines then returned the same graph
+## with different edge orders in 30 of 30 runs. C_dag_restore_state() rebuilds
+## without canonicalising (ch[] follows the edge matrix) and writes pa[] from
+## the saved parent sets, which the matrix cannot express since it groups arcs
+## by tail.
+local({
+    mv <- function(st, u, v)
+        invisible(.Call(idlBNs:::C_dag_apply_move, st, 1L,
+                        as.integer(u), as.integer(v)))
+    pas <- function(st) .Call(idlBNs:::C_dag_pasets, st)
+    set.seed(11); noncanon <- 0L; exact <- 0L; tot <- 0L
+    for (rep in 1:150) {
+        q <- sample(5:9, 1); st <- dag_new(q); o <- sample(q); k <- 0L
+        for (i in 1:(q-1)) for (j in (i+1):q)
+            if (runif(1) < 0.45) { mv(st, o[i], o[j]); k <- k + 1L }
+        if (k == 0L) next
+        tot <- tot + 1L
+        em0 <- dag_edgeM(st); pa0 <- pas(st)
+        if (!identical(pa0, lapply(pa0, sort))) noncanon <- noncanon + 1L
+        invisible(dag_set(st, em0))                     # canonicalises
+        invisible(.Call(idlBNs:::C_dag_restore_state, st, em0, pa0))
+        if (identical(dag_edgeM(st), em0) && identical(pas(st), pa0))
+            exact <- exact + 1L
+    }
+    stopifnot(tot > 0L, noncanon > 0L, identical(exact, tot))  # anti-vacuity
+    ## a snapshot that is not a permutation of the parents is refused, and
+    ## refused before anything is written
+    st <- dag_new(4L); mv(st, 1, 2); mv(st, 3, 2)
+    em <- dag_edgeM(st); p0 <- pas(st); bad <- p0; bad[[2]] <- c(1L, 1L)
+    err <- tryCatch({ .Call(idlBNs:::C_dag_restore_state, st, em, bad); NULL },
+                    error = function(e) conditionMessage(e))
+    stopifnot(!is.null(err), identical(pas(st), p0),
+              identical(dag_edgeM(st), em))
+})
+cat("test_c_imec.R: a fruitless exhaustive escape restores the order too\n")
