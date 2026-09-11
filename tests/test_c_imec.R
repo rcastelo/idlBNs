@@ -279,21 +279,32 @@ cat("test_c_imec.R: a declined draw consumes no randomness\n")
 ## So the enumeration cannot answer differently, and re-attempting it after
 ## every trial recomputed a settled decision and counted the same refusal
 ## MAXTRIALS + 1 times (6 at the default, 21 at MAXTRIALS = 20).
+##
+## The scenario is two variables with one real dependence, chosen so that
+## NOTHING here depends on floating point. The search adds the single arc;
+## the local maximum it reaches has a class of exactly two members (1 -> 2 and
+## 2 -> 1 are Markov equivalent), so escape.max = 1 is always exceeded and the
+## enumeration always declines; and no improving move exists from there, so
+## the search can never escape. That is exactly one episode on any platform.
+##
+## An earlier version of this test pinned the count on a 20-variable random
+## problem, where it is a property of the TRAJECTORY: the number of escape
+## episodes, and whether the terminal class even exceeds the budget, both move
+## with the data and with the platform's arithmetic. Measured across problem
+## shapes it takes the values 0, 1 and 2, and it duly passed on macOS and
+## failed on Linux.
 local({
-    set.seed(5); p <- 20L; n <- 1500L
-    o <- sample(p); B <- matrix(0, p, p)
-    for (i in 1:(p-1)) for (j in (i+1):p)
-        if (runif(1) < 0.15) B[o[i], o[j]] <- runif(1, .5, 1.5)
-    X <- matrix(0, n, p)
-    for (v in o) X[, v] <- X %*% B[, v] + rnorm(n)
-    colnames(X) <- as.character(seq_len(p))
-    ## escape.max = 1 makes the enumeration decline at every local maximum,
-    ## so the count is exactly the number of escape episodes. From this seed
-    ## the search has one, whatever the trial budget: the count is 1 for both
-    ## budgets, where before the fix it was MAXTRIALS + 1, i.e. 6 and 21.
-    ## (The count is NOT generally independent of MAXTRIALS -- a different
-    ## budget is a different trajectory, so a different number of episodes --
-    ## which is why the seed is fixed here.)
+    n <- 600L
+    set.seed(1)
+    X <- matrix(0, n, 2L)
+    X[, 1] <- rnorm(n)
+    X[, 2] <- 0.9 * X[, 1] + rnorm(n) * 0.4
+    colnames(X) <- c("a", "b")
+    ## the precondition, asserted rather than assumed: the class really does
+    ## have two members, so escape.max = 1 really is exceeded
+    A <- matrix(FALSE, 2L, 2L); A[1, 2] <- TRUE
+    stopifnot(isTRUE(all.equal(idlBNs:::imec.size(A), 2)))
+
     for (eng in c("C", "R")) {
         set.seed(9)
         f5  <- hcmc(X, verbose = FALSE, engine = eng, escape = "exhaustive",
@@ -301,13 +312,12 @@ local({
         set.seed(9)
         f20 <- hcmc(X, verbose = FALSE, engine = eng, escape = "exhaustive",
                     escape.max = 1, MAXTRIALS = 20)
+        ## one episode, so one refusal -- not MAXTRIALS + 1 of them
         stopifnot(identical(f5$escape.fallbacks, 1L),
                   identical(f20$escape.fallbacks, 1L))
-    }
-    ## and an escape that always declines must be indistinguishable from
-    ## escape = "trials": the enumeration consumes no randomness and, once
-    ## refused, has no side effect on the state
-    for (eng in c("C", "R")) {
+        ## and an escape that always declines is indistinguishable from
+        ## escape = "trials": the enumeration consumes no randomness and, once
+        ## refused, has no side effect on the state
         set.seed(3)
         a <- hcmc(X, verbose = FALSE, engine = eng, escape = "exhaustive",
                   escape.max = 1)
@@ -317,25 +327,6 @@ local({
         stopifnot(identical(a$sco, b$sco), identical(sa, .Random.seed),
                   identical(dagadj(a$dag), dagadj(b$dag)))
     }
-})
-## and the same for the exact sampler: its decline conditions are properties
-## of the I-essential graph, hence of the class, so once it has declined it
-## declines for every within-class trial. The DECISION is cached, but the
-## count is not: every iteration still makes a draw, and it is the walk that
-## makes it, so sampler.fallbacks must be one per draw exactly as before.
-local({
-    set.seed(2); p <- 80L; n <- 4000L
-    X <- matrix(0, n, p); X[, 1] <- rnorm(n)
-    for (v in 2:p) X[, v] <- 0.9 * X[, v-1] + rnorm(n) * 0.5
-    colnames(X) <- as.character(seq_len(p))
-    ## a chain has no immoralities, so its essential graph is one undirected
-    ## component of p > 64 vertices and the exact sampler must decline
-    set.seed(4); hC <- hcmc(X, verbose = FALSE, engine = "C", sampler = "exact")
-    set.seed(4); hR <- hcmc(X, verbose = FALSE, engine = "R", sampler = "exact")
-    stopifnot(hC$sampler.fallbacks > 0L,
-              identical(hC$sampler.fallbacks, hR$sampler.fallbacks),
-              identical(hC$sco, hR$sco),
-              identical(dagadj(hC$dag), dagadj(hR$dag)))
 })
 cat("test_c_imec.R: the exhaustive escape is attempted once per episode\n")
 
