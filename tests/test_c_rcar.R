@@ -26,11 +26,11 @@ dag_move  <- function(st, op, u, v)
     invisible(.Call(idlBNs:::C_dag_apply_move, st, as.integer(op),
                     as.integer(u), as.integer(v)))
 dag_rcar  <- function(st, rlen, ut)
-    .Call(idlBNs:::C_dag_rcar, st, as.integer(rlen), as.integer(ut))
+    .Call(idlBNs:::C_dag_rcar, st, as.integer(rlen), ut)
 dag_edgeM <- function(st) .Call(idlBNs:::C_dag_edgeM, st)
 dag_anc   <- function(st) .Call(idlBNs:::C_dag_anc, st)
 dag_pas   <- function(st) .Call(idlBNs:::C_dag_pasets, st)
-dag_ced   <- function(st, ut) .Call(idlBNs:::C_dag_cedges, st, as.integer(ut))
+dag_ced   <- function(st, ut) .Call(idlBNs:::C_dag_cedges, st, ut)
 dag_check <- function(st) invisible(.Call(idlBNs:::C_dag_check, st))
 
 ## build the same DAG in both representations, inserting arcs in the given
@@ -88,21 +88,38 @@ compare_rcar <- function(b, r, ut, seed) {
 
 ################################################################################
 ## 1. random DAGs, every r, several seeds, with and without targets
+## NOTE: these pass the target FAMILY, not the union of it. An arc is
+## I-covered unless some single target separates its endpoints, so
+## list(integer(0), c(1L, 2L)) leaves 1 -> 2 I-covered even though both ends
+## are targeted -- a case the union of the targets cannot express, and the
+## families below therefore include multi-vertex targets.
+
 ################################################################################
 
 set.seed(20260907)
 nrev <- 0L
 ncmp <- 0L
+## The sweep is 4 sizes x 3 arc sets x 4 values of r x 5 target families x 3
+## seeds. It used 6 arc sets and 5 seeds, which repeated each CONFIGURATION
+## ten times over and cost 5.3 s of this file's 6.3. Every dimension that
+## selects a code path -- r = 0 and r = 20 at the boundaries, and the five
+## target families including the two whose single target holds both ends of
+## an arc -- is still crossed in full; only the repetition per configuration
+## is lower.
 for (p in c(3, 5, 8, 12)) {
-  for (rep in 1:6) {
+  for (rep in 1:3) {
     cand <- which(upper.tri(matrix(0, p, p)), arr.ind=TRUE)
     cand <- cand[runif(nrow(cand)) < 0.5, , drop=FALSE]
     if (nrow(cand) == 0) next
     cand <- cand[sample.int(nrow(cand)), , drop=FALSE]     ## shuffled inserts
     arcs <- lapply(seq_len(nrow(cand)), function(k) c(cand[k, 1], cand[k, 2]))
     for (r in c(0L, 1L, 3L, 20L))
-      for (ut in list(integer(0), 1L, c(1L, min(3L, p))))
-        for (seed in 1:5) {
+      for (ut in list(list(integer(0)),                       # none
+                      list(integer(0), 1L),                   # one singleton
+                      list(integer(0), 1L, min(3L, p)),       # two singletons
+                      list(integer(0), c(1L, min(2L, p))),    # BOTH ends
+                      list(integer(0), c(1L, min(3L, p)), 2L)))
+        for (seed in 1:3) {
           rr <- compare_rcar(both(p, arcs), r, ut, seed)
           nrev <- nrev + rr
           ncmp <- ncmp + 1L
@@ -122,17 +139,21 @@ cat(sprintf("rcar: %d comparisons, %d reversals performed, stream and state iden
 ## (a) an edgeless DAG
 b <- both(4, list())
 set.seed(1); before <- .Random.seed
-stopifnot(identical(dag_rcar(b$st, length(0:20), integer(0)), 0L))
+stopifnot(identical(dag_rcar(b$st, length(0:20), list()), 0L))
 stopifnot(identical(.Random.seed, before))
 
 ## (b) arcs present, but no I-covered arc survives the target filter.
-## X1 -> X2 -> X3: X1 -> X2 is covered, X2 -> X3 is not; naming X1 as a
-## target removes the only covered arc.
+## X1 -> X2 -> X3: X1 -> X2 is covered, X2 -> X3 is not; a target naming X1
+## alone separates the endpoints of X1 -> X2 and so removes the only covered
+## arc. A target naming BOTH, list(integer(0), c(1L, 2L)), does not separate
+## them and leaves it covered -- see tests/test_c_nh.R section 3.
 b <- both(3, list(c(1,2), c(2,3)))
-stopifnot(identical(as.logical(dag_ced(b$st, integer(0))), c(TRUE, FALSE)))
-stopifnot(!any(as.logical(dag_ced(b$st, 1L))))            ## precondition
+stopifnot(identical(as.logical(dag_ced(b$st, list())), c(TRUE, FALSE)))
+stopifnot(!any(as.logical(dag_ced(b$st, list(integer(0), 1L)))),   ## precondition
+          identical(as.logical(dag_ced(b$st, list(integer(0), c(1L, 2L)))),
+                    c(TRUE, FALSE)))
 set.seed(1); before <- .Random.seed
-stopifnot(identical(dag_rcar(b$st, length(0:20), 1L), 0L))
+stopifnot(identical(dag_rcar(b$st, length(0:20), list(integer(0), 1L)), 0L))
 stopifnot(identical(.Random.seed, before))
 stopifnot(identical(unname(dag_edgeM(b$st)), unname(edgeMatrix(b$dag))))
 
@@ -149,7 +170,7 @@ cat("early returns: both branches consume no randomness, in C and in R\n")
 
 b <- both(3, list(c(1,2), c(2,3)))
 set.seed(1); before <- .Random.seed
-stopifnot(identical(dag_rcar(b$st, length(0:0), integer(0)), 0L))
+stopifnot(identical(dag_rcar(b$st, length(0:0), list()), 0L))
 after <- .Random.seed
 stopifnot(!identical(after, before))          ## it drew
 ## and it drew exactly what R drew
@@ -169,9 +190,9 @@ cat("r = 0 consumes exactly one draw, matching R\n")
 b <- both(5, list(c(1,2), c(2,3), c(3,4), c(4,5)))
 for (seed in 1:20) {
   bb <- both(5, list(c(1,2), c(2,3), c(3,4), c(4,5)))
-  rr <- compare_rcar(bb, 20L, integer(0), seed)
+  rr <- compare_rcar(bb, 20L, list(), seed)
   ## after any number of covered reversals there is still a covered arc
-  stopifnot(any(as.logical(dag_ced(bb$st, integer(0)))))
+  stopifnot(any(as.logical(dag_ced(bb$st, list()))))
 }
 cat("covered reversals keep the covered set non-empty\n")
 
@@ -180,24 +201,24 @@ cat("covered reversals keep the covered set non-empty\n")
 ################################################################################
 
 arcs <- list(c(1,3), c(1,2), c(3,4), c(2,5))
-r1 <- compare_rcar(both(5, arcs), 20L, integer(0), 99L)
-r2 <- compare_rcar(both(5, arcs), 20L, integer(0), 99L)
+r1 <- compare_rcar(both(5, arcs), 20L, list(), 99L)
+r2 <- compare_rcar(both(5, arcs), 20L, list(), 99L)
 stopifnot(identical(r1, r2))
 
 ## invalid arguments are rejected before anything happens
 b <- both(4, list(c(1,2)))
 errs <- function(e) inherits(tryCatch(e, error=function(x) x), "error")
-stopifnot(errs(dag_rcar(b$st, 0L, integer(0))))       ## rlen must be >= 1
-stopifnot(errs(dag_rcar(b$st, -1L, integer(0))))
-stopifnot(errs(.Call(idlBNs:::C_dag_rcar, b$st, NA_integer_, integer(0))))
+stopifnot(errs(dag_rcar(b$st, 0L, list())))       ## rlen must be >= 1
+stopifnot(errs(dag_rcar(b$st, -1L, list())))
+stopifnot(errs(.Call(idlBNs:::C_dag_rcar, b$st, NA_integer_, list())))
 stopifnot(errs(.Call(idlBNs:::C_dag_rcar, b$st, 5L, "x")))
 stopifnot(identical(unname(dag_edgeM(b$st)), unname(edgeMatrix(b$dag))))
 dag_check(b$st)
 
-## out-of-range utargets ignored, as in R (see tests/test_c_nh.R section 4)
-for (ut in list(0L, c(0L, 2L), c(2L, 99L), NA_integer_))
+## out-of-range target vertices ignored, as in R (see tests/test_c_nh.R section 4)
+for (ut in list(list(0L), list(c(0L, 2L)), list(c(2L, 99L)), list(NA_integer_)))
   invisible(compare_rcar(both(4, list(c(1,2), c(2,3))), 5L, ut, 3L))
-cat("determinism, argument validation and utargets tolerance all hold\n")
+cat("determinism, argument validation and target tolerance all hold\n")
 
 ################################################################################
 ## 6. a realistic DAG from the package's own simulator, at the r the search
@@ -210,7 +231,8 @@ for (p in c(10, 20, 30)) {
   em <- edgeMatrix(as(D, "graphNEL"))
   arcs <- lapply(seq_len(ncol(em)), function(k) c(em["from", k], em["to", k]))
   for (seed in 1:5)
-    for (ut in list(integer(0), c(2L, 5L)))
+    for (ut in list(list(integer(0)), list(integer(0), 2L, 5L),
+                    list(integer(0), c(2L, 5L))))
       invisible(compare_rcar(both(p, arcs), 20L, ut, seed))
 }
 cat("simulated DAGs at p = 10, 20, 30 agree on stream and state\n")

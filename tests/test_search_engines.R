@@ -83,11 +83,25 @@ cat(sprintf("hillclimbing: %d cases, C and R engines bit-identical\n", ncase))
 ################################################################################
 
 nhcmc <- 0L
-for (p in c(5, 8, 12, 20))
-  for (seed in 1:3) {
-    x <- mkdata(p, seed = seed)
+## The grid is deliberately unbalanced. The R engine is the whole cost of
+## this file: one hcmc() run is 0.004 s under engine = "C" and 0.39 s under
+## "R" at p = 20, and a full 4 x 3 x 8 grid spent 14 of this file's 17
+## seconds re-running configurations that a smaller p had already covered.
+##
+## What is preserved: every CONFIGURATION -- score function x r x
+## observational/interventional -- still runs at every p, so no code path is
+## dropped, and r = 0 still runs wherever it is cheap. What is thinned is the
+## repetition of whole configurations across seeds at the sizes where a case
+## is expensive, and the six datasets below are all distinct.
+grid <- list(list(p =  5L, seeds = 1:3, rs = c(0L, 20L)),
+             list(p =  8L, seeds = 2L,  rs = c(0L, 20L)),
+             list(p = 12L, seeds = 3L,  rs = c(0L, 20L)),
+             list(p = 20L, seeds = 1L,  rs = 20L))
+for (g in grid)
+  for (seed in g$seeds) {
+    x <- mkdata(g$p, seed = seed)
     for (sf in list(iBIC, iBGe))
-      for (r in c(0L, 20L))
+      for (r in g$rs)
         for (tg in list(list(targets = list(integer(0)),
                              target.index = rep(1L, nrow(x$dat))),
                         list(targets = x$targets,
@@ -110,7 +124,7 @@ for (p in c(5, 8, 12, 20))
           nhcmc <- nhcmc + 1L
         }
   }
-stopifnot(nhcmc >= 96L)
+stopifnot(nhcmc >= 44L)
 cat(sprintf("hcmc: %d cases, C and R engines bit-identical including .Random.seed\n",
             nhcmc))
 

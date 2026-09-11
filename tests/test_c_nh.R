@@ -23,9 +23,9 @@ dag_new   <- function(p) .Call(idlBNs:::C_dag_new, as.integer(p))
 dag_move  <- function(st, op, u, v)
     invisible(.Call(idlBNs:::C_dag_apply_move, st, as.integer(op),
                     as.integer(u), as.integer(v)))
-dag_nh    <- function(st, kind, ut = integer(0))
-    .Call(idlBNs:::C_dag_nh, st, as.integer(kind), as.integer(ut))
-dag_ced   <- function(st, ut) .Call(idlBNs:::C_dag_cedges, st, as.integer(ut))
+dag_nh    <- function(st, kind, ut = list())
+    .Call(idlBNs:::C_dag_nh, st, as.integer(kind), ut)
+dag_ced   <- function(st, ut) .Call(idlBNs:::C_dag_cedges, st, ut)
 dag_check <- function(st) invisible(.Call(idlBNs:::C_dag_check, st))
 
 ## the R neighbourhood, in the same shape C returns
@@ -38,7 +38,14 @@ r_nh <- function(kind, dag, anc, ut) {
   list(op=ne$op, u=ne$u, v=ne$v)
 }
 
-UTARGETS <- list(integer(0), 1L, c(1L, 3L))
+## target FAMILIES, not unions: the last two hold both endpoints of a
+## possible arc in one target, which leaves that arc I-covered even though
+## both ends are targeted -- the case a union of targets cannot express.
+UTARGETS <- list(list(integer(0)),
+                 list(integer(0), 1L),
+                 list(integer(0), 1L, 3L),
+                 list(integer(0), c(1L, 3L)),
+                 list(integer(0), c(1L, 2L), 3L))
 
 ncmp <- 0L
 nmoves <- 0L
@@ -48,8 +55,8 @@ ncov <- 0L
 
 compare_nh <- function(st, dag, anc, p) {
   for (ut in UTARGETS) {
-    ## ncr is the only kind that reads utargets, so only vary it there
-    kinds <- if (identical(ut, integer(0))) 1:3 else 3L
+    ## ncr is the only kind that reads the targets, so only vary it there
+    kinds <- if (identical(ut, list(integer(0)))) 1:3 else 3L
     for (kd in kinds) {
       got <- dag_nh(st, kd, ut)
       want <- r_nh(kd, dag, anc, ut)
@@ -108,17 +115,29 @@ shadow_nh <- function(p, nsteps, seed) {
   invisible(NULL)
 }
 
-## 200 steps at p = 8 and p = 12 is where child lists churn hardest
+## Short trajectories at every size and seed: these are what catch an
+## off-by-one in the enumeration, and they cost 0.2 s for the whole grid.
 for (p in c(4, 6, 8, 12))
-  for (nsteps in c(0, 1, 7, 200))
+  for (nsteps in c(0, 1, 7))
     for (seed in 1:4)
       shadow_nh(p, nsteps, seed)
+## Long trajectories are what churn the child lists, and the churn is hardest
+## at p = 8 and p = 12 -- which is where they now run. Sweeping 200 steps at
+## all four sizes and all four seeds instead cost 9.3 s of this file's 10.2,
+## re-walking short-graph behaviour the cheap cells above already cover.
+for (p in c(8, 12))
+  for (seed in 1:2)
+    shadow_nh(p, 200, seed)
 ## a couple of wider graphs, fewer steps, to exercise larger neighbourhoods
 for (p in c(20, 30))
   for (seed in 1:2)
     shadow_nh(p, 40, seed)
 
-stopifnot(nmoves > 2000L, ncmp > 5000L)
+## anti-vacuity: the sweep really did apply moves and compare neighbourhoods.
+## The thresholds sit just under what the grid above produces (1088 moves,
+## 8008 comparisons), so they still fail loudly if a cell is dropped by
+## accident, rather than being slack enough to hide it.
+stopifnot(nmoves > 1000L, ncmp > 7500L)
 ## the three anti-vacuity guards: the sweep must actually have produced
 ## non-ascending child lists, offered reversals, and seen covered arcs
 stopifnot(nonasc > 0L, nrev > 0L, ncov > 0L)
@@ -167,22 +186,36 @@ cat("insertion order: removals follow stored child order, not ascending\n")
 ## pa(X2) \ {X1} is empty. X2 -> X3 is not: pa(X2) = {X1} but
 ## pa(X3) \ {X2} is empty.
 b <- both(3, list(c(1,2), c(2,3)))
-stopifnot(identical(as.logical(dag_ced(b$st, integer(0))), c(TRUE, FALSE)))
+stopifnot(identical(as.logical(dag_ced(b$st, list())), c(TRUE, FALSE)))
 ## ncr therefore drops the reversal of X1 -> X2 but keeps X2 -> X3's
-ncr <- dag_nh(b$st, 3L, integer(0))
+ncr <- dag_nh(b$st, 3L, list())
 rv <- ncr$op == 3L
 stopifnot(identical(ncr$u[rv], 2L), identical(ncr$v[rv], 3L))
 ## ar keeps both reversals
 ar <- dag_nh(b$st, 2L)
 stopifnot(sum(ar$op == 3L) == 2L)
-## naming either endpoint of the covered arc as a target puts it back
-for (ut in list(1L, 2L)) {
+## A target that SEPARATES the endpoints puts the reversal back: the arc is
+## then target-protected, hence not I-covered.
+for (ut in list(list(integer(0), 1L), list(integer(0), 2L),
+                list(integer(0), c(1L, 3L)))) {
   ncr2 <- dag_nh(b$st, 3L, ut)
   stopifnot(sum(ncr2$op == 3L) == 2L)
   stopifnot(identical(dag_nh(b$st, 3L, ut), r_nh(3L, b$dag, b$anc, ut)))
 }
+## But a single target holding BOTH endpoints does not separate them, so the
+## arc stays I-covered and the reversal stays dropped -- even though both
+## endpoints are targeted. This is the case the union of the targets cannot
+## express, and testing it against the union of list(integer(0), c(1L, 2L))
+## would wrongly expect 2.
+for (ut in list(list(integer(0), c(1L, 2L)),
+                list(integer(0), c(1L, 2L, 3L)))) {
+  ncr2 <- dag_nh(b$st, 3L, ut)
+  stopifnot(sum(ncr2$op == 3L) == 1L,
+            identical(as.logical(dag_ced(b$st, ut)), c(TRUE, FALSE)),
+            identical(ncr2, r_nh(3L, b$dag, b$anc, ut)))
+}
 ## a target elsewhere leaves it dropped
-stopifnot(sum(dag_nh(b$st, 3L, 3L)$op == 3L) == 1L)
+stopifnot(sum(dag_nh(b$st, 3L, list(integer(0), 3L))$op == 3L) == 1L)
 cat("ncr: I-covered arcs dropped, target-touching covered arcs kept\n")
 
 ################################################################################
@@ -200,7 +233,8 @@ cat("ncr: I-covered arcs dropped, target-touching covered arcs kept\n")
 ################################################################################
 
 b <- both(4, list(c(1,2), c(2,3)))
-for (ut in list(0L, c(0L, 2L), c(-1L, 2L), c(2L, 99L), NA_integer_)) {
+for (ut in list(list(0L), list(c(0L, 2L)), list(c(-1L, 2L)),
+                list(c(2L, 99L)), list(NA_integer_))) {
   stopifnot(identical(dag_nh(b$st, 3L, ut), r_nh(3L, b$dag, b$anc, ut)))
   stopifnot(identical(as.logical(dag_ced(b$st, ut)),
                       as.logical(idlBNs:::cedges(b$dag, ut))))
@@ -215,7 +249,7 @@ cat("out-of-range utargets ignored, matching R\n")
 s1 <- dag_new(1L)
 for (kd in 1:3)
   stopifnot(length(dag_nh(s1, kd)$op) == 0L)
-stopifnot(length(dag_ced(s1, integer(0))) == 0L)
+stopifnot(length(dag_ced(s1, list())) == 0L)
 
 ## p = 2 edgeless: two additions, no removals, no reversals
 s2 <- dag_new(2L)

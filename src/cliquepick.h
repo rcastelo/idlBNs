@@ -1,0 +1,74 @@
+#ifndef IDLBNS_CLIQUEPICK_H
+#define IDLBNS_CLIQUEPICK_H
+
+#include <stdint.h>
+
+/* vertex sets inside one chain component; components are capped at 64 vertices */
+typedef uint64_t cp_vset;
+
+/*
+ * One memoised subproblem: a vertex subset of the component, its AMO count,
+ * and -- for sampling -- the per-clique weights, forbidden-prefix chains and
+ * child subproblem ids that the count was assembled from.
+ */
+typedef struct {
+    cp_vset  key;
+    double   total;
+    int      ncl;
+    cp_vset *cl;        /* ncl clique vertex sets                          */
+    double  *w;         /* ncl weights, summing to total                   */
+    int     *nsp;       /* ncl subproblem counts                           */
+    int    **sp;        /* ncl arrays of subproblem node ids               */
+    int     *nfp;       /* ncl forbidden-prefix chain lengths              */
+    cp_vset **fp;       /* ncl arrays of nested prefix sets, ascending     */
+    double  **gtab;     /* ncl count tables, built on first unrank, or NULL */
+} cp_node;
+
+typedef struct {
+    const cp_vset *adj;
+    int      m;
+    int      nnode;
+    int      cap;
+    cp_node *node;
+    int      ok;        /* 0 once anything overflowed or exceeded a bound  */
+    int      inexact;   /* 1 once a count stopped being exact in a double  */
+} cp_ctx;
+
+/*
+ * Sampling and unranking need the counts to be EXACT, not merely finite: a
+ * clique is chosen by comparing a uniform integer against cumulative weights,
+ * and a rank is decoded by subtracting them. Doubles hold integers exactly up
+ * to 2^53, and cp_fac() is exact up to 18! = 6.4e15; past either, the weights
+ * are rounded and the draw is no longer uniform on the class. cp_build() sets
+ * ctx->inexact when it crosses one of those, and the samplers decline rather
+ * than return a draw they cannot vouch for. COUNTING is unaffected -- an
+ * approximate double is the expected answer for a class of 10^30 members, and
+ * counting such classes is the point of the algorithm.
+ */
+#define CP_EXACT_MAX 9007199254740992.0   /* 2^53 */
+#define CP_FAC_EXACT 18                   /* largest n with n! exact         */
+
+/* Build the memo for the component `uni`; returns its node id, or -1 on
+   failure. Allocation is R_alloc'd, so nothing needs freeing. */
+int    cp_build(cp_ctx *ctx, const cp_vset *adj, int m, cp_vset uni);
+double cp_count(cp_ctx *ctx, int id);
+
+/*
+ * Draw a uniform AMO of the component rooted at `id`, writing a topological
+ * order into ord[] starting at position *tick. Consumes R's RNG; the caller
+ * brackets it with Get/PutRNGstate.
+ */
+/* one uniform AMO; 0 if the rejection loop gave up, in which case the caller
+   must restore the RNG state before raising -- see cliquepick.c */
+int    cp_sample(cp_ctx *ctx, int id, int *ord, int *tick);
+
+/*
+ * The k-th member of the class rooted at `id`, 0-based, as a topological order
+ * written into ord[] from *tick. Each call is independent of k -- the rank is
+ * decoded by counting, never by walking the members before it -- so listing a
+ * class of c members costs c calls and is proportional to the output. Valid
+ * for k < cp_count(ctx, id).
+ */
+void   cp_member(cp_ctx *ctx, int id, double k, int *ord, int *tick);
+
+#endif /* IDLBNS_CLIQUEPICK_H */

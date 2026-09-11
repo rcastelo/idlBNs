@@ -32,8 +32,8 @@ dag_move  <- function(st, op, u, v)
                     as.integer(u), as.integer(v)))
 dag_pas   <- function(st) .Call(idlBNs:::C_dag_pasets, st)
 dag_stamp <- function(st) .Call(idlBNs:::C_dag_pastamp, st)
-dag_nh    <- function(st, kind, ut = integer(0))
-    .Call(idlBNs:::C_dag_nh, st, as.integer(kind), as.integer(ut))
+dag_nh    <- function(st, kind, ut = list())
+    .Call(idlBNs:::C_dag_nh, st, as.integer(kind), ut)
 
 ################################################################################
 ## 1. the stamps themselves: pav_stamp[v] must change exactly when pa(v)
@@ -94,7 +94,7 @@ manual_search <- function(x, sf, p, use.memo, nsteps = 40L) {
   cs <- sc_new(p)
   st <- dag_new(p)
   amf <- attr(sf, "nh.argmax.fun")
-  ut <- as.integer(sort(unique(unlist(x$targets))))
+  ut <- x$targets
   for (k in seq_len(nsteps)) {
     ne <- dag_nh(st, 3L, ut)
     if (length(ne$op) == 0L)
@@ -136,12 +136,20 @@ cat(sprintf("memo does not perturb the cache: %d searches, contents byte-identic
 ## 3. full searches: both engines still agree, bit for bit, with the RNG
 ################################################################################
 
+## Both algorithms and both score functions at every size the memo is cheap
+## at; only hcmc() at p = 20, which is the expensive case and the one whose
+## trajectory the memo could actually perturb. The full 3 x 2 x 2 x 2 grid
+## cost 5.4 s of this file's 6.5, re-running an agreement that
+## tests/test_search_engines.R already sweeps far more widely -- what is
+## specific to THIS file is that the agreement still holds with the memo on.
 nsearch <- 0L
-for (p in c(8, 14, 20))
-  for (seed in 1:2) {
-    x <- mkdata(p, seed = seed)
+for (g in list(list(p =  8L, seeds = 1:2, algs = c("hcmc", "hillclimbing")),
+               list(p = 14L, seeds = 1:2, algs = c("hcmc", "hillclimbing")),
+               list(p = 20L, seeds = 1L,  algs = "hcmc")))
+  for (seed in g$seeds) {
+    x <- mkdata(g$p, seed = seed)
     for (sf in list(iBIC, iBGe))
-      for (alg in c("hcmc", "hillclimbing")) {
+      for (alg in g$algs) {
         f <- match.fun(alg)
         set.seed(77L)
         rC <- f(x$dat, targets = x$targets, target.index = x$target.index,

@@ -12,14 +12,19 @@ hcmc(
   scorefun = iBIC,
   MAXTRIALS = 5,
   verbose = TRUE,
-  engine = c("C", "R")
+  engine = c("C", "R"),
+  sampler = c("rcar", "exact"),
+  escape = c("trials", "exhaustive"),
+  escape.max = 512
 )
 }
 \arguments{
 \item{dat}{A \code{data.frame} or \code{matrix} object, containing input Gaussian data,
 with data value records in the rows and random variables in the columns.}
 
-\item{r}{(Default 20) Maximum number of (\emph{I}-)covered arc reversals.}
+\item{r}{(Default 20) Non-negative integer scalar indicating the maximum
+number of (\emph{I}-)covered arc reversals by the RCAR algorithm (Castelo
+and Kočka, 2003).}
 
 \item{targets}{(Default \code{list(integer(0))}) A \code{list} object with a family of
 targets provided as a list of integer vectors. Its default value indicates
@@ -35,8 +40,13 @@ observational.}
 \item{scorefun}{(Default is \code{\link{iBIC}}) A function to calculate the goodness
 of fit (GoF) score of a DAG on a given data set.}
 
-\item{MAXTRIALS}{(Default 5) Maximum number of trials to escape from local
-maxima.}
+\item{MAXTRIALS}{(Default 5) Non-negative integer scalar indicating the
+maximum number of trials to escape from local maxima when \code{escape="trials"}.
+It is ignored when \code{escape="exhaustive"}, unless the exhaustive enumeration
+of the (\emph{I}-)equivalence class exceeds \code{escape.max} or a chain component
+has more than 64 vertices, in which case the escape mechanism falls back to
+the RCAR algorithm for a maximum of \code{MAXTRIALS} trials. See the \code{escape}
+argument for details.}
 
 \item{verbose}{(Default TRUE) Show progress in the calculations.}
 
@@ -49,10 +59,66 @@ identically and so follow the same trajectory from the same seed, and both
 return the same result. \code{"C"} requires a \code{scorefun} able to score a whole
 neighbourhood at once, which \code{\link{iBIC}} and \code{\link{iBGe}} are; with any other
 score function the \code{"R"} engine is used regardless.}
+
+\item{sampler}{(Default \code{"rcar"}) A character string selecting how the
+algorithm moves within the (\emph{I}-)equivalence class of the current DAG.
+\code{"rcar"} performs the RCAR algorithm (a random walk of up to \code{r}
+(\emph{I}-)covered arc reversals) of Castelo and Kočka (2003). \code{"exact"}
+instead draws a member of the class uniformly at random, by the
+Clique-Picking algorithm of Wienöbst \emph{et al.} (2023), and ignores \code{r}.
+The walk produced by the RCAR algorithm and the exact draw are not
+equivalent: the walk is a random walk on the class, so its equilibrium is
+proportional to the number of (\emph{I}-)covered arcs of each member and is
+not uniform for any value of \code{r}.  The exact draw has no limit on the size
+of the class, and none on the number of vertices in the DAG. It declines,
+reverting to the walk and counting the draw in \code{sampler.fallbacks}, in two
+cases. First, vertex sets within an undirected chain component are 64-bit
+masks, so a component of more than 64 vertices is out of reach; components
+that large need a DAG with almost no immoralities, and the largest seen for
+random DAGs up to \eqn{p = 500} is 16. Second, uniformity needs the
+per-component counts to be \emph{exact}, because the draw compares a
+uniform integer against cumulative counts: doubles hold integers exactly
+only to \eqn{2^{53}}, and a clique of more than 18 vertices has a
+factorial past that, so beyond either bound the draw is declined rather
+than made with rounded weights. Counting is unaffected and still answers
+for a class of any size.}
+
+\item{escape}{(Default \code{"trials"}) A character string selecting what happens
+at a local maximum. \code{"trials"} re-randomises the current DAG within its
+class and retries, up to \code{MAXTRIALS} times. \code{"exhaustive"} instead examines
+\emph{every} member of the class and takes the best move available from any
+of them, which settles the question of whether the search is really at a
+local maximum of the class; \code{MAXTRIALS} is then unused. It falls back to
+\code{"trials"} in the cases where the enumeration declines, counted in
+\code{escape.fallbacks}: a class larger than \code{escape.max} or \code{INT_MAX}, and a
+class whose size cannot be computed at all because some chain component has
+more than 64 vertices. The second is the 64-bit mask limit described under
+\code{sampler}, and applies here whichever \code{sampler} is in use, since the escape
+enumerates the class regardless of how the search moves within it.}
+
+\item{escape.max}{(Default 512) Positive integer scalar giving the largest
+(\emph{I}-)equivalence class the \code{escape="exhaustive"} enumeration will
+walk. That escape scores one whole neighbourhood per member, so its cost
+grows linearly in the size of the class, which is why it is the class size
+that is bounded. Producing the members is not itself the expensive part:
+each one is generated directly from its index in the class, so listing
+costs one step per member listed and no more. What \code{escape.max} bounds is
+therefore the scoring, not the enumeration. \code{NA} or \code{Inf} mean no limit,
+but the default of 512 is a safe value for the largest classes seen in
+random DAGs up to \eqn{p = 500} vertices.}
 }
 \value{
-A list containing a \code{\link[graph:graphNEL-class]{graphNEL}} object with
-the structure of the learned DAG, and its corresponding score.
+A list with the following components: \code{dag}, a
+\code{\link[graph:graphNEL-class]{graphNEL}} object with the structure of the learned
+DAG; \code{sco}, its score; \code{sampler.fallbacks}, the number of draws for which
+\code{sampler="exact"} declined and the \code{"rcar"} walk was used instead; and
+\code{escape.fallbacks}, the number of local maxima at which
+\code{escape="exhaustive"} declined and the \code{MAXTRIALS} budget was used instead.
+Both counts are zero unless the corresponding exact method was selected, and
+a non-zero count means part of the run silently used the older machinery:
+the walk does not sample the (\emph{I}-)equivalence class uniformly, so a
+result obtained with \code{sampler.fallbacks > 0} is not the one
+\code{sampler="exact"} promises.
 }
 \description{
 Run the hill-climber Monte Carlo (HCMC) algorithm (Castelo and
@@ -129,6 +195,10 @@ Bayesian networks. \emph{Journal of Machine Learning Research}, 4:527-574, 2003.
 Castelo, R. Interventional idlBNs in DAG-space. In \emph{Challenges
 and Algorithms for Knowledge Discovery from Data}, M. van Leeuwen and
 J.  Vreeken (eds.). LNCS 16067, Festschrift, Springer, 2026.
+
+Wienöbst, M., Bannach, M. and Liśkiewicz, M. Polynomial-time
+algorithms for counting and sampling Markov equivalent DAGs with
+applications. \emph{Journal of Machine Learning Research}, 24(213):1-45, 2023.
 }
 \seealso{
 \code{\link[=iBIC]{iBIC()}}, \code{\link[=iBGe]{iBGe()}}

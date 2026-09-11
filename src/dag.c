@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <R.h>                  /* R_Calloc / R_Realloc / R_Free / R_alloc */
+#include <R_ext/Utils.h>        /* R_isort */
 #include "dag.h"
 
 /*
@@ -210,9 +211,106 @@ idl_dag_can_reverse(const idl_dag *d, int u, int v) {
 /* mutations                                                                */
 /* ------------------------------------------------------------------------ */
 
+/*
+ * Put pa[] and ch[] into ascending order. The graph itself is untouched --
+ * only the order in which each vertex's parents and children are stored.
+ *
+ * That order is observable: C_dag_pasets() hands pa[v] to the score function,
+ * whose linear algebra is not associative, and the neighbourhood is
+ * enumerated in ch[] order. It is normally the insertion order, which both
+ * engines reproduce because both apply the same moves in the same sequence.
+ * The exact sampler breaks that symmetry: the C engine re-orients only the
+ * arcs whose direction changed, leaving a history-dependent order, while the
+ * R engine rebuilds pasets and edgeL from the sampled adjacency matrix, which
+ * comes out ascending. Canonicalising here puts the C engine on the R
+ * engine's footing, after which both append and stay in step.
+ *
+ * pas[v] is already the ascending mirror of pa[v], so the parents are a copy
+ * rather than a sort.
+ *
+ * Reordering pa[v] BUMPS pav_stamp[v]. The stamp is what callers memoise
+ * against -- nh_scores.c keys its addition memo on (u, v, pav_stamp[v]) --
+ * and the value memoised there is a delta computed from pa(v) in the order
+ * it was in, through a score function whose arithmetic is not associative.
+ * Leaving the stamp alone would let a later neighbourhood reuse a delta
+ * computed for the old order.
+ *
+ * That hazard is currently blocked further down: nh_scores.c scores a parent
+ * set through a cache keyed by the set SORTED, and that cache only ever
+ * grows, so once a (vertex, parent set) score exists it is reused whatever
+ * the order -- 3.2 million verified memo hits across four workloads, one
+ * with declines injected on alternate draws to force 418 reorderings of
+ * vertices with four or more parents, produced no mismatch. The bump is kept
+ * anyway: it costs nothing measurable (0.409 s against 0.410 s over ten
+ * searches at p = 40, identical results), and it makes the memo's invariant
+ * hold locally instead of resting on the cache's eviction policy.
+ */
+void
+idl_dag_canonical_order(idl_dag *d) {
+    for (int v = 0; v < d->p; v++) {
+        idl_ivec *pav = &d->pa[v];
+        if (pav->n > 1 &&
+            memcmp(pav->v, d->pas[v].v, (size_t) pav->n * sizeof(int)) != 0) {
+            memcpy(pav->v, d->pas[v].v, (size_t) pav->n * sizeof(int));
+            d->pav_stamp[v]++;          /* the order is part of what callers
+                                           memoise against this stamp */
+        }
+        if (d->ch[v].n > 1)
+            R_isort(d->ch[v].v, d->ch[v].n);
+    }
+}
+
+/*
+ * Reserve room for pa_need[v] parents and ch_need[v] children at every
+ * vertex, so a subsequent rebuild cannot allocate.
+ *
+ * link_edge() is all-or-nothing against a failing R_Realloc for ONE arc, but
+ * a caller replacing the whole graph needs more than that: it removes every
+ * old arc and then adds the new ones, and a longjmp partway through the
+ * additions would leave a live DAG holding a prefix of the requested edge
+ * list -- neither the old graph nor the new one, and a caller that traps the
+ * error would carry on with it. Reserving first moves every allocation ahead
+ * of the first mutation, so the failure leaves the old graph untouched and
+ * the rebuild itself cannot fail. idl_dag_add_edge() allocates only through
+ * link_edge(), and the ancestor and descendant updates work in scratch
+ * buffers sized at idl_dag_alloc() time, so this covers all of it.
+ */
+void
+idl_dag_reserve(idl_dag *d, const int *pa_need, const int *ch_need) {
+    for (int v = 0; v < d->p; v++) {
+        if (pa_need[v] > 0) {
+            ivec_reserve(&d->pa[v], pa_need[v]);
+            ivec_reserve(&d->pas[v], pa_need[v]);
+        }
+        if (ch_need[v] > 0)
+            ivec_reserve(&d->ch[v], ch_need[v]);
+    }
+}
+
 /* the adjacency half of adding u -> v, shared by add and reverse */
 static void
 link_edge(idl_dag *d, int u, int v) {
+    /* Two invariants, both checked before any list is reserved, so a rejected
+       arc leaves the DAG exactly as it was -- the same all-or-nothing property
+       the reserves below give against a longjmp. Together they cost one
+       comparison and one bitset probe, on a path already O(|delta| + |D|)
+       words, which is below what the search's timings can resolve.
+
+       No self-loop: u would be pushed into its own pa[u] and ch[u], making it
+       its own parent and child. The ancestor and descendant closures maintained
+       by the caller take u's own bit for granted, so the graph would not even
+       be recognisably cyclic afterwards -- it would just be wrong.
+
+       No arc already present: pushing it a second time would leave a duplicate
+       in pa[v], pas[v] and ch[u] and count it twice in nedges, while pab and
+       adj -- being bitsets -- would merely be set again. The vectors and the
+       bitsets would then disagree, and nothing downstream would notice, since
+       every query goes through one or the other. */
+    if (u == v)
+        error("idl_dag: self-loops are not allowed (u = v = %d)", u + 1);
+    if (idl_dag_has_edge(d, u, v))
+        error("idl_dag: arc %d -> %d is already present", u + 1, v + 1);
+
     /* reserve every list first: R_Realloc longjmps on failure, and doing
        this up front is what keeps a move all-or-nothing. past this point
        nothing below can fail. */
@@ -231,6 +329,15 @@ link_edge(idl_dag *d, int u, int v) {
 
 static void
 unlink_edge(idl_dag *d, int u, int v) {
+    /* the arc has to be there. ivec_erase() on an absent element and
+       idl_bs_clear() of an unset bit are both silent no-ops, but nedges-- is
+       not, so removing an arc that was never added leaves the count low while
+       every list and bitset still looks right -- the one piece of state with
+       no redundancy to check it against. Raised before anything is touched,
+       so a rejected removal leaves the DAG exactly as it was. */
+    if (!idl_dag_has_edge(d, u, v))
+        error("idl_dag: arc %d -> %d is not present", u + 1, v + 1);
+
     ivec_erase(&d->pa[v], u);
     ivec_erase(&d->pas[v], u);
     d->pav_stamp[v]++;                    /* pa(v) changed    */

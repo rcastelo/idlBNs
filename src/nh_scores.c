@@ -555,8 +555,13 @@ nh_argmax_driver(SEXP pasets_R, SEXP cached_scores_R, SEXP op_R, SEXP u_R,
 
         if (memo != NULL && op[m] == IDLBNS_OP_ADD) {
             /* additions are ~99% of the candidates, and an addition's delta
-               is a function of pa(v) alone -- through both s(v, pa(v) + u)
-               and base[v] -- so one stamp compare decides validity */
+               is a function of the parent SET pa(v) alone -- through both
+               s(v, pa(v) + u) and base[v] -- so one stamp compare decides
+               validity. Two things keep it a function of the set rather than
+               of the order pa(v) happens to be stored in: cached_node_score()
+               keys on the sorted key and its cache never evicts, and
+               idl_dag_canonical_order() bumps the stamp whenever it reorders
+               pa[v]. */
             size_t slot = (size_t) (uu[m] - 1) * (size_t) p
                           + (size_t) (vv[m] - 1);
             if (memo->add_st[slot] == stamp[vv[m] - 1]) {
