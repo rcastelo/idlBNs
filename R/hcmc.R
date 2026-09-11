@@ -615,12 +615,19 @@ hcmc <- function(dat, r=20, targets=list(integer(0)),
     dat
 }
 
+#' @importFrom cli cli_abort
 .check_targets <- function(targets, p) {
     if (!is.list(targets)) {
-        msg <- paste("The 'targets' argument must be a list of integer vectors",
-                     ", each vector specifying zero or more intervened random",
-                     "variables in the data.")
+        msg <- paste("The 'targets' argument must be a list of integer",
+                     "vectors, each vector specifying zero or more",
+                     "intervened random variables in the data.")
         cli_abort(c("x"=msg))
+    } else if (length(targets) == 0) {
+        targets <- list(integer(0))
+        cli_alert_warning("The 'targets' list is empty,replaced by"
+                          "'list(integer(0))', which implies all data",
+                          "are observational.")
+        return(targets)
     }
 
     for (i in seq_along(targets)) {
