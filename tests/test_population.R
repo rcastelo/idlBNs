@@ -104,6 +104,63 @@ cat(sprintf("test_population.R: finite-sample converges (iBIC %.1e -> %.1e, iBGe
             r4[1], r6[1], r4[2], r6[2]))
 
 ################################################################################
+## 2b. iBGe's statistic is the CENTRED cross-product, and with fixed
+## per-environment counts its expectation is NOT (N-1) times the mixture
+## covariance.
+##
+## Decomposing the centred sum of squares and taking expectations with the
+## counts held fixed gives (N_j - 1) W_j + N_j B_j: the within part loses a
+## degree of freedom to the estimated mean, the between part does not. Using
+## (N_j - 1)(W_j + B_j) understates it by exactly B_j, which is non-zero
+## exactly when the environments differ in mean -- which is what an
+## intervention does. Monte Carlo put that bias at 21.6 standard errors at the
+## intervened vertex. It is O(1) in a statistic of size O(N), which is not
+## harmless: BGe multiplies log-determinants of TN by a factor of order N, so
+## it lands as an O(1) error in the score, the scale that decides between
+## nested models.
+##
+## The check is deterministic, not a simulation: the centred cross-product is
+## the uncentred one less N * xbar xbar', and E[xbar xbar'] = W/N + mu mu'.
+## iBIC supplies the uncentred statistic, and it is verified against
+## 01_population_score.R in section 1, so this is an independent route.
+################################################################################
+
+local({
+    IVbig <- 6                      # environments far apart in mean
+    pm <- population(G, ivent.value = IVbig, ivent.var = TV)
+    cnt <- c(300, 200, 200)
+    bi <- idlBNs:::.iBIC.population.sufstats(pm, TG, cnt)
+    bg <- idlBNs:::.iBGe.population.sufstats(pm, TG, cnt)
+    am <- 1; aw <- P + am + 1; T0s <- am * (aw - P - 1) / (am + 1)
+    envs <- lapply(TG, function(I) { Bk <- B; omk <- OM; b0k <- B0
+        if (length(I)) { Bk[, I] <- 0; omk[I] <- TV; b0k[I] <- IVbig }
+        M <- solve(diag(P) - t(Bk))
+        list(mu = as.vector(M %*% b0k), Sigma = M %*% diag(omk, P) %*% t(M)) })
+    nontrivial <- 0L
+    for (j in seq_len(P)) {
+        keep <- which(!vapply(TG, function(I) j %in% I, TRUE))
+        wj <- cnt[keep] / sum(cnt[keep]); Nj <- sum(cnt[keep])
+        mu <- Reduce(`+`, Map(function(e, wi) wi * e$mu, envs[keep], wj))
+        Wj <- Reduce(`+`, Map(function(e, wi) wi * e$Sigma, envs[keep], wj))
+        Bj <- Reduce(`+`, Map(function(e, wi) wi * tcrossprod(e$mu - mu),
+                              envs[keep], wj))
+        S <- bi$S[[j]]
+        expected <- S[-1, -1] - tcrossprod(S[1, -1]) / Nj - Wj   # (Nj-1)W + Nj*B
+        got <- bg$TN[[j]] - diag(T0s, P, P) - (am * Nj / (am + Nj)) * outer(mu, mu)
+        stopifnot(max(abs(got - expected)) < 1e-8)
+        ## and the old formula really would have differed here, so a
+        ## regression to it cannot pass unnoticed
+        if (max(abs(Bj)) > 1e-8) {
+            nontrivial <- nontrivial + 1L
+            stopifnot(max(abs(got - (Nj - 1) * (Wj + Bj))) > 1e-8)
+        }
+    }
+    stopifnot(nontrivial > 0L)      # anti-vacuity: some vertex pools two means
+})
+cat("test_population.R: iBGe uses (N-1)W + N*B, matching an independent route
+")
+
+################################################################################
 ## 3. the object stands in for the data matrix, and the search runs on it
 ################################################################################
 

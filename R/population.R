@@ -65,9 +65,15 @@
 .pop.pool <- function(moments, w) {
     w  <- w / sum(w)
     mu <- Reduce(`+`, Map(function(e, wi) wi * e$mu, moments, w))
-    S  <- Reduce(`+`, Map(function(e, wi) wi * (e$Sigma + tcrossprod(e$mu - mu)),
-                          moments, w))
-    list(mu = mu, Sigma = S)
+    ## kept apart, not just summed: the two scores need different combinations
+    ## of them. WITHIN is the average of the environments' own covariances,
+    ## BETWEEN the spread of their means about the pooled mean, and the
+    ## mixture covariance is their sum.
+    within  <- Reduce(`+`, Map(function(e, wi) wi * e$Sigma, moments, w))
+    between <- Reduce(`+`, Map(function(e, wi) wi * tcrossprod(e$mu - mu),
+                               moments, w))
+    list(mu = mu, Sigma = within + between,
+         within = within, between = between)
 }
 
 ## For every vertex, the pooled moments of the environments that do not
@@ -304,7 +310,26 @@ dimnames.idlBNsPopulation <- function(x) list(NULL, x$nodes)
     scoreconstvec <- vector("list", p)
     for (j in seq_len(p)) {
         Nj <- pv$v[[j]]$N; means <- pv$v[[j]]$mu
-        covmat <- pv$v[[j]]$Sigma * (Nj - 1)
+        ## iBGe's statistic is the CENTRED cross-product, and with fixed
+        ## per-environment counts its expectation is not (N-1) times the
+        ## mixture covariance. Decomposing the centred sum of squares into
+        ## within and between parts, and taking expectations with the counts
+        ## held fixed,
+        ##
+        ##     E[sum_i (x_i - xbar)(x_i - xbar)'] = (N_j - 1) W_j + N_j B_j
+        ##
+        ## -- the within part loses a degree of freedom to the estimated mean,
+        ## the between part does not. Using (N_j - 1)(W_j + B_j) understates
+        ## it by exactly B_j whenever the environments differ in mean, which
+        ## is precisely what an intervention does. That is an O(1) error in a
+        ## statistic of size O(N), which sounds harmless but is not: the BGe
+        ## score multiplies log-determinants of TN by a factor of order N, so
+        ## it lands as an O(1) error in the score, on the same scale as the
+        ## penalty differences that decide between nested models.
+        ##
+        ## iBIC is unaffected: it uses the UNCENTRED cross-product, whose
+        ## expectation is exactly N times the second moment.
+        covmat <- (Nj - 1) * pv$v[[j]]$within + Nj * pv$v[[j]]$between
         TN[[j]] <- T0 + covmat + (am * Nj / (am + Nj)) * outer(means, means)
         awpN[j] <- aw + Nj
         constscorefact <- -(Nj / 2) * log(pi) + 0.5 * log(am / (am + Nj))
