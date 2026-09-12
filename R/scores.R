@@ -146,7 +146,6 @@ iBIC <- function(g, x, targets=list(integer(0)),
         .check_g_dat_consistency(g, x)
     }
     target.index <- .resolve.target.index(x, targets, target.index)
-    target.index <- .resolve.target.index(x, targets, target.index)
 
     if (is.null(pasets))
         pasets <- .build_pasets(g, x)
@@ -317,7 +316,12 @@ attr(iBIC, "nh.argmax.fun") <- .iBIC.nh.argmax
 
 #' @importFrom cli cli_abort
 .iBIC.global.sufstats <- function(dat, targets=list(integer(0)),
-                                  target.index=rep(1L, nrow(dat))) {
+                                  target.index=NULL) {
+    ## resolved here too: this is reachable directly, and as the
+    ## global.sufstats.fun attribute, so it cannot lean on its callers having
+    ## done it. rep(1L, nrow(dat)) as a default is what a population object
+    ## cannot satisfy -- it has no rows.
+    target.index <- .resolve.target.index(dat, targets, target.index)
     ## a population model in place of data: the same statistics in the
     ## large-sample limit, built in R/population.R
     if (.is.population(dat))
@@ -570,6 +574,7 @@ iBGe <- function(g, x, targets=list(integer(0)),
         x <- .check_input_data(x)
         .check_g_dat_consistency(g, x)
     }
+    target.index <- .resolve.target.index(x, targets, target.index)
 
     if (is.null(pasets))
         pasets <- .build_pasets(g, x)
@@ -665,7 +670,12 @@ attr(iBGe, "nh.argmax.fun") <- .iBGe.nh.argmax
 ## and the BiDAG package, but stripped down to exclude BDe, BDecat, DBN, MDAG,
 ## and other stuff not exposed in the iBGe() function of this package
 .iBGe.global.sufstats <- function(dat, targets=list(integer(0)),
-                                  target.index=rep(1L, nrow(dat))) {
+                                  target.index=NULL) {
+    ## resolved here too: this is reachable directly, and as the
+    ## global.sufstats.fun attribute, so it cannot lean on its callers having
+    ## done it. rep(1L, nrow(dat)) as a default is what a population object
+    ## cannot satisfy -- it has no rows.
+    target.index <- .resolve.target.index(dat, targets, target.index)
     ## a population model in place of data: the same statistics in the
     ## large-sample limit, built in R/population.R
     if (.is.population(dat))

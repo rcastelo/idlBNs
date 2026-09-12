@@ -130,6 +130,30 @@ for (f in list(hcmc, hillclimbing)) {
 e <- tryCatch(iBIC(mkg(DAGS[[1]]), PM, targets = TG), error = function(e) e)
 stopifnot(inherits(e, "error"), grepl("sample size", conditionMessage(e)))
 
+## EVERY entry point, not just one of them. The first version of this fix
+## reached iBIC and missed iBGe -- one patch, applied twice to the same
+## anchor -- and the test only exercised iBIC, so it passed. The loop is the
+## point: whatever resolves the default has to be reachable from all of them,
+## including the two global.sufstats builders, which are public enough to be
+## called directly and are the scorefun attribute the search uses.
+local({
+    PMn <- population(G, n = 8000, ivent.value = IV, ivent.var = TV)
+    G0  <- mkg(matrix(FALSE, P, P))
+    for (sf in list(iBIC, iBGe)) {
+        stopifnot(is.finite(sf(G0, PMn, targets = TG)))
+        stopifnot(is.finite(hcmc(PMn, targets = TG, scorefun = sf,
+                                 verbose = FALSE)$sco),
+                  is.finite(hillclimbing(PMn, targets = TG, scorefun = sf,
+                                         verbose = FALSE)$sco))
+        ## omitting it must equal stating the same split outright
+        eq <- rep(8000 / length(TG), length(TG))
+        stopifnot(isTRUE(all.equal(sf(G0, PMn, targets = TG),
+                                   sf(G0, PMn, targets = TG, target.index = eq))))
+    }
+    for (b in list(idlBNs:::.iBIC.global.sufstats, idlBNs:::.iBGe.global.sufstats))
+        stopifnot(isTRUE(all.equal(b(PMn, TG)$n, 8000)))
+})
+
 ## with n on the object it is split equally, and explicit counts still win
 PMn <- population(G, n = 4 * sum(CNT), ivent.value = IV, ivent.var = TV)
 set.seed(5); a <- hcmc(PMn, targets = TG, verbose = FALSE)
