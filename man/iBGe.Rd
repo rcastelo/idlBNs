@@ -57,7 +57,16 @@ that environment contributes nothing and is dropped. What each variable
 does need is at least two observations' worth of mass from the environments
 that leave it alone, the same floor the row counts must clear when \code{x}
 carries data; below it the variable cannot be scored and the call fails
-naming it.}
+naming it.
+
+An environment with no observations is removed from \code{targets} altogether,
+under either kind of input -- a count of zero, or a target that no row
+refers to. It is not merely that it cannot inform the score: the target
+family is also what defines \emph{I}-equivalence and therefore which
+reversals are \emph{I}-covered, so an intervention that was never
+performed would otherwise narrow the equivalence classes the search moves
+in and change the graph returned. The refinement is earned by having
+observed the intervention.}
 
 \item{cached.scores}{An optional list of environment objects, containing
 cached scores per parent set for each vertex in \code{g}. If \code{NULL} (default),

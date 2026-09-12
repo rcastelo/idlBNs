@@ -154,6 +154,58 @@ local({
         stopifnot(isTRUE(all.equal(b(PMn, TG)$n, 8000)))
 })
 
+## An environment with no observations must not refine the equivalence classes.
+##
+## Zero-mass environments were dropped when the SCORE statistics were built,
+## but the search reads the target family for a different purpose: it is what
+## defines I-equivalence, which arcs are target-protected, and so which
+## reversals are I-covered. An intervention nobody collected data for still
+## shrank the classes the sampler drew from and the neighbourhood ncr.nh()
+## emitted, and the search returned a different graph than if it had never
+## been mentioned -- on an 8-vertex model, 22 arcs against 17. It applies to
+## real data too: a target listed in `targets` that no row refers to.
+local({
+    adj <- function(g) { m <- as(g, "matrix"); m[] <- m != 0; m }
+    same <- function(a, b) isTRUE(all.equal(a$sco, b$sco)) &&
+                           identical(adj(a$dag), adj(b$dag))
+    run <- function(...) { set.seed(77); hcmc(..., verbose = FALSE) }
+    q <- 8L
+    set.seed(4); gg <- pcalg::r.gauss.pardag(q, 0.45)
+    pm <- population(gg, ivent.value = 2)
+
+    ## population: a declared environment with a count of zero
+    stopifnot(same(run(pm, targets = list(integer(0), 1L, 2L),
+                       target.index = c(4000, 0, 0), sampler = "exact",
+                       escape = "exhaustive"),
+                   run(pm, targets = list(integer(0)), target.index = 4000,
+                       sampler = "exact", escape = "exhaustive")))
+
+    ## data: a target no row refers to
+    set.seed(9); nn <- 1500L
+    XX <- rmvnorm.ivent(nn, gg); colnames(XX) <- as.character(seq_len(q))
+    stopifnot(same(run(XX, targets = list(integer(0), 1L, 2L),
+                       target.index = rep(1L, nn)),
+                   run(XX, targets = list(integer(0)), target.index = rep(1L, nn))))
+
+    ## a MIDDLE environment dropped, so the row labels have to be remapped
+    ti <- rep(c(1L, 3L), length.out = nn)          # environment 2 unused
+    stopifnot(same(run(XX, targets = list(integer(0), 5L, 6L), target.index = ti),
+                   run(XX, targets = list(integer(0), 6L),
+                       target.index = ifelse(ti == 1L, 1L, 2L))))
+
+    ## and an environment that DOES have observations still refines, which is
+    ## the whole point -- the fix must not flatten the interventional case
+    stopifnot(!same(run(XX, targets = list(integer(0), 6L),
+                        target.index = ifelse(ti == 1L, 1L, 2L)),
+                    run(XX, targets = list(integer(0)), target.index = rep(1L, nn))))
+
+    ## hillclimbing() shares the resolution
+    stopifnot(same(hillclimbing(XX, targets = list(integer(0), 1L, 2L),
+                                target.index = rep(1L, nn), verbose = FALSE),
+                   hillclimbing(XX, targets = list(integer(0)),
+                                target.index = rep(1L, nn), verbose = FALSE)))
+})
+
 ## with n on the object it is split equally, and explicit counts still win
 PMn <- population(G, n = 4 * sum(CNT), ivent.value = IV, ivent.var = TV)
 set.seed(5); a <- hcmc(PMn, targets = TG, verbose = FALSE)

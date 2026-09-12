@@ -49,6 +49,15 @@
 #' carries data; below it the variable cannot be scored and the call fails
 #' naming it.
 #'
+#' An environment with no observations is removed from `targets` altogether,
+#' under either kind of input -- a count of zero, or a target that no row
+#' refers to. It is not merely that it cannot inform the score: the target
+#' family is also what defines \emph{I}-equivalence and therefore which
+#' reversals are \emph{I}-covered, so an intervention that was never
+#' performed would otherwise narrow the equivalence classes the search moves
+#' in and change the graph returned. The refinement is earned by having
+#' observed the intervention.
+#'
 #' @param MAXTRIALS (Default 5) Non-negative integer scalar indicating the
 #' maximum number of trials to escape from local maxima when `escape="trials"`.
 #' It is ignored when `escape="exhaustive"`, unless the exhaustive enumeration
@@ -240,6 +249,14 @@ hcmc <- function(x, r=20, targets=list(integer(0)),
 
     targets <- .check_targets(targets, ncol(x))
     target.index <- .resolve.target.index(x, targets, target.index)
+    ## an environment with no observations has not been performed, so it must
+    ## not refine the I-equivalence classes the search moves in
+    .ee <- .drop.empty.environments(x, targets, target.index)
+    if (.ee$dropped > 0L && verbose)
+        cli_alert_info(paste("Ignoring {.ee$dropped} intervention target{?s} with",
+                             "no observations; {?it does/they do} not refine",
+                             "the equivalence classes."))
+    targets <- .ee$targets; target.index <- .ee$target.index
     escape.maxD <- .check_escape.max(escape.max)
     scorefun <- match.fun(scorefun)
 

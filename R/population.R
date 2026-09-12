@@ -294,3 +294,37 @@ dimnames.idlBNsPopulation <- function(x) list(NULL, x$nodes)
     }
     rep(1L, nrow(x))
 }
+
+
+## Drop the environments that contributed no observations.
+##
+## They cannot inform the score -- with data they own no rows, and in the
+## population path .pop.pervertex() drops them before pooling -- but the
+## SEARCH reads the target family for a different purpose: it is what defines
+## I-equivalence, which arcs are target-protected, and therefore which
+## reversals are I-covered. So an intervention nobody collected data for still
+## refined the classes the sampler draws from and the neighbourhood ncr.nh()
+## emits, and the search returned a different graph than if it had never been
+## mentioned: on an 8-vertex model, 22 arcs against 17.
+##
+## The refinement is earned by having observed the intervention. An
+## environment with no observations has not been performed, so it does not
+## refine, and it is removed here before the family reaches the search.
+##
+## With data the row labels are indices into targets, so dropping entries
+## means remapping them; the rows that referred to a dropped environment are
+## precisely the ones that do not exist.
+.drop.empty.environments <- function(x, targets, target.index) {
+    mass <- if (.is.population(x)) target.index
+            else tabulate(target.index, nbins = length(targets))
+    keep <- which(mass > 0)
+    if (length(keep) == length(targets))
+        return(list(targets = targets, target.index = target.index, dropped = 0L))
+    if (!length(keep))                       # cannot happen: both paths check
+        cli_abort(c("x"="No environment has any observations."))
+    ti <- if (.is.population(x)) target.index[keep]
+          else { map <- integer(length(targets)); map[keep] <- seq_along(keep)
+                 map[target.index] }
+    list(targets = targets[keep], target.index = ti,
+         dropped = length(targets) - length(keep))
+}

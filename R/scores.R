@@ -52,6 +52,15 @@
 #' carries data; below it the variable cannot be scored and the call fails
 #' naming it.
 #'
+#' An environment with no observations is removed from `targets` altogether,
+#' under either kind of input -- a count of zero, or a target that no row
+#' refers to. It is not merely that it cannot inform the score: the target
+#' family is also what defines \emph{I}-equivalence and therefore which
+#' reversals are \emph{I}-covered, so an intervention that was never
+#' performed would otherwise narrow the equivalence classes the search moves
+#' in and change the graph returned. The refinement is earned by having
+#' observed the intervention.
+#'
 #' @param cached.scores (Default `NULL`) An optional list of environment
 #' objects, containing cached scores per parent set for each vertex in `g`. If
 #' `NULL` (default), no cached scores are used. Using this argument can speed
@@ -496,6 +505,15 @@ attr(iBIC, "global.sufstats.fun") <- .iBIC.global.sufstats
 #' that leave it alone, the same floor the row counts must clear when `x`
 #' carries data; below it the variable cannot be scored and the call fails
 #' naming it.
+#'
+#' An environment with no observations is removed from `targets` altogether,
+#' under either kind of input -- a count of zero, or a target that no row
+#' refers to. It is not merely that it cannot inform the score: the target
+#' family is also what defines \emph{I}-equivalence and therefore which
+#' reversals are \emph{I}-covered, so an intervention that was never
+#' performed would otherwise narrow the equivalence classes the search moves
+#' in and change the graph returned. The refinement is earned by having
+#' observed the intervention.
 #'
 #' @param cached.scores An optional list of environment objects, containing
 #' cached scores per parent set for each vertex in `g`. If `NULL` (default),
