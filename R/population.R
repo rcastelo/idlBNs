@@ -333,24 +333,45 @@ dimnames.idlBNsPopulation <- function(x) list(NULL, x$nodes)
 ## silently change the answer. So it has to be stated, either as n on the
 ## population object (split equally here) or as explicit counts.
 .resolve.target.index <- function(x, targets, target.index) {
-    if (!is.null(target.index))
-        return(target.index)
-    if (.is.population(x)) {
-        px <- .as.population(x)
-        if (is.null(px$n))
-            cli_abort(c("x"=paste("With a population model in 'x' the notional",
-                                  "sample size has to be given, because the",
-                                  "score's penalty depends on it."),
-                        "i"=paste("Either set 'n' in population(), or pass one",
-                                  "observation count per element of 'targets'",
-                                  "in 'target.index'.")))
-        ## split n in proportion to (C, 1, ..., 1): an environment is
-        ## observational when its target is empty, so this does not depend on
-        ## the order of targets, and C is inert when they are all one kind
-        w <- ifelse(vapply(targets, function(I) length(I) == 0L, TRUE), px$C, 1)
-        return(px$n * w / sum(w))
+    if (is.null(target.index)) {
+        if (.is.population(x)) {
+            px <- .as.population(x)
+            if (is.null(px$n))
+                cli_abort(c("x"=paste("With a population model in 'x' the",
+                                      "notional sample size has to be given,",
+                                      "because the score's penalty depends",
+                                      "on it."),
+                            "i"=paste("Either set 'n' in population(), or pass",
+                                      "one observation count per element of",
+                                      "'targets' in 'target.index'.")))
+            ## split n in proportion to (C, 1, ..., 1): an environment is
+            ## observational when its target is empty, so this does not depend
+            ## on the order of targets, and C is inert when all are one kind
+            w <- ifelse(vapply(targets, function(I) length(I) == 0L, TRUE),
+                        px$C, 1)
+            return(px$n * w / sum(w))
+        }
+        return(rep(1L, nrow(x)))
     }
-    rep(1L, nrow(x))
+
+    ## Given one, validate it HERE, which is the one place all four entry
+    ## points pass through. Counts get the population checks; row labels have
+    ## to be one per row and name an environment that exists. Neither was
+    ## checked: a label vector of the wrong length was accepted outright, and
+    ## one naming an environment past the end of 'targets' surfaced later as
+    ## the misleading "No environment has any observations".
+    if (.is.population(x))
+        return(.pop.counts(target.index, targets))
+    if (!is.numeric(target.index) || any(!is.finite(target.index)))
+        cli_abort(c("x"="'target.index' must be a vector of finite integers."))
+    if (length(target.index) != nrow(x))
+        cli_abort(c("x"=paste("'target.index' has {length(target.index)}",
+                              "entr{?y/ies} but 'x' has {nrow(x)} row{?s};",
+                              "there must be one per row.")))
+    if (any(target.index < 1) || any(target.index > length(targets)))
+        cli_abort(c("x"=paste("'target.index' names environments outside",
+                              "1..{length(targets)}, the length of 'targets'.")))
+    target.index
 }
 
 
@@ -373,7 +394,19 @@ dimnames.idlBNsPopulation <- function(x) list(NULL, x$nodes)
 ## means remapping them; the rows that referred to a dropped environment are
 ## precisely the ones that do not exist.
 .drop.empty.environments <- function(x, targets, target.index) {
-    mass <- if (.is.population(x)) target.index
+    ## .pop.counts() FIRST, not after: it is what checks that there is one
+    ## count per environment, and subsetting an unvalidated vector hid that.
+    ## A too-long target.index made keep run past the end of targets, and
+    ## out-of-range list indices come back as NULL, which reads downstream as
+    ## an empty target -- an observational environment. So an invalid count
+    ## vector was silently turned into a longer, valid-looking family: ten
+    ## environments where three were declared, seven of them NULL. The
+    ## over-long case then failed much later and incidentally, inside
+    ## idl_tmask_build(), and a too-SHORT one was accepted outright.
+    ##
+    ## For data the tabulate() below is bounded by nbins, so keep can never
+    ## leave range; the row labels themselves are checked downstream.
+    mass <- if (.is.population(x)) .pop.counts(target.index, targets)
             else tabulate(target.index, nbins = length(targets))
     keep <- which(mass > 0)
     if (length(keep) == length(targets))

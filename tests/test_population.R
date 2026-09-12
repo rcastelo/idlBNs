@@ -112,9 +112,46 @@ stopifnot(ncol(PM) == P, identical(colnames(PM), as.character(seq_len(P))),
 ## a bare GaussParDAG is accepted too, as a hard intervention to 0
 stopifnot(inherits(idlBNs:::.as.population(G), "idlBNsPopulation"),
           idlBNs:::.as.population(G)$ivent.value == 0)
-## target.index must now be one count per environment
-stopifnot(inherits(tryCatch(hcmc(PM, targets = TG, target.index = rep(1L, 10),
-                                 verbose = FALSE), error = function(e) e), "error"))
+## target.index is validated BEFORE anything subsets by it. It used not to be:
+## .drop.empty.environments() computed which environments to keep from the raw
+## vector, so a too-LONG one indexed past the end of targets, and out-of-range
+## list indices come back as NULL, which reads downstream as an empty target --
+## an observational environment. An invalid vector was quietly turned into a
+## longer, valid-looking family (ten environments where three were declared,
+## seven of them NULL). The over-long case then failed late and incidentally
+## inside idl_tmask_build(), which is why asserting only "this errors" passed
+## for the wrong reason; a too-SHORT one was accepted outright.
+##
+## So the assertions below check the MESSAGE, not merely that something failed.
+bad.pop <- list("too long"     = rep(1L, 10),
+                "too short"    = c(5L, 5L),
+                "negative"     = c(100, -1, 50),
+                "non-numeric"  = c("a", "b", "c"),
+                "all zero"     = c(0, 0, 0))
+for (nm in names(bad.pop)) {
+    e <- tryCatch(hcmc(PM, targets = TG, target.index = bad.pop[[nm]],
+                       verbose = FALSE), error = function(e) e)
+    stopifnot(inherits(e, "error"),
+              grepl("target.index", conditionMessage(e), fixed = TRUE))
+}
+## and the data branch, where a label vector of the wrong length was accepted
+## outright and an out-of-range label surfaced as "No environment has any
+## observations", which names the symptom rather than the mistake
+local({
+    nn <- 200L
+    XX <- matrix(rnorm(nn * P), nn, P,
+                 dimnames = list(NULL, as.character(seq_len(P))))
+    for (ti in list(rep(1L, 7), rep(9L, nn), rep(0L, nn))) {
+        e <- tryCatch(hcmc(XX, targets = TG, target.index = ti, verbose = FALSE),
+                      error = function(e) e)
+        stopifnot(inherits(e, "error"),
+                  grepl("target.index", conditionMessage(e), fixed = TRUE))
+    }
+    ## a valid one still runs
+    stopifnot(is.finite(hcmc(XX, targets = TG,
+                             target.index = rep(c(1L, 2L, 3L), length.out = nn),
+                             verbose = FALSE)$sco))
+})
 
 ## Omitting target.index. The formal default used to be rep(1L, nrow(x)),
 ## which a population object cannot satisfy -- nrow() is NA by construction --
