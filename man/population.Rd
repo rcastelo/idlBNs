@@ -2,7 +2,7 @@
 % Please edit documentation in R/population.R
 \name{population}
 \alias{population}
-\title{Describe a population rather than a sample}
+\title{Create a population parameter model for interventional Bayesian networks}
 \usage{
 population(x, n = NULL, C = 1, ivent.value = 0, ivent.var = 0)
 }

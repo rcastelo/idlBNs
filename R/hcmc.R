@@ -24,17 +24,30 @@
 #' that there are no interventions in the data, i.e., the data is purely
 #' observational.
 #'
-#' @param target.index (Default a unit vector) How much data comes from each
-#' environment. With data in `x`, a vector of integers in one-to-one
-#' correspondence with the rows in `x`, indicating which rows in the input
-#' data are intervened by which targets; its default value indicates that
-#' there are no interventions in the data, i.e., the data is purely
-#' observational. With a population model in `x` there are no rows to label,
-#' so it is instead one observation count per element of `targets`, and the
-#' notional sample size -- which is what sets the score's penalty term -- is
-#' their sum. It may then be omitted, in which case [`population`]'s own `n`
-#' and `C` supply the size and how it is split between observational and
-#' interventional environments.
+#' @param target.index (Default `NULL`) How much data comes from each
+#' environment. What it holds, and what `NULL` resolves to, depend on whether
+#' `x` carries data or a population.
+#'
+#' With data in `x`, a vector of integers in one-to-one correspondence with
+#' the rows in `x`, saying which target intervened on each row. `NULL`
+#' resolves to a vector of ones: the data is purely observational.
+#'
+#' With a population model in `x` there are no rows to label, so it is one
+#' observation count per element of `targets` instead. Their sum is the
+#' notional sample size, which sets the score's penalty term and so decides
+#' between nested models in the limit. `NULL` resolves to [`population`]'s own
+#' `n`, split in proportion to \eqn{(C, 1, \ldots, 1)} between the
+#' observational and the interventional environments. If `n` was not given
+#' there, omitting this argument is an error rather than a default: any size
+#' invented on the caller's behalf would silently change which model is
+#' selected.
+#'
+#' The counts need not be whole numbers, and a count of zero is allowed --
+#' that environment contributes nothing and is dropped. What each variable
+#' does need is at least two observations' worth of mass from the environments
+#' that leave it alone, the same floor the row counts must clear when `x`
+#' carries data; below it the variable cannot be scored and the call fails
+#' naming it.
 #'
 #' @param MAXTRIALS (Default 5) Non-negative integer scalar indicating the
 #' maximum number of trials to escape from local maxima when `escape="trials"`.
