@@ -442,14 +442,24 @@ attr(iBIC, "global.sufstats.fun") <- .iBIC.global.sufstats
 
 #' @importFrom cli cli_abort
 .check_g_dat_consistency <- function(g, dat) {
-    if (ncol(dat) != numNodes(g))
-        cli_abort(c("x"="The number of columns in dat must equal the number of nodes in g"))
-    if (is.null(colnames(dat)))
-        cli_abort(c("x"="Input data in dat must have column names corresponding to the node names in g"))
-    if (!all(nodes(g) %in% colnames(dat)))
-        cli_abort(c("x"="All nodes in g must be present as column names in dat"))
-    else if (!all(nodes(g) == colnames(dat)))
-        cli_abort(c("x"="The order of nodes in g must match the order of column names in dat"))
+    if (ncol(dat) != numNodes(g)) {
+        msg <- paste("The number of columns in 'x' must equal the number of",
+                     "nodes in 'g'.")
+        cli_abort(c("x"=msg))
+    }
+    if (is.null(colnames(dat))) {
+        msg <- paste("Input data in 'x' must have column names corresponding",
+                     "to the node names in 'g'")
+        cli_abort(c("x"=msg))
+    }
+    if (!all(nodes(g) %in% colnames(dat))) {
+        msg <- "All nodes in 'g' must be present as column names in 'x'."
+        cli_abort(c("x"=msg))
+    } else if (!all(nodes(g) == colnames(dat))) {
+        msg <- paste("The order of nodes in 'g' must match the order of column",
+                     "names in 'x'.")
+        cli_abort(c("x"=msg))
+    }
 }
 
 #' @title BGe score for interventional Gaussian data

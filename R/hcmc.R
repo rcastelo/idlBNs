@@ -646,26 +646,26 @@ hcmc <- function(x, r=20, targets=list(integer(0)),
     if (.is.population(dat))
         return(.as.population(dat))
     if (!is.data.frame(dat) && !is.matrix(dat)) {
-        msg <- paste("Input data in 'dat' must be a data.frame or a",
+        msg <- paste("Input data in 'x' must be a data.frame or a",
                      "matrix object.")
         cli_abort(c("x"=msg))
     }
 
     if (is.null(colnames(dat))) {
-        msg <- paste("Input data in 'dat' must have column names",
+        msg <- paste("Input data in 'x' must have column names",
                      "corresponding to the random variables of the sought DAG.")
         cli_abort(c("x"=msg))
     }
 
     dat <- as.matrix(dat)
     if (!is.numeric(dat))
-        cli_abort(c("x"="Input data in 'dat' must be numeric."))
+        cli_abort(c("x"="Input data in 'x' must be numeric."))
 
     if (nrow(dat) < 4)
-        cli_abort(c("x"="Input data in 'dat' must have 3 or more rows."))
+        cli_abort(c("x"="Input data in 'x' must have 3 or more rows."))
 
     if (ncol(dat) < 2)
-        cli_abort(c("x"="Input data in 'dat' must have 2 or more columns."))
+        cli_abort(c("x"="Input data in 'x' must have 2 or more columns."))
 
     dat
 }
