@@ -74,13 +74,38 @@
 ## intervene on it, and the count of observations they contribute.
 .pop.pervertex <- function(moments, targets, counts, p) {
     n <- sum(counts)
+
+    ## An environment with no observations carries no information, so it is
+    ## dropped before anything is pooled. Left in, it stays in the pooling
+    ## weights, and a vertex that only the zero-count environments leave alone
+    ## divides 0 by 0: NaN moments, and then a score that is WRONG RATHER THAN
+    ## REFUSED. iBGe returned NaN with no error at all and the search died
+    ## later on "missing value where TRUE/FALSE needed"; iBIC failed inside
+    ## the Cholesky with "dpotrf failed". Neither named the cause.
+    live    <- which(counts > 0)
+    moments <- moments[live]
+    targets <- targets[live]
+    counts  <- counts[live]
+
     out <- lapply(seq_len(p), function(j) {
         keep <- which(!vapply(targets, function(I) j %in% I, TRUE))
         if (!length(keep))
-            cli_abort(c("x"=paste("Every environment intervenes on variable",
-                                  "{j}, so it has no observations to score")))
+            cli_abort(c("x"=paste("Every environment with observations",
+                                  "intervenes on variable {j}, so it has none",
+                                  "of its own to be scored on."),
+                        "i"=paste("Give an environment that leaves it alone a",
+                                  "non-zero count in 'target.index'.")))
+        Nj <- sum(counts[keep])
+        ## the floor the finite-sample path applies to its row counts, applied
+        ## here to mass: below it the score is not defined, and a fractional
+        ## count used to come back as a finite, plausible-looking number
+        if (Nj < 2)
+            cli_abort(c("x"=paste("The environments that leave variable {j}",
+                                  "alone total {format(Nj)} observations,",
+                                  "and two are needed to score it."),
+                        "i"="Raise 'n', or the counts in 'target.index'."))
         pooled <- .pop.pool(moments[keep], counts[keep])
-        c(pooled, list(N = sum(counts[keep])))
+        c(pooled, list(N = Nj))
     })
     list(n = n, v = out)
 }

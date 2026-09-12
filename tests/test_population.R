@@ -171,6 +171,37 @@ set.seed(5); v <- hcmc(population(G, n = 1000, C = 5, ivent.value = IV),
                        targets = TG, target.index = c(400, 300, 300), verbose = FALSE)
 stopifnot(!identical(u$sco, v$sco))
 
+## Zero-count environments. A count of 0 says an environment contributes
+## nothing, which is legitimate -- but it stayed in the pooling weights, and a
+## vertex left alone ONLY by zero-count environments then divided 0 by 0. The
+## result was not an error: iBGe returned NaN and the search died later on
+## "missing value where TRUE/FALSE needed", while iBIC failed inside the
+## Cholesky with "dpotrf failed". Worse, a FRACTIONAL count never went near
+## either path and came back as a finite, plausible score for a vertex with
+## less than one observation's worth of mass, where the finite-sample path
+## refuses anything under two rows.
+local({
+    G0 <- mkg(matrix(FALSE, P, P))
+    tg <- list(integer(0), 1L)              # only env 1 leaves variable 1 alone
+    for (cs in list(c(0, 500), c(0.4, 500), c(1.9, 500)))
+        for (sf in list(iBIC, iBGe)) {
+            e <- tryCatch(sf(G0, PM, targets = tg, target.index = cs),
+                          error = function(e) e)
+            stopifnot(inherits(e, "error"),
+                      grepl("variable 1", conditionMessage(e)))   # and says which
+        }
+    ## the boundary is where the finite-sample path puts it
+    stopifnot(is.finite(iBIC(G0, PM, targets = tg, target.index = c(2, 500))))
+    ## a zero-count environment that is not the only one leaving a vertex alone
+    ## is simply ignored -- dropping it must not change any score
+    stopifnot(isTRUE(all.equal(
+        iBIC(G0, PM, targets = list(integer(0), 1L, 2L), target.index = c(400, 100, 0)),
+        iBIC(G0, PM, targets = list(integer(0), 1L),     target.index = c(400, 100)))))
+    ## and a whole search still runs with one present
+    stopifnot(is.finite(hcmc(PM, targets = list(integer(0), 1L, 2L),
+                             target.index = c(4000, 1000, 0), verbose = FALSE)$sco))
+})
+
 ## and the data path is untouched by the change of default
 XX <- matrix(rnorm(120 * P), 120, P, dimnames = list(NULL, as.character(seq_len(P))))
 stopifnot(is.finite(hcmc(XX, verbose = FALSE)$sco),
