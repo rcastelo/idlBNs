@@ -184,9 +184,9 @@ population <- function(x, n = NULL, C = 1, ivent.value = 0, ivent.var = 0) {
         cli_abort(c("x"="'n' must be NULL or a positive finite numeric scalar"))
     if (!is.numeric(C) || length(C) != 1L || !is.finite(C) || C <= 0)
         cli_abort(c("x"="'C' must be a positive finite numeric scalar"))
-    if (!is.finite(ivent.value) || !is.numeric(ivent.value) ||
-        length(ivent.value) != 1L || !is.finite(ivent.var) ||
-        !is.numeric(ivent.var) || length(ivent.var) != 1L || ivent.var < 0)
+    if (!is.numeric(ivent.value) || length(ivent.value) != 1L ||
+        !is.finite(ivent.value) || !is.numeric(ivent.var) ||
+        length(ivent.var) != 1L || !is.finite(ivent.var) || ivent.var < 0)
         cli_abort(c("x"=paste("'ivent.value' must be a numeric scalar and",
                               "'ivent.var' a non-negative numeric scalar")))
     structure(list(model = x, n = n, C = C,
