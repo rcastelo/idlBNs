@@ -28,6 +28,7 @@ reference:
     contents:
       - iBIC
       - iBGe
+      - population
   - title: "Search Algorithms"
     desc: "Search algorithms for learning the structure of Bayesian networks"
     contents:

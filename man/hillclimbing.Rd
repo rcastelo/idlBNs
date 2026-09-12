@@ -5,27 +5,63 @@
 \title{Straightforward (classical) hill-climbing algorithm}
 \usage{
 hillclimbing(
-  dat,
+  x,
   targets = list(integer(0)),
-  target.index = rep(1L, nrow(dat)),
+  target.index = NULL,
   scorefun = iBIC,
   verbose = TRUE,
   engine = c("C", "R")
 )
 }
 \arguments{
-\item{dat}{A \code{data.frame} object with data records in the rows.}
+\item{x}{Either the data to learn from, or the population it would have
+come from. A \code{data.frame} or \code{matrix} of Gaussian data, with observations
+in the rows and random variables in the columns; or a population model
+built with \code{\link{population}}, in which case the search is scored in the
+large-sample limit instead of on a sample, which is what lets a run be read
+as the behaviour of the algorithm itself rather than of one dataset. A bare
+\code{GaussParDAG} from the \pkg{pcalg} package is accepted as a population
+model with a hard intervention to zero. See \code{target.index} for how the
+notional sample size is supplied.}
 
 \item{targets}{(Default \code{list(integer(0))}) A \code{list} object with a family of
 targets provided as a list of integer vectors. Its default value indicates
 that there are no interventions in the data, i.e., the data is purely
 observational.}
 
-\item{target.index}{(Default a unit vector) A vector of integers in
-one-to-one correspondence with the rows in \code{dat}, indicating which rows in
-the input data are intervened by which targets. Its default value indicates
-that there are no interventions in the data, i.e., the data is purely
-observational.}
+\item{target.index}{(Default \code{NULL}) How much data comes from each
+environment. What it holds, and what \code{NULL} resolves to, depend on whether
+\code{x} carries data or a population.
+
+With data in \code{x}, a vector of integers in one-to-one correspondence with
+the rows in \code{x}, saying which target intervened on each row. \code{NULL}
+resolves to a vector of ones: the data is purely observational.
+
+With a population model in \code{x} there are no rows to label, so it is one
+observation count per element of \code{targets} instead. Their sum is the
+notional sample size, which sets the score's penalty term and so decides
+between nested models in the limit. \code{NULL} resolves to \code{\link{population}}'s own
+\code{n}, split in proportion to \eqn{(C, 1, \ldots, 1)} between the
+observational and the interventional environments. If \code{n} was not given
+there, omitting this argument is an error rather than a default: any size
+invented on the caller's behalf would silently change which model is
+selected.
+
+The counts need not be whole numbers, and a count of zero is allowed --
+that environment contributes nothing and is dropped. What each variable
+does need is at least two observations' worth of mass from the environments
+that leave it alone, the same floor the row counts must clear when \code{x}
+carries data; below it the variable cannot be scored and the call fails
+naming it.
+
+An environment with no observations is removed from \code{targets} altogether,
+under either kind of input -- a count of zero, or a target that no row
+refers to. It is not merely that it cannot inform the score: the target
+family is also what defines \emph{I}-equivalence and therefore which
+reversals are \emph{I}-covered, so an intervention that was never
+performed would otherwise narrow the equivalence classes the search moves
+in and change the graph returned. The refinement is earned by having
+observed the intervention.}
 
 \item{scorefun}{(Default is \code{\link{iBIC}}) A function to calculate the goodness
 of fit (GoF) score of a DAG on a given data set.}
