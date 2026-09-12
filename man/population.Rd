@@ -14,8 +14,10 @@ generative model.}
 in for. It is not cosmetic: the score's penalty is a function of it, so it
 is what decides between nested models in the limit, and there is no
 defensible default. Setting it lets \code{target.index} be omitted, in which
-case the size is split equally across the environments in \code{targets}; pass
-\code{target.index} instead to allocate it unequally.}
+case \code{n} is divided between the environments in \code{targets} according to \code{C}
+-- in proportion to \eqn{(C, 1, \ldots, 1)}, which is an equal split only
+when \code{C} is 1. Passing \code{target.index} states the allocation outright and
+uses neither.}
 
 \item{C}{(Default 1) How much data an observational environment carries
 relative to each interventional one, as in Wang, Solus, Yang and Uhler
@@ -49,4 +51,60 @@ Wraps a generative model with the intervention semantics, so that it can be
 passed where a data matrix normally goes and the scores are evaluated in the
 large-sample limit instead of on a sample. See \code{\link{iBIC}} for what the
 accompanying \code{targets} and \code{target.index} then mean.
+}
+\examples{
+
+suppressPackageStartupMessages({
+    library(graph)
+    library(pcalg)
+    library(idlBNs)
+})
+
+p <- 5
+k <- 2
+
+## simulate a random Gaussian DAG, as in the package vignette
+set.seed(123)
+Mg <- r.gauss.pardag(p, 0.6, top.sort=TRUE, normalize=TRUE)
+g <- as(Mg, "graphNEL")
+
+## a family of intervention targets: none, then two single vertices
+I <- c(list(integer(0)), sample(p, size=k, replace=FALSE))
+
+## the equivalence class the search should recover, given those targets
+e <- as(dag2essgraph(g, targets=I), "graphNEL")
+
+## Rather than simulate data, describe the population it would come from:
+## a notional 10000 observations, an observational environment five times
+## the size of each interventional one, and an intervention that fixes its
+## variable at 2. The scores are then evaluated in the large-sample limit,
+## so a run shows what the algorithm does rather than what one sample did.
+pop <- population(Mg, n=10000, C=5, ivent.value=2)
+
+## it stands in for the data matrix, and reports that shape: p columns,
+## and no rows to count
+c(ncol(pop), nrow(pop))
+
+## run iHCMC in that limit, sampling the I-equivalence class exactly
+set.seed(42)
+dhat <- hcmc(pop, targets=I, sampler="exact", escape="exhaustive")
+
+## in the limit it recovers the generative equivalence class
+shd(e, as(dag2essgraph(dhat$dag, targets=I), "graphNEL"))
+
+## omitting target.index split n by C, in proportion to (C, 1, 1); saying
+## so outright is the same experiment
+w <- ifelse(lengths(I) == 0, 5, 1)
+10000 * w / sum(w)
+set.seed(42)
+same <- hcmc(pop, targets=I, target.index=10000*w/sum(w),
+             sampler="exact", escape="exhaustive")
+identical(same$sco, dhat$sco)
+
+## whereas C=1, an equal split, is a different experiment
+set.seed(42)
+eq <- hcmc(population(Mg, n=10000, ivent.value=2), targets=I,
+           sampler="exact", escape="exhaustive")
+identical(eq$sco, dhat$sco)
+
 }
