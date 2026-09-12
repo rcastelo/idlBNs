@@ -77,8 +77,8 @@
     out <- lapply(seq_len(p), function(j) {
         keep <- which(!vapply(targets, function(I) j %in% I, TRUE))
         if (!length(keep))
-            cli_abort(c("x" = paste("Every environment intervenes on variable",
-                                    j, ", so it has no observations to score")))
+            cli_abort(c("x"=paste("Every environment intervenes on variable",
+                                  "{j}, so it has no observations to score")))
         pooled <- .pop.pool(moments[keep], counts[keep])
         c(pooled, list(N = sum(counts[keep])))
     })
@@ -88,12 +88,15 @@
 ## Validate the population form of target.index and return it as counts.
 .pop.counts <- function(target.index, targets) {
     if (!is.numeric(target.index) || length(target.index) != length(targets))
-        cli_abort(c("x" = paste("With a population model in 'x', 'target.index'",
-                                "must be a numeric vector with one observation",
-                                "count per element of 'targets'.")))
+        cli_abort(c("x"=paste("With a population model in 'x', 'target.index'",
+                              "must be a numeric vector with one observation",
+                              "count per element of 'targets'.")))
     if (any(!is.finite(target.index)) || any(target.index < 0) ||
-        sum(target.index) <= 0)
-        cli_abort(c("x" = "'target.index' counts must be finite, non-negative and not all zero."))
+        sum(target.index) <= 0) {
+        msg <- paste("'target.index' counts must be finite, non-negative and",
+                     "not all zero.")
+        cli_abort(c("x"=msg))
+    }
     as.numeric(target.index)
 }
 
@@ -106,7 +109,7 @@
     if (is.null(nm)) as.character(seq_len(x$node.count())) else as.character(nm)
 }
 
-#' Describe a population rather than a sample
+#' Create a population parameter model for interventional Bayesian networks
 #'
 #' Wraps a generative model with the intervention semantics, so that it can be
 #' passed where a data matrix normally goes and the scores are evaluated in the
@@ -150,15 +153,16 @@
 #' @export
 population <- function(x, n = NULL, C = 1, ivent.value = 0, ivent.var = 0) {
     if (!inherits(x, "GaussParDAG"))
-        cli_abort(c("x" = "'x' must be a pcalg::GaussParDAG object"))
-    if (!is.null(n) && (!is.numeric(n) || length(n) != 1L || !is.finite(n) || n <= 0))
-        cli_abort(c("x" = "'n' must be NULL or a positive finite numeric scalar"))
+        cli_abort(c("x"="'x' must be a pcalg::GaussParDAG object"))
+    if (!is.null(n) && (!is.numeric(n) || length(n) != 1L || !is.finite(n)
+                        || n <= 0))
+        cli_abort(c("x"="'n' must be NULL or a positive finite numeric scalar"))
     if (!is.numeric(C) || length(C) != 1L || !is.finite(C) || C <= 0)
-        cli_abort(c("x" = "'C' must be a positive finite numeric scalar"))
+        cli_abort(c("x"="'C' must be a positive finite numeric scalar"))
     if (!is.numeric(ivent.value) || length(ivent.value) != 1L ||
         !is.numeric(ivent.var) || length(ivent.var) != 1L || ivent.var < 0)
-        cli_abort(c("x" = paste("'ivent.value' must be a numeric scalar and",
-                                "'ivent.var' a non-negative numeric scalar")))
+        cli_abort(c("x"=paste("'ivent.value' must be a numeric scalar and",
+                              "'ivent.var' a non-negative numeric scalar")))
     structure(list(model = x, n = n, C = C,
                    ivent.value = ivent.value, ivent.var = ivent.var,
                    nodes = .pop.nodes(x), p = x$node.count()),
@@ -250,12 +254,12 @@ dimnames.idlBNsPopulation <- function(x) list(NULL, x$nodes)
     if (.is.population(x)) {
         px <- .as.population(x)
         if (is.null(px$n))
-            cli_abort(c("x" = paste("With a population model in 'x' the notional",
-                                    "sample size has to be given, because the",
-                                    "score's penalty depends on it."),
-                        "i" = paste("Either set 'n' in population(), or pass one",
-                                    "observation count per element of 'targets'",
-                                    "in 'target.index'.")))
+            cli_abort(c("x"=paste("With a population model in 'x' the notional",
+                                  "sample size has to be given, because the",
+                                  "score's penalty depends on it."),
+                        "i"=paste("Either set 'n' in population(), or pass one",
+                                  "observation count per element of 'targets'",
+                                  "in 'target.index'.")))
         ## split n in proportion to (C, 1, ..., 1): an environment is
         ## observational when its target is empty, so this does not depend on
         ## the order of targets, and C is inert when they are all one kind
