@@ -37,7 +37,7 @@ extern SEXP C_dag_desc(SEXP);
 extern SEXP C_dag_check(SEXP);
 extern SEXP C_dag_nh(SEXP, SEXP, SEXP);
 extern SEXP C_dag_cedges(SEXP, SEXP);
-extern SEXP C_dag_rcar(SEXP, SEXP, SEXP);
+extern SEXP C_dag_rcar(SEXP, SEXP, SEXP, SEXP);
 extern SEXP C_dag_imec_sample(SEXP, SEXP);
 extern SEXP C_dag_imec_size(SEXP, SEXP);
 extern SEXP C_dag_imec_members(SEXP, SEXP, SEXP);
@@ -78,7 +78,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"C_dag_check",         (DL_FUNC) &C_dag_check,         1},
     {"C_dag_nh",            (DL_FUNC) &C_dag_nh,            3},
     {"C_dag_cedges",        (DL_FUNC) &C_dag_cedges,        2},
-    {"C_dag_rcar",          (DL_FUNC) &C_dag_rcar,          3},
+    {"C_dag_rcar",          (DL_FUNC) &C_dag_rcar,          4},
     {"C_dag_imec_sample",   (DL_FUNC) &C_dag_imec_sample,   2},
     {"C_dag_imec_size",     (DL_FUNC) &C_dag_imec_size,     2},
     {"C_dag_imec_members",  (DL_FUNC) &C_dag_imec_members,  3},

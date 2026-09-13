@@ -234,9 +234,37 @@ set.seed(8L); hR <- hcmc(x$dat, targets = x$targets,
                          engine = "R")
 stopifnot(same_result(hC, hR), identical(sC, .Random.seed))
 
+## the same, moving within the class by the Metropolis-Hastings walk. This is
+## the one assertion that covers the whole rcar.mh() integration: both of
+## hcmc()'s walk call sites, in both engines, with every debug assertion on.
+## The extra runif(1) per step means the C port only lands on the same
+## trajectory if it takes that draw in the same place, so same_result() here
+## is a stream check as much as a result check.
+set.seed(8L); mC <- hcmc(x$dat, targets = x$targets,
+                         target.index = x$target.index, verbose = FALSE,
+                         engine = "C", sampler = "rcar-mh")
+sC <- .Random.seed
+set.seed(8L); mR <- hcmc(x$dat, targets = x$targets,
+                         target.index = x$target.index, verbose = FALSE,
+                         engine = "R", sampler = "rcar-mh")
+stopifnot(same_result(mC, mR), identical(sC, .Random.seed), is.finite(mC$sco))
+## and it is a DIFFERENT walk: same seed, same data, a trajectory the plain
+## walk does not take (it accepts every step, so it cannot stay put)
+stopifnot(!identical(.Random.seed, {
+            set.seed(8L); invisible(hcmc(x$dat, targets = x$targets,
+                            target.index = x$target.index, verbose = FALSE,
+                            engine = "C", sampler = "rcar"))
+            .Random.seed }))
+## "rcar" is an exact match, not a prefix of "rcar-mh"
+set.seed(8L); pC <- hcmc(x$dat, targets = x$targets,
+                         target.index = x$target.index, verbose = FALSE,
+                         engine = "C", sampler = "rcar")
+stopifnot(same_result(pC, hC))
+
 options(idlBNs.debug.pasets = old$p, idlBNs.debug.anc = old$a,
         idlBNs.debug.dag = old$d)
 cat("debug.pasets, debug.anc and debug.dag all pass on both engines\n")
+cat("engines agree under sampler = \"rcar-mh\" too, stream included\n")
 
 ################################################################################
 ## 6. the debug assertions are not vacuous: idlBNs.debug.anc must reject a

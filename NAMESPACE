@@ -32,6 +32,7 @@ importFrom(methods,as)
 importFrom(stats,
   cov,
   cov.wt,
+  runif,
   setNames
 )
 importFrom(utils,installed.packages)
