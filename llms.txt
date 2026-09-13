@@ -67,6 +67,9 @@ Goodness-of-fit scoring functions for Bayesian networks
   score for observational and interventional Gaussian data
 - [`iBGe()`](https://rcastelo.github.io/idlBNs/reference/iBGe.md) : BGe
   score for interventional Gaussian data
+- [`population()`](https://rcastelo.github.io/idlBNs/reference/population.md)
+  : Create a population parameter model for interventional Bayesian
+  networks
 
 ## Search Algorithms
 

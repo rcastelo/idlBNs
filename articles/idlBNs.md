@@ -79,8 +79,8 @@ library(pcalg)
 library(idlBNs)
 ```
 
-We start by simulating a Gaussian Bayesian network with 10 vertices and
-50% density using the function
+We start by simulating a Gaussian Bayesian network with 5 vertices and
+60% density using the function
 [`r.gauss.pardag()`](https://rdrr.io/pkg/pcalg/man/r.gauss.pardag.html)
 from the `pcalg` package, extracting its DAG strcture and converting it
 into an essential graph using the function
@@ -335,7 +335,7 @@ attached base packages:
 
 other attached packages:
  [1] kableExtra_1.4.1    cli_3.6.6           bench_1.1.4        
- [4] tibble_3.3.1        dplyr_1.2.1         idlBNs_1.1.1       
+ [4] tibble_3.3.1        dplyr_1.2.1         idlBNs_1.1.2       
  [7] pcalg_2.7-12        graph_1.90.0        BiocGenerics_0.58.1
 [10] generics_0.1.4      knitr_1.52         
 

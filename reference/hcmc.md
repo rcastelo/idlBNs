@@ -9,10 +9,10 @@ Run the hill-climber Monte Carlo (HCMC) algorithm (Castelo and Kočka,
 
 ``` r
 hcmc(
-  dat,
+  x,
   r = 20,
   targets = list(integer(0)),
-  target.index = rep(1L, nrow(dat)),
+  target.index = NULL,
   scorefun = iBIC,
   MAXTRIALS = 5,
   verbose = TRUE,
@@ -25,11 +25,19 @@ hcmc(
 
 ## Arguments
 
-- dat:
+- x:
 
-  A `data.frame` or `matrix` object, containing input Gaussian data,
-  with data value records in the rows and random variables in the
-  columns.
+  Either the data to learn from, or the population it would have come
+  from. A `data.frame` or `matrix` of Gaussian data, with observations
+  in the rows and random variables in the columns; or a population model
+  built with
+  [`population`](https://rcastelo.github.io/idlBNs/reference/population.md),
+  in which case the search is scored in the large-sample limit instead
+  of on a sample, which is what lets a run be read as the behaviour of
+  the algorithm itself rather than of one dataset. A bare `GaussParDAG`
+  from the pcalg package is accepted as a population model with a hard
+  intervention to zero. See `target.index` for how the notional sample
+  size is supplied.
 
 - r:
 
@@ -46,11 +54,40 @@ hcmc(
 
 - target.index:
 
-  (Default a unit vector) A vector of integers in one-to-one
-  correspondence with the rows in `dat`, indicating which rows in the
-  input data are intervened by which targets. Its default value
-  indicates that there are no interventions in the data, i.e., the data
-  is purely observational.
+  (Default `NULL`) How much data comes from each environment. What it
+  holds, and what `NULL` resolves to, depend on whether `x` carries data
+  or a population.
+
+  With data in `x`, a vector of integers in one-to-one correspondence
+  with the rows in `x`, saying which target intervened on each row.
+  `NULL` resolves to a vector of ones: the data is purely observational.
+
+  With a population model in `x` there are no rows to label, so it is
+  one observation count per element of `targets` instead. Their sum is
+  the notional sample size, which sets the score's penalty term and so
+  decides between nested models in the limit. `NULL` resolves to
+  [`population`](https://rcastelo.github.io/idlBNs/reference/population.md)'s
+  own `n`, split in proportion to \\(C, 1, \ldots, 1)\\ between the
+  observational and the interventional environments. If `n` was not
+  given there, omitting this argument is an error rather than a default:
+  any size invented on the caller's behalf would silently change which
+  model is selected.
+
+  The counts need not be whole numbers, and a count of zero is allowed –
+  that environment contributes nothing and is dropped. What each
+  variable does need is at least two observations' worth of mass from
+  the environments that leave it alone, the same floor the row counts
+  must clear when `x` carries data; below it the variable cannot be
+  scored and the call fails naming it.
+
+  An environment with no observations is removed from `targets`
+  altogether, under either kind of input – a count of zero, or a target
+  that no row refers to. It is not merely that it cannot inform the
+  score: the target family is also what defines *I*-equivalence and
+  therefore which reversals are *I*-covered, so an intervention that was
+  never performed would otherwise narrow the equivalence classes the
+  search moves in and change the graph returned. The refinement is
+  earned by having observed the intervention.
 
 - scorefun:
 
@@ -203,22 +240,22 @@ nbytgts <- rep(floor(n / (k + 1)), k)
 nbytgts <- c(n - sum(nbytgts), nbytgts)
 
 ## simulate mixed observational and interventional data
-dat <- list()
+x <- list()
 for (v in seq_along(I)) {
     targets <- I[[v]]
-    dat[[v]] <- rmvnorm.ivent(nbytgts[v], Mg, target=targets,
+    x[[v]] <- rmvnorm.ivent(nbytgts[v], Mg, target=targets,
                               target.value=rep(2, length(targets)))
 }
-dat <- do.call("rbind", dat)
+x <- do.call("rbind", x)
 
 ## store the target index for each row of the data
 tindex <- rep(1:length(nbytgts), nbytgts)
 
 ## run the HCMC algorithm assuming all data were observational
-dhat.hcmc <- hcmc(dat)
+dhat.hcmc <- hcmc(x)
 #> ℹ Calculating global sufficient statistics
 #> ⠙ Score -87.004214222737 Escapes 0 Trials 0
-#> ✔ Score -83.2933160642061 Escapes 0 Trials 0 [57ms]
+#> ✔ Score -83.2933160642061 Escapes 0 Trials 0 [39ms]
 #> 
 dhat.hcmc
 #> $dag
@@ -244,7 +281,7 @@ shd(e, dag2essgraph(dhat.hcmc$dag))
 ## run the iHCMC algorithm informing the presence of interventional data
 ## using by the default the interventional BIC score (see the iBIC()
 ## function).
-dhat.ihcmc <- hcmc(dat, targets=I, target.index=tindex)
+dhat.ihcmc <- hcmc(x, targets=I, target.index=tindex)
 #> ℹ Calculating global sufficient statistics
 #> ⠙ Score -59.3908043567074 Escapes 0 Trials 0
 #> ✔ Score -50.0166049861733 Escapes 0 Trials 0 [11ms]
@@ -273,10 +310,10 @@ shd(e, dag2essgraph(dhat.ihcmc$dag))
 
 ## run it again this time using the interventional BGe score (see the
 ## iBGe() function), which provides an estimate closer to the generative DAG
-dhat.ihcmc2 <- hcmc(dat, targets=I, target.index=tindex, scorefun=iBGe)
+dhat.ihcmc2 <- hcmc(x, targets=I, target.index=tindex, scorefun=iBGe)
 #> ℹ Calculating global sufficient statistics
 #> ⠙ Score -189.956899563879 Escapes 0 Trials 0
-#> ✔ Score -181.640790427507 Escapes 0 Trials 0 [10ms]
+#> ✔ Score -181.640790427507 Escapes 0 Trials 0 [11ms]
 #> 
 shd(e, dag2essgraph(dhat.ihcmc2$dag))
 #> [1] 2

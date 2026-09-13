@@ -13,7 +13,7 @@ HCMC (iHCMC) on mixed observational and interventional Gaussian data
 
     <a class="navbar-brand me-2" href="../index.html">idlBNs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -49,10 +49,10 @@ HCMC (iHCMC) on mixed observational and interventional Gaussian data
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">hcmc</span><span class="op">(</span></span>
-<span>  <span class="va">dat</span>,</span>
+<span>  <span class="va">x</span>,</span>
 <span>  r <span class="op">=</span> <span class="fl">20</span>,</span>
 <span>  targets <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">integer</a></span><span class="op">(</span><span class="fl">0</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>  target.index <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1L</span>, <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">dat</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>  target.index <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  scorefun <span class="op">=</span> <span class="va">iBIC</span>,</span>
 <span>  MAXTRIALS <span class="op">=</span> <span class="fl">5</span>,</span>
 <span>  verbose <span class="op">=</span> <span class="cn">TRUE</span>,</span>
@@ -67,9 +67,16 @@ HCMC (iHCMC) on mixed observational and interventional Gaussian data
     <h2 id="arguments">Arguments<a class="anchor" aria-label="anchor" href="#arguments"></a></h2>
 
 
-<dl><dt id="arg-dat">dat<a class="anchor" aria-label="anchor" href="#arg-dat"></a></dt>
-<dd><p>A <code>data.frame</code> or <code>matrix</code> object, containing input Gaussian data,
-with data value records in the rows and random variables in the columns.</p></dd>
+<dl><dt id="arg-x">x<a class="anchor" aria-label="anchor" href="#arg-x"></a></dt>
+<dd><p>Either the data to learn from, or the population it would have
+come from. A <code>data.frame</code> or <code>matrix</code> of Gaussian data, with observations
+in the rows and random variables in the columns; or a population model
+built with <code><a href="population.html">population</a></code>, in which case the search is scored in the
+large-sample limit instead of on a sample, which is what lets a run be read
+as the behaviour of the algorithm itself rather than of one dataset. A bare
+<code>GaussParDAG</code> from the <span class="pkg">pcalg</span> package is accepted as a population
+model with a hard intervention to zero. See <code>target.index</code> for how the
+notional sample size is supplied.</p></dd>
 
 
 <dt id="arg-r">r<a class="anchor" aria-label="anchor" href="#arg-r"></a></dt>
@@ -86,11 +93,35 @@ observational.</p></dd>
 
 
 <dt id="arg-target-index">target.index<a class="anchor" aria-label="anchor" href="#arg-target-index"></a></dt>
-<dd><p>(Default a unit vector) A vector of integers in
-one-to-one correspondence with the rows in <code>dat</code>, indicating which rows in
-the input data are intervened by which targets. Its default value indicates
-that there are no interventions in the data, i.e., the data is purely
-observational.</p></dd>
+<dd><p>(Default <code>NULL</code>) How much data comes from each
+environment. What it holds, and what <code>NULL</code> resolves to, depend on whether
+<code>x</code> carries data or a population.</p>
+<p>With data in <code>x</code>, a vector of integers in one-to-one correspondence with
+the rows in <code>x</code>, saying which target intervened on each row. <code>NULL</code>
+resolves to a vector of ones: the data is purely observational.</p>
+<p>With a population model in <code>x</code> there are no rows to label, so it is one
+observation count per element of <code>targets</code> instead. Their sum is the
+notional sample size, which sets the score's penalty term and so decides
+between nested models in the limit. <code>NULL</code> resolves to <code><a href="population.html">population</a></code>'s own
+<code>n</code>, split in proportion to \((C, 1, \ldots, 1)\) between the
+observational and the interventional environments. If <code>n</code> was not given
+there, omitting this argument is an error rather than a default: any size
+invented on the caller's behalf would silently change which model is
+selected.</p>
+<p>The counts need not be whole numbers, and a count of zero is allowed –
+that environment contributes nothing and is dropped. What each variable
+does need is at least two observations' worth of mass from the environments
+that leave it alone, the same floor the row counts must clear when <code>x</code>
+carries data; below it the variable cannot be scored and the call fails
+naming it.</p>
+<p>An environment with no observations is removed from <code>targets</code> altogether,
+under either kind of input – a count of zero, or a target that no row
+refers to. It is not merely that it cannot inform the score: the target
+family is also what defines <em>I</em>-equivalence and therefore which
+reversals are <em>I</em>-covered, so an intervention that was never
+performed would otherwise narrow the equivalence classes the search moves
+in and change the graph returned. The refinement is earned by having
+observed the intervention.</p></dd>
 
 
 <dt id="arg-scorefun">scorefun<a class="anchor" aria-label="anchor" href="#arg-scorefun"></a></dt>
@@ -234,22 +265,22 @@ applications. <em>Journal of Machine Learning Research</em>, 24(213):1-45, 2023.
 <span class="r-in"><span><span class="va">nbytgts</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">n</span> <span class="op">-</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">nbytgts</span><span class="op">)</span>, <span class="va">nbytgts</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co">## simulate mixed observational and interventional data</span></span></span>
-<span class="r-in"><span><span class="va">dat</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">x</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="kw">for</span> <span class="op">(</span><span class="va">v</span> <span class="kw">in</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_along</a></span><span class="op">(</span><span class="va">I</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span></span>
 <span class="r-in"><span>    <span class="va">targets</span> <span class="op">&lt;-</span> <span class="va">I</span><span class="op">[[</span><span class="va">v</span><span class="op">]</span><span class="op">]</span></span></span>
-<span class="r-in"><span>    <span class="va">dat</span><span class="op">[[</span><span class="va">v</span><span class="op">]</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/pcalg/man/rmvnorm.ivent.html" class="external-link">rmvnorm.ivent</a></span><span class="op">(</span><span class="va">nbytgts</span><span class="op">[</span><span class="va">v</span><span class="op">]</span>, <span class="va">Mg</span>, target<span class="op">=</span><span class="va">targets</span>,</span></span>
+<span class="r-in"><span>    <span class="va">x</span><span class="op">[[</span><span class="va">v</span><span class="op">]</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/pcalg/man/rmvnorm.ivent.html" class="external-link">rmvnorm.ivent</a></span><span class="op">(</span><span class="va">nbytgts</span><span class="op">[</span><span class="va">v</span><span class="op">]</span>, <span class="va">Mg</span>, target<span class="op">=</span><span class="va">targets</span>,</span></span>
 <span class="r-in"><span>                              target.value<span class="op">=</span><span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">targets</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span></span></span>
-<span class="r-in"><span><span class="va">dat</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="st">"rbind"</span>, <span class="va">dat</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">x</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="st">"rbind"</span>, <span class="va">x</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co">## store the target index for each row of the data</span></span></span>
 <span class="r-in"><span><span class="va">tindex</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">nbytgts</span><span class="op">)</span>, <span class="va">nbytgts</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co">## run the HCMC algorithm assuming all data were observational</span></span></span>
-<span class="r-in"><span><span class="va">dhat.hcmc</span> <span class="op">&lt;-</span> <span class="fu">hcmc</span><span class="op">(</span><span class="va">dat</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">dhat.hcmc</span> <span class="op">&lt;-</span> <span class="fu">hcmc</span><span class="op">(</span><span class="va">x</span><span class="op">)</span></span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Calculating global sufficient statistics</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> ⠙ Score -87.004214222737 Escapes 0 Trials 0</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BB00;">✔</span> Score -83.2933160642061 Escapes 0 Trials 0 <span style="color: #B2B2B2;">[57ms]</span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BB00;">✔</span> Score -83.2933160642061 Escapes 0 Trials 0 <span style="color: #B2B2B2;">[39ms]</span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-in"><span><span class="va">dhat.hcmc</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $dag</span>
@@ -275,7 +306,7 @@ applications. <em>Journal of Machine Learning Research</em>, 24(213):1-45, 2023.
 <span class="r-in"><span><span class="co">## run the iHCMC algorithm informing the presence of interventional data</span></span></span>
 <span class="r-in"><span><span class="co">## using by the default the interventional BIC score (see the iBIC()</span></span></span>
 <span class="r-in"><span><span class="co">## function).</span></span></span>
-<span class="r-in"><span><span class="va">dhat.ihcmc</span> <span class="op">&lt;-</span> <span class="fu">hcmc</span><span class="op">(</span><span class="va">dat</span>, targets<span class="op">=</span><span class="va">I</span>, target.index<span class="op">=</span><span class="va">tindex</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">dhat.ihcmc</span> <span class="op">&lt;-</span> <span class="fu">hcmc</span><span class="op">(</span><span class="va">x</span>, targets<span class="op">=</span><span class="va">I</span>, target.index<span class="op">=</span><span class="va">tindex</span><span class="op">)</span></span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Calculating global sufficient statistics</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> ⠙ Score -59.3908043567074 Escapes 0 Trials 0</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BB00;">✔</span> Score -50.0166049861733 Escapes 0 Trials 0 <span style="color: #B2B2B2;">[11ms]</span></span>
@@ -304,10 +335,10 @@ applications. <em>Journal of Machine Learning Research</em>, 24(213):1-45, 2023.
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co">## run it again this time using the interventional BGe score (see the</span></span></span>
 <span class="r-in"><span><span class="co">## iBGe() function), which provides an estimate closer to the generative DAG</span></span></span>
-<span class="r-in"><span><span class="va">dhat.ihcmc2</span> <span class="op">&lt;-</span> <span class="fu">hcmc</span><span class="op">(</span><span class="va">dat</span>, targets<span class="op">=</span><span class="va">I</span>, target.index<span class="op">=</span><span class="va">tindex</span>, scorefun<span class="op">=</span><span class="va">iBGe</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">dhat.ihcmc2</span> <span class="op">&lt;-</span> <span class="fu">hcmc</span><span class="op">(</span><span class="va">x</span>, targets<span class="op">=</span><span class="va">I</span>, target.index<span class="op">=</span><span class="va">tindex</span>, scorefun<span class="op">=</span><span class="va">iBGe</span><span class="op">)</span></span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Calculating global sufficient statistics</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> ⠙ Score -189.956899563879 Escapes 0 Trials 0</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BB00;">✔</span> Score -181.640790427507 Escapes 0 Trials 0 <span style="color: #B2B2B2;">[10ms]</span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BB00;">✔</span> Score -181.640790427507 Escapes 0 Trials 0 <span style="color: #B2B2B2;">[11ms]</span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/pkg/pcalg/man/shd.html" class="external-link">shd</a></span><span class="op">(</span><span class="va">e</span>, <span class="fu"><a href="https://rdrr.io/pkg/pcalg/man/dag2essgraph.html" class="external-link">dag2essgraph</a></span><span class="op">(</span><span class="va">dhat.ihcmc2</span><span class="op">$</span><span class="va">dag</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] 2</span>

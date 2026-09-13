@@ -21,7 +21,7 @@ assumes there are no interventions in the data."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">idlBNs</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.1.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -62,9 +62,9 @@ assumes there are no interventions in the data.</p>
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">iBIC</span><span class="op">(</span></span>
 <span>  <span class="va">g</span>,</span>
-<span>  <span class="va">dat</span>,</span>
+<span>  <span class="va">x</span>,</span>
 <span>  targets <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">integer</a></span><span class="op">(</span><span class="fl">0</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>  target.index <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1L</span>, <span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">dat</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>  target.index <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  cached.scores <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  global.sufstats <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  engine <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"C"</span>, <span class="st">"R"</span><span class="op">)</span>,</span>
@@ -81,8 +81,16 @@ assumes there are no interventions in the data.</p>
 for which we want to calculate the score.</p></dd>
 
 
-<dt id="arg-dat">dat<a class="anchor" aria-label="anchor" href="#arg-dat"></a></dt>
-<dd><p>A <code>data.frame</code> object with data records in the rows.</p></dd>
+<dt id="arg-x">x<a class="anchor" aria-label="anchor" href="#arg-x"></a></dt>
+<dd><p>Either the data, or the population it would have come from. A
+<code>data.frame</code> or <code>matrix</code> of Gaussian data, with observations in the rows
+and random variables in the columns; or a population model built with
+<code><a href="population.html">population</a></code>, in which case the score is evaluated in the large-sample
+limit instead of on a sample. That is not a different score: it is the same
+arithmetic fed the sufficient statistics a sample of the given size would
+have in expectation. A bare <code>GaussParDAG</code> from the <span class="pkg">pcalg</span> package is
+accepted as a population model with a hard intervention to zero. See
+<code>target.index</code> for how the notional sample size is supplied.</p></dd>
 
 
 <dt id="arg-targets">targets<a class="anchor" aria-label="anchor" href="#arg-targets"></a></dt>
@@ -93,11 +101,35 @@ observational.</p></dd>
 
 
 <dt id="arg-target-index">target.index<a class="anchor" aria-label="anchor" href="#arg-target-index"></a></dt>
-<dd><p>(Default a unit vector) A vector of integers in
-one-to-one correspondence with the rows in <code>dat</code>, indicating which rows in
-the input data are intervened by which targets. Its default value indicates
-that there are no interventions in the data, i.e., the data is purely
-observational.</p></dd>
+<dd><p>(Default <code>NULL</code>) How much data comes from each
+environment. What it holds, and what <code>NULL</code> resolves to, depend on whether
+<code>x</code> carries data or a population.</p>
+<p>With data in <code>x</code>, a vector of integers in one-to-one correspondence with
+the rows in <code>x</code>, saying which target intervened on each row. <code>NULL</code>
+resolves to a vector of ones: the data is purely observational.</p>
+<p>With a population model in <code>x</code> there are no rows to label, so it is one
+observation count per element of <code>targets</code> instead. Their sum is the
+notional sample size, which sets the score's penalty term and so decides
+between nested models in the limit. <code>NULL</code> resolves to <code><a href="population.html">population</a></code>'s own
+<code>n</code>, split in proportion to \((C, 1, \ldots, 1)\) between the
+observational and the interventional environments. If <code>n</code> was not given
+there, omitting this argument is an error rather than a default: any size
+invented on the caller's behalf would silently change which model is
+selected.</p>
+<p>The counts need not be whole numbers, and a count of zero is allowed –
+that environment contributes nothing and is dropped. What each variable
+does need is at least two observations' worth of mass from the environments
+that leave it alone, the same floor the row counts must clear when <code>x</code>
+carries data; below it the variable cannot be scored and the call fails
+naming it.</p>
+<p>An environment with no observations is removed from <code>targets</code> altogether,
+under either kind of input – a count of zero, or a target that no row
+refers to. It is not merely that it cannot inform the score: the target
+family is also what defines <em>I</em>-equivalence and therefore which
+reversals are <em>I</em>-covered, so an intervention that was never
+performed would otherwise narrow the equivalence classes the search moves
+in and change the graph returned. The refinement is earned by having
+observed the intervention.</p></dd>
 
 
 <dt id="arg-cached-scores">cached.scores<a class="anchor" aria-label="anchor" href="#arg-cached-scores"></a></dt>
@@ -115,7 +147,7 @@ and then pass it to this <code>cached.scores</code> parameter, i.e.,
 <dd><p>(Default <code>NULL</code>) An optional list of global sufficient
 statistics for the iBIC score, as returned by the <code>.iBIC.global.sufstats()</code>
 function, which do not depend on the structure of a specific DAG, but only
-on the input data (<code>dat</code>), the target vertices (<code>targets</code>) and the target
+on the input data (<code>x</code>), the target vertices (<code>targets</code>) and the target
 indices (<code>target.index</code>) of the interventions. If <code>NULL</code> (default), the
 <code>.iBIC.global.sufstats()</code> function is internally called.</p></dd>
 
@@ -128,7 +160,7 @@ pure-R implementation and is provided for testing and verification.</p></dd>
 
 <dt id="arg-pasets">pasets<a class="anchor" aria-label="anchor" href="#arg-pasets"></a></dt>
 <dd><p>(Default <code>NULL</code>) An optional list of parent sets, one per
-vertex in <code>g</code> in the order given by <code>colnames(dat)</code>, as internally built
+vertex in <code>g</code> in the order given by <code>colnames(x)</code>, as internally built
 by <code>iBIC()</code> from the structure of <code>g</code>. If <code>NULL</code> (default), it is
 internally computed from <code>g</code>. Search algorithms that maintain <code>pasets</code>
 incrementally across many calls (e.g. <code><a href="hcmc.html">hcmc()</a></code>, <code><a href="hillclimbing.html">hillclimbing()</a></code>) can
@@ -181,14 +213,14 @@ pcalg. <em>Journal of Statistical Software</em>, 47:1-26, 2012.</p>
 <span class="r-in"><span><span class="va">intdat</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>X1<span class="op">=</span><span class="va">X1</span>, X2<span class="op">=</span><span class="va">X2</span>, X3<span class="op">=</span><span class="va">X3</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co">## combine observational and interventional data</span></span></span>
-<span class="r-in"><span><span class="va">dat</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/cbind.html" class="external-link">rbind</a></span><span class="op">(</span><span class="va">obsdat</span>, <span class="va">intdat</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">x</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/BiocGenerics/man/cbind.html" class="external-link">rbind</a></span><span class="op">(</span><span class="va">obsdat</span>, <span class="va">intdat</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co">## define the targets and target indices for the interventional data</span></span></span>
 <span class="r-in"><span><span class="va">targets</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/integer.html" class="external-link">integer</a></span><span class="op">(</span><span class="fl">0</span><span class="op">)</span>, <span class="fl">2L</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">target.index</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1L</span>, <span class="va">nobs</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">2L</span>, <span class="va">nint</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co">## calculate the interventional BIC score for the DAG and data set</span></span></span>
-<span class="r-in"><span><span class="fu">iBIC</span><span class="op">(</span><span class="va">g</span>, <span class="va">dat</span>, <span class="va">targets</span>, <span class="va">target.index</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu">iBIC</span><span class="op">(</span><span class="va">g</span>, <span class="va">x</span>, <span class="va">targets</span>, <span class="va">target.index</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] -242.3883</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co">## create another Markov equivalent DAG by reversing the arc X1 -&gt; X2</span></span></span>
@@ -200,14 +232,14 @@ pcalg. <em>Journal of Statistical Software</em>, 47:1-26, 2012.</p>
 <span class="r-in"><span><span class="co">## calculate the interventional BIC score for the new DAG on the</span></span></span>
 <span class="r-in"><span><span class="co">## same data, notice that the score is different despite being a</span></span></span>
 <span class="r-in"><span><span class="co">## Markov equivalent DAG</span></span></span>
-<span class="r-in"><span><span class="fu">iBIC</span><span class="op">(</span><span class="va">g2</span>, <span class="va">dat</span>, <span class="va">targets</span>, <span class="va">target.index</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu">iBIC</span><span class="op">(</span><span class="va">g2</span>, <span class="va">x</span>, <span class="va">targets</span>, <span class="va">target.index</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] -249.149</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co">## this is not the case if we do not indicate the presence of interventions</span></span></span>
 <span class="r-in"><span><span class="co">## in the data</span></span></span>
-<span class="r-in"><span><span class="fu">iBIC</span><span class="op">(</span><span class="va">g</span>, <span class="va">dat</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu">iBIC</span><span class="op">(</span><span class="va">g</span>, <span class="va">x</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] -326.3833</span>
-<span class="r-in"><span><span class="fu">iBIC</span><span class="op">(</span><span class="va">g2</span>, <span class="va">dat</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu">iBIC</span><span class="op">(</span><span class="va">g2</span>, <span class="va">x</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] -326.3833</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
