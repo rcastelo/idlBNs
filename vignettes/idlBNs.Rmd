@@ -92,7 +92,7 @@ library(graph)
 library(pcalg)
 library(idlBNs)
 ```
-We start by simulating a Gaussian Bayesian network with 10 vertices and 50%
+We start by simulating a Gaussian Bayesian network with 5 vertices and 60%
 density using the function `r.gauss.pardag()` from the `pcalg` package,
 extracting its DAG strcture and converting it into an essential graph using
 the function `dag2essgraph()` from the `pcalg`  package.

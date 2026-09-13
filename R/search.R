@@ -331,13 +331,13 @@ score.nh <- function(ne, dag, dat, targets, target.index, cached.scores,
         if (supports.pasets) {
             pas <- move.pasets(pasets, ne$op[m], vidx.nodes[ne$u[m]],
                                vidx.nodes[ne$v[m]])
-            sco[m] <- scorefun(g=dag, dat=dat, targets=targets,
+            sco[m] <- scorefun(dag, dat, targets=targets,
                                target.index=target.index,
                                cached.scores=cached.scores,
                                global.sufstats=global.sufstats, pasets=pas)
         } else {
             g <- apply.move(dag, ne$op[m], ne$u[m], ne$v[m], vnames)
-            sco[m] <- scorefun(g=g, dat=dat, targets=targets,
+            sco[m] <- scorefun(g, dat, targets=targets,
                                target.index=target.index,
                                cached.scores=cached.scores,
                                global.sufstats=global.sufstats)
@@ -541,18 +541,54 @@ rcar <- function(dag, r, targets, anc, pasets, vidx) {
 #' algorithm that at each step during the search adds, removes and reverses all
 #' possible arcs.
 #'
-#' @param dat A `data.frame` object with data records in the rows.
+#' @param x Either the data to learn from, or the population it would have
+#' come from. A `data.frame` or `matrix` of Gaussian data, with observations
+#' in the rows and random variables in the columns; or a population model
+#' built with [`population`], in which case the search is scored in the
+#' large-sample limit instead of on a sample, which is what lets a run be read
+#' as the behaviour of the algorithm itself rather than of one dataset. A bare
+#' `GaussParDAG` from the \pkg{pcalg} package is accepted as a population
+#' model with a hard intervention to zero. See `target.index` for how the
+#' notional sample size is supplied.
 #'
 #' @param targets (Default `list(integer(0))`) A `list` object with a family of
 #' targets provided as a list of integer vectors. Its default value indicates
 #' that there are no interventions in the data, i.e., the data is purely
 #' observational.
 #'
-#' @param target.index (Default a unit vector) A vector of integers in
-#' one-to-one correspondence with the rows in `dat`, indicating which rows in
-#' the input data are intervened by which targets. Its default value indicates
-#' that there are no interventions in the data, i.e., the data is purely
-#' observational.
+#' @param target.index (Default `NULL`) How much data comes from each
+#' environment. What it holds, and what `NULL` resolves to, depend on whether
+#' `x` carries data or a population.
+#'
+#' With data in `x`, a vector of integers in one-to-one correspondence with
+#' the rows in `x`, saying which target intervened on each row. `NULL`
+#' resolves to a vector of ones: the data is purely observational.
+#'
+#' With a population model in `x` there are no rows to label, so it is one
+#' observation count per element of `targets` instead. Their sum is the
+#' notional sample size, which sets the score's penalty term and so decides
+#' between nested models in the limit. `NULL` resolves to [`population`]'s own
+#' `n`, split in proportion to \eqn{(C, 1, \ldots, 1)} between the
+#' observational and the interventional environments. If `n` was not given
+#' there, omitting this argument is an error rather than a default: any size
+#' invented on the caller's behalf would silently change which model is
+#' selected.
+#'
+#' The counts need not be whole numbers, and a count of zero is allowed --
+#' that environment contributes nothing and is dropped. What each variable
+#' does need is at least two observations' worth of mass from the environments
+#' that leave it alone, the same floor the row counts must clear when `x`
+#' carries data; below it the variable cannot be scored and the call fails
+#' naming it.
+#'
+#' An environment with no observations is removed from `targets` altogether,
+#' under either kind of input -- a count of zero, or a target that no row
+#' refers to. It is not merely that it cannot inform the score: the target
+#' family is also what defines \emph{I}-equivalence and therefore which
+#' reversals are \emph{I}-covered, so an intervention that was never
+#' performed would otherwise narrow the equivalence classes the search moves
+#' in and change the graph returned. The refinement is earned by having
+#' observed the intervention.
 #'
 #' @param scorefun (Default is [`iBIC`]) A function to calculate the goodness
 #' of fit (GoF) score of a DAG on a given data set.
@@ -577,17 +613,26 @@ rcar <- function(dag, r, targets, anc, pasets, vidx) {
 #' @importFrom cli cli_progress_step cli_progress_update
 #' @importFrom stats setNames
 #' @export
-hillclimbing <- function(dat, targets=list(integer(0)),
-                         target.index=rep(1L, nrow(dat)),  scorefun=iBIC,
+hillclimbing <- function(x, targets=list(integer(0)),
+                         target.index=NULL,  scorefun=iBIC,
                          verbose=TRUE, engine=c("C", "R")) {
 
     engine <- match.arg(engine)
 
-    dat <- .check_input_data(dat)
-    dag <- graphNEL(colnames(dat), edgemode="directed")
-    attr(dat, "sanitycheck") <- TRUE
+    x <- .check_input_data(x)
+    dag <- graphNEL(colnames(x), edgemode="directed")
+    attr(x, "sanitycheck") <- TRUE
 
-    targets <- .check_targets(targets, ncol(dat))
+    targets <- .check_targets(targets, ncol(x))
+    target.index <- .resolve.target.index(x, targets, target.index)
+    ## an environment with no observations has not been performed, so it must
+    ## not refine the I-equivalence classes the search moves in
+    .ee <- .drop.empty.environments(x, targets, target.index)
+    if (.ee$dropped > 0L && verbose)
+        cli_alert_info(paste("Ignoring {.ee$dropped} intervention target{?s} with",
+                             "no observations; {?it does/they do} not refine",
+                             "the equivalence classes."))
+    targets <- .ee$targets; target.index <- .ee$target.index
     scorefun <- match.fun(scorefun)
 
     ## the attributes that decide which engine can run, extracted before the
@@ -620,7 +665,7 @@ hillclimbing <- function(dat, targets=list(integer(0)),
     ## the parent SET, so the cache is part of the arithmetic. See
     ## src/sccache.h and tests/test_c_cache.R.
     if (use.c)
-        cached.scores <- .Call(C_sccache_new, ncol(dat))
+        cached.scores <- .Call(C_sccache_new, ncol(x))
     else {
         if (!.load_suggested_package("RBGL")) {
             msg <- paste("The R engine requires the Bioconductor package",
@@ -628,7 +673,7 @@ hillclimbing <- function(dat, targets=list(integer(0)),
             cli_abort(c=("x"=msg))
         }
         cached.scores <- list()
-        for (i in seq_len(ncol(dat)))
+        for (i in seq_len(ncol(x)))
             cached.scores[[i]] <- new.env(hash=TRUE, parent=emptyenv())
     }
 
@@ -637,20 +682,20 @@ hillclimbing <- function(dat, targets=list(integer(0)),
     if (!is.null(global.sufstats.fun)) {
         if (verbose)
             cli_alert_info("Calculating global sufficient statistics")
-        global.sufstats <- global.sufstats.fun(dat, targets, target.index)
+        global.sufstats <- global.sufstats.fun(x, targets, target.index)
     }
 
-    anc <- init.ancestors(colnames(dat))
-    vidx <- setNames(seq_len(ncol(dat)), colnames(dat))
+    anc <- init.ancestors(colnames(x))
+    vidx <- setNames(seq_len(ncol(x)), colnames(x))
     ## nodes(dag) never changes during the search, only its edges do, so the
-    ## vertex names and the nodes(dag)-position -> dat-column map that
+    ## vertex names and the nodes(dag)-position -> x-column map that
     ## translate a move's integer u/v are built once here
     vnames <- nodes(dag)
     vidx.nodes <- unname(vidx[vnames])
-    pasets <- init.pasets(ncol(dat))
+    pasets <- init.pasets(ncol(x))
 
     s0 <- -Inf
-    s1 <- scorefun(g=dag, dat=dat, targets=targets, target.index=target.index,
+    s1 <- scorefun(dag, x, targets=targets, target.index=target.index,
                    cached.scores=cached.scores, global.sufstats=global.sufstats)
 
     if (verbose) {
@@ -672,7 +717,7 @@ hillclimbing <- function(dat, targets=list(integer(0)),
     ## serve score.nh()'s per-candidate fallback. iBIC() and iBGe() qualify;
     ## anything else falls back to R rather than failing.
     if (use.c) {
-        st <- .Call(C_dag_new, ncol(dat))
+        st <- .Call(C_dag_new, ncol(x))
         while (s1 > s0) {
             s0 <- s1
             ne <- .Call(C_dag_nh, st, 2L, list())       ## 2 = ar
@@ -687,7 +732,7 @@ hillclimbing <- function(dat, targets=list(integer(0)),
             .Call(C_dag_apply_move, st, ne$op[b], ne$u[b], ne$v[b])
             s1 <- am$total
 
-            .debug_assertions(st, NULL, NULL, NULL, dat, vnames)
+            .debug_assertions(st, NULL, NULL, NULL, x, vnames)
 
             if (verbose)
                 cli_progress_update()
@@ -697,7 +742,7 @@ hillclimbing <- function(dat, targets=list(integer(0)),
         while (s1 > s0) {
             s0 <- s1
             ne <- ar.nh(dag, anc)
-            sco <- score.nh(ne, dag, dat, targets, target.index, cached.scores,
+            sco <- score.nh(ne, dag, x, targets, target.index, cached.scores,
                             global.sufstats, pasets, vidx.nodes,
                             supports.pasets, scorefun, nh.scores.fun)
             b <- which.max(sco)
@@ -716,7 +761,7 @@ hillclimbing <- function(dat, targets=list(integer(0)),
             dag <- apply.move(dag, b.op, b.u, b.v, vnames)
             s1 <- sco[b]
 
-            .debug_assertions(NULL, dag, anc, pasets, dat, vnames)
+            .debug_assertions(NULL, dag, anc, pasets, x, vnames)
 
             if (verbose)
                 cli_progress_update()

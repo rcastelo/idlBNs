@@ -6,9 +6,9 @@
 \usage{
 iBIC(
   g,
-  dat,
+  x,
   targets = list(integer(0)),
-  target.index = rep(1L, nrow(dat)),
+  target.index = NULL,
   cached.scores = NULL,
   global.sufstats = NULL,
   engine = c("C", "R"),
@@ -19,18 +19,54 @@ iBIC(
 \item{g}{An acyclic directed graph (DAG) structure of the Bayesian network
 for which we want to calculate the score.}
 
-\item{dat}{A \code{data.frame} object with data records in the rows.}
+\item{x}{Either the data, or the population it would have come from. A
+\code{data.frame} or \code{matrix} of Gaussian data, with observations in the rows
+and random variables in the columns; or a population model built with
+\code{\link{population}}, in which case the score is evaluated in the large-sample
+limit instead of on a sample. That is not a different score: it is the same
+arithmetic fed the sufficient statistics a sample of the given size would
+have in expectation. A bare \code{GaussParDAG} from the \pkg{pcalg} package is
+accepted as a population model with a hard intervention to zero. See
+\code{target.index} for how the notional sample size is supplied.}
 
 \item{targets}{(Default \code{list(integer(0))}) A \code{list} object with a family of
 targets provided as a list of integer vectors. Its default value indicates
 that there are no interventions in the data, i.e., the data is purely
 observational.}
 
-\item{target.index}{(Default a unit vector) A vector of integers in
-one-to-one correspondence with the rows in \code{dat}, indicating which rows in
-the input data are intervened by which targets. Its default value indicates
-that there are no interventions in the data, i.e., the data is purely
-observational.}
+\item{target.index}{(Default \code{NULL}) How much data comes from each
+environment. What it holds, and what \code{NULL} resolves to, depend on whether
+\code{x} carries data or a population.
+
+With data in \code{x}, a vector of integers in one-to-one correspondence with
+the rows in \code{x}, saying which target intervened on each row. \code{NULL}
+resolves to a vector of ones: the data is purely observational.
+
+With a population model in \code{x} there are no rows to label, so it is one
+observation count per element of \code{targets} instead. Their sum is the
+notional sample size, which sets the score's penalty term and so decides
+between nested models in the limit. \code{NULL} resolves to \code{\link{population}}'s own
+\code{n}, split in proportion to \eqn{(C, 1, \ldots, 1)} between the
+observational and the interventional environments. If \code{n} was not given
+there, omitting this argument is an error rather than a default: any size
+invented on the caller's behalf would silently change which model is
+selected.
+
+The counts need not be whole numbers, and a count of zero is allowed --
+that environment contributes nothing and is dropped. What each variable
+does need is at least two observations' worth of mass from the environments
+that leave it alone, the same floor the row counts must clear when \code{x}
+carries data; below it the variable cannot be scored and the call fails
+naming it.
+
+An environment with no observations is removed from \code{targets} altogether,
+under either kind of input -- a count of zero, or a target that no row
+refers to. It is not merely that it cannot inform the score: the target
+family is also what defines \emph{I}-equivalence and therefore which
+reversals are \emph{I}-covered, so an intervention that was never
+performed would otherwise narrow the equivalence classes the search moves
+in and change the graph returned. The refinement is earned by having
+observed the intervention.}
 
 \item{cached.scores}{(Default \code{NULL}) An optional list of environment
 objects, containing cached scores per parent set for each vertex in \code{g}. If
@@ -44,7 +80,7 @@ and then pass it to this \code{cached.scores} parameter, i.e.,
 \item{global.sufstats}{(Default \code{NULL}) An optional list of global sufficient
 statistics for the iBIC score, as returned by the \code{.iBIC.global.sufstats()}
 function, which do not depend on the structure of a specific DAG, but only
-on the input data (\code{dat}), the target vertices (\code{targets}) and the target
+on the input data (\code{x}), the target vertices (\code{targets}) and the target
 indices (\code{target.index}) of the interventions. If \code{NULL} (default), the
 \code{.iBIC.global.sufstats()} function is internally called.}
 
@@ -53,7 +89,7 @@ engine: \code{"C"} (default) uses a compiled C routine for speed; \code{"R"} use
 pure-R implementation and is provided for testing and verification.}
 
 \item{pasets}{(Default \code{NULL}) An optional list of parent sets, one per
-vertex in \code{g} in the order given by \code{colnames(dat)}, as internally built
+vertex in \code{g} in the order given by \code{colnames(x)}, as internally built
 by \code{iBIC()} from the structure of \code{g}. If \code{NULL} (default), it is
 internally computed from \code{g}. Search algorithms that maintain \code{pasets}
 incrementally across many calls (e.g. \code{\link[=hcmc]{hcmc()}}, \code{\link[=hillclimbing]{hillclimbing()}}) can
@@ -102,14 +138,14 @@ X3 <- 0.5 * X2 + rnorm(nint, mean=0, sd=1)
 intdat <- data.frame(X1=X1, X2=X2, X3=X3)
 
 ## combine observational and interventional data
-dat <- rbind(obsdat, intdat)
+x <- rbind(obsdat, intdat)
 
 ## define the targets and target indices for the interventional data
 targets <- list(integer(0), 2L)
 target.index <- c(rep(1L, nobs), rep(2L, nint))
 
 ## calculate the interventional BIC score for the DAG and data set
-iBIC(g, dat, targets, target.index)
+iBIC(g, x, targets, target.index)
 
 ## create another Markov equivalent DAG by reversing the arc X1 -> X2
 ## to obtain X1 <- X2 -> X3
@@ -120,12 +156,12 @@ g2 <- addEdge("X2", "X1", g2)
 ## calculate the interventional BIC score for the new DAG on the
 ## same data, notice that the score is different despite being a
 ## Markov equivalent DAG
-iBIC(g2, dat, targets, target.index)
+iBIC(g2, x, targets, target.index)
 
 ## this is not the case if we do not indicate the presence of interventions
 ## in the data
-iBIC(g, dat)
-iBIC(g2, dat)
+iBIC(g, x)
+iBIC(g2, x)
 
 }
 \references{

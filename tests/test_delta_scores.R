@@ -95,7 +95,7 @@ for (p in c(5, 8, 12)) {
             ref <- vapply(seq_along(ne$op), function(m) {
                             pas <- idlBNs:::move.pasets(pasets, ne$op[m],
                                                         ne$u[m], ne$v[m])
-                            sf(g=dag, dat=dat, targets=tgt$targets,
+                            sf(dag, dat, targets=tgt$targets,
                                target.index=tgt$target.index,
                                cached.scores=NULL, global.sufstats=gs,
                                pasets=pas)
