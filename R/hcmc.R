@@ -90,7 +90,28 @@
 #' The walk produced by the RCAR algorithm and the exact draw are not
 #' equivalent: the walk is a random walk on the class, so its equilibrium is
 #' proportional to the number of (\emph{I}-)covered arcs of each member and is
-#' not uniform for any value of `r`.  The exact draw has no limit on the size
+#' not uniform for any value of `r`.
+#'
+#' `"rcar-mh"` is the same walk under a Metropolis-Hastings acceptance
+#' criterion. Both walks propose the same way -- one (\emph{I}-)covered arc
+#' of the current DAG, uniformly at random -- so the proposal density is
+#' \eqn{1/n}, with \eqn{n} the number of such arcs; reversing a
+#' (\emph{I}-)covered arc leaves it (\emph{I}-)covered, so every proposal
+#' can be undone and \eqn{n \ge 1} on both sides. For a uniform target the
+#' Hastings ratio is therefore \eqn{n_{cur}/n_{pro}}, and accepting with that
+#' probability makes the walk's equilibrium uniform on the class rather than
+#' proportional to the (\emph{I}-)covered-arc counts. This buys calibration
+#' at the price of mixing, since a rejection is a step that stays put: at
+#' \eqn{r = 20} it is closer to uniform than `"rcar"` on classes of up to eight
+#' members, where the plain walk has already converged and its residual error
+#' *is* the bias, and slightly further from uniform on classes above sixteen,
+#' where neither walk has mixed. It costs one extra (\emph{I}-)covered-arc
+#' scan and one extra uniform draw per step. Where the class is small enough
+#' for it to matter, `"exact"` is both uniform and cheaper, so `"rcar-mh"` is
+#' mainly of interest when an unbiased walk is wanted without the
+#' Clique-Picking machinery.
+#'
+#' The exact draw has no limit on the size
 #' of the class, and none on the number of vertices in the DAG. It declines,
 #' reverting to the walk and counting the draw in `sampler.fallbacks`, in two
 #' cases. First, vertex sets within an undirected chain component are 64-bit
@@ -225,7 +246,8 @@ hcmc <- function(x, r=20, targets=list(integer(0)),
                  target.index=NULL,
                  scorefun=iBIC, MAXTRIALS=5, verbose=TRUE,
                  engine=c("C", "R"),
-                 sampler=c("rcar", "exact"), escape=c("trials", "exhaustive"),
+                 sampler=c("rcar", "rcar-mh", "exact"),
+                 escape=c("trials", "exhaustive"),
                  escape.max=512) {
 
     engine <- match.arg(engine)
@@ -339,6 +361,16 @@ hcmc <- function(x, r=20, targets=list(integer(0)),
     ## non-integer r is 0:floor(r) and for a negative r counts down, so the
     ## coercion stays where it already behaves correctly (see src/rcar.c)
     rlen <- length(0:r)
+    ## which covered-arc-reversal walk moves within the class. Both consume
+    ## the same stream up to the extra runif(1) per step that the
+    ## Metropolis-Hastings acceptance takes, so the C and R engines still
+    ## follow identical trajectories from the same seed under either. When
+    ## sampler="exact" declines, its fallback is the PLAIN walk regardless:
+    ## "exact" is a separate choice from "rcar-mh", and making its fallback
+    ## depend on an option it does not name would change what that sampler
+    ## does without saying so.
+    walk.mh <- sampler == "rcar-mh"
+    walk.fun <- if (walk.mh) rcar.mh else rcar
     s0 <- -Inf
     ## g and x go POSITIONALLY: a user-supplied scorefun may still call its
     ## second formal 'dat', and renaming ours must not break theirs
@@ -412,7 +444,7 @@ hcmc <- function(x, r=20, targets=list(integer(0)),
             if (!drew) {
                 if (sampler == "exact")
                     sampler.fallbacks <- sampler.fallbacks + 1L
-                .Call(C_dag_rcar, st, rlen, targets)
+                .Call(C_dag_rcar, st, rlen, targets, walk.mh)
             }
             ne <- .Call(C_dag_nh, st, 3L, targets)    ## 3 = ncr
             pasets <- .Call(C_dag_pasets, st)
@@ -492,7 +524,7 @@ hcmc <- function(x, r=20, targets=list(integer(0)),
                 if (!drew) {
                     if (sampler == "exact")
                         sampler.fallbacks <- sampler.fallbacks + 1L
-                    .Call(C_dag_rcar, st, rlen, targets)
+                    .Call(C_dag_rcar, st, rlen, targets, walk.mh)
                 }
                 local_maximum <- FALSE
                 was_in_local_maximum <- TRUE
@@ -512,7 +544,7 @@ hcmc <- function(x, r=20, targets=list(integer(0)),
             rcar.out <- if (sampler == "exact" && !sampler.declined)
                 isample.move(dag, targets, anc, pasets, vidx, vnames,
                              vidx.nodes, r)
-            else rcar(dag, r, targets, anc, pasets, vidx)
+            else walk.fun(dag, r, targets, anc, pasets, vidx)
             if (isTRUE(rcar.out$fallback)) sampler.declined <- TRUE
             if (sampler == "exact" && sampler.declined)
                 sampler.fallbacks <- sampler.fallbacks + 1L
@@ -603,7 +635,7 @@ hcmc <- function(x, r=20, targets=list(integer(0)),
                 rcar.out <- if (sampler == "exact" && !sampler.declined)
                     isample.move(dag, targets, anc, pasets, vidx, vnames,
                                  vidx.nodes, r)
-                else rcar(dag, r, targets, anc, pasets, vidx)
+                else walk.fun(dag, r, targets, anc, pasets, vidx)
                 if (isTRUE(rcar.out$fallback)) sampler.declined <- TRUE
                 if (sampler == "exact" && sampler.declined)
                     sampler.fallbacks <- sampler.fallbacks + 1L

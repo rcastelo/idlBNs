@@ -528,6 +528,55 @@ rcar <- function(dag, r, targets, anc, pasets, vidx) {
     list(dag=tmp.g, anc=anc, pasets=pasets)
 }
 
+## RCAR-MH: repeated covered arc reversal algorithm with Metropolis-Hastings
+## this is an updated version of rcar() that uses a Metropolis-Hastings
+## acceptance criterion to help converging to a uniform distribution over
+## the DAGs forming the Markov equivalence class of the input DAG.
+## because the target distribution is uniform, the acceptance probability
+## is simply the ratio of the number of covered edges in the current DAG
+## and the number of covered edges in the proposed DAG.
+## `targets` is the target family (see .separates())
+## returns a list(dag=, anc=, pasets=) since every reversal it performs,
+## although always cycle-safe by construction (a covered edge cannot
+## introduce a cycle), still changes true ancestor relationships and parent
+## sets, and must keep both 'anc' and 'pasets' in sync for subsequent
+## neighborhood generation and scoring to remain correct. 'vidx' is a named
+## integer vector mapping vertex name -> dat-column index (as used by
+## 'pasets'), built once per search by the caller.
+
+#' @importFrom graph removeEdge addEdge numEdges edgeMatrix nodes
+#' @importFrom stats runif
+rcar.mh <- function(dag, r, targets, anc, pasets, vidx) {
+    if (numEdges(dag) == 0)
+        return(list(dag=dag, anc=anc, pasets=pasets))
+    cemask <- cedges(dag, targets)
+    if (!any(cemask))
+        return(list(dag=dag, anc=anc, pasets=pasets))
+
+    cur.g <- dag
+    v <- nodes(cur.g)
+    rr <- sample(0:r, size=1)
+    for (i in seq_len(rr)) {
+        em <- edgeMatrix(cur.g)
+        cur.cemask <- cedges(cur.g, targets) ## id. covered arcs current DAG
+        n.ce.cur.g <- sum(cur.cemask)        ## count covered arcs current DAG
+        rndce <- resample(which(cur.cemask), size=1) ## draw a proposed covered arc
+        u <- v[em["from", rndce]]
+        w <- v[em["to", rndce]]
+        pro.g <- removeEdge(u, w, cur.g)     ## build a proposed DAG after
+        pro.g <- addEdge(w, u, pro.g)        ## reversing the proposed covered
+        pro.cemask <- cedges(pro.g, targets) ## arc, identify its covered arcs
+        n.ce.pro.g <- sum(pro.cemask)        ## and count them
+        alpha <- min(1, n.ce.cur.g / n.ce.pro.g) ## calculate acceptance prob.
+        if (runif(1) <= alpha) {             ## if accepted, updated current DAG
+            anc <- reverse.ancestors(anc, cur.g, u, w)
+            pasets <- reverse.pasets(pasets, vidx[[u]], vidx[[w]])
+            cur.g <- pro.g
+        }
+    }
+    list(dag=cur.g, anc=anc, pasets=pasets)
+}
+
 
 
 ##

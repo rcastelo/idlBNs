@@ -25,8 +25,8 @@ dag_new   <- function(p) .Call(idlBNs:::C_dag_new, as.integer(p))
 dag_move  <- function(st, op, u, v)
     invisible(.Call(idlBNs:::C_dag_apply_move, st, as.integer(op),
                     as.integer(u), as.integer(v)))
-dag_rcar  <- function(st, rlen, ut)
-    .Call(idlBNs:::C_dag_rcar, st, as.integer(rlen), ut)
+dag_rcar  <- function(st, rlen, ut, mh=FALSE)
+    .Call(idlBNs:::C_dag_rcar, st, as.integer(rlen), ut, mh)
 dag_edgeM <- function(st) .Call(idlBNs:::C_dag_edgeM, st)
 dag_anc   <- function(st) .Call(idlBNs:::C_dag_anc, st)
 dag_pas   <- function(st) .Call(idlBNs:::C_dag_pasets, st)
@@ -63,13 +63,19 @@ both <- function(p, arcs) {
        vidx=setNames(seq_len(p), vn))
 }
 
-## run both implementations from the same seed and compare everything
-compare_rcar <- function(b, r, ut, seed) {
+## run both implementations from the same seed and compare everything.
+## 'mh' selects the Metropolis-Hastings variant on BOTH sides: rcar.mh()
+## takes one extra runif(1) per step, so the streams only line up if the C
+## port takes it too, in the same place, and unconditionally -- including
+## when alpha == 1, where it is not needed. Skipping it there would make the
+## number of draws depend on the graph.
+compare_rcar <- function(b, r, ut, seed, mh=FALSE) {
   set.seed(seed)
-  out <- idlBNs:::rcar(b$dag, r, ut, b$anc, b$pas, b$vidx)
+  out <- if (mh) idlBNs:::rcar.mh(b$dag, r, ut, b$anc, b$pas, b$vidx)
+         else    idlBNs:::rcar(b$dag, r, ut, b$anc, b$pas, b$vidx)
   seedR <- .Random.seed
   set.seed(seed)
-  rr <- dag_rcar(b$st, length(0:r), ut)
+  rr <- dag_rcar(b$st, length(0:r), ut, mh)
   seedC <- .Random.seed
 
   ## the stream: same number of unif_rand() calls, same position
@@ -78,7 +84,7 @@ compare_rcar <- function(b, r, ut, seed) {
   stopifnot(identical(unname(dag_edgeM(b$st)), unname(edgeMatrix(out$dag))))
   stopifnot(identical(dag_anc(b$st), unname(out$anc)))
   stopifnot(identical(dag_pas(b$st), unname(out$pasets)))
-  ## rcar only ever reverses, so the arc count is invariant
+  ## neither walk ever adds or removes an arc, so the arc count is invariant
   stopifnot(identical(as.integer(numEdges(out$dag)),
                       as.integer(numEdges(b$dag))))
   dag_check(b$st)
@@ -119,17 +125,18 @@ for (p in c(3, 5, 8, 12)) {
                       list(integer(0), 1L, min(3L, p)),       # two singletons
                       list(integer(0), c(1L, min(2L, p))),    # BOTH ends
                       list(integer(0), c(1L, min(3L, p)), 2L)))
-        for (seed in 1:3) {
-          rr <- compare_rcar(both(p, arcs), r, ut, seed)
-          nrev <- nrev + rr
-          ncmp <- ncmp + 1L
-        }
+        for (seed in 1:3)
+          for (mh in c(FALSE, TRUE)) {
+            rr <- compare_rcar(both(p, arcs), r, ut, seed, mh)
+            nrev <- nrev + rr
+            ncmp <- ncmp + 1L
+          }
   }
 }
 stopifnot(ncmp > 500L)
 ## the sweep must actually have performed reversals, or it proves nothing
 stopifnot(nrev > 0L)
-cat(sprintf("rcar: %d comparisons, %d reversals performed, stream and state identical\n",
+cat(sprintf("rcar: %d comparisons (plain and MH), %d steps taken, stream and state identical\n",
             ncmp, nrev))
 
 ################################################################################
@@ -156,6 +163,16 @@ set.seed(1); before <- .Random.seed
 stopifnot(identical(dag_rcar(b$st, length(0:20), list(integer(0), 1L)), 0L))
 stopifnot(identical(.Random.seed, before))
 stopifnot(identical(unname(dag_edgeM(b$st)), unname(edgeMatrix(b$dag))))
+
+## the MH variant takes the same two early returns, also without drawing
+b <- both(4, list())
+set.seed(1); before <- .Random.seed
+stopifnot(identical(dag_rcar(b$st, length(0:20), list(), TRUE), 0L))
+stopifnot(identical(.Random.seed, before))
+b <- both(3, list(c(1,2), c(2,3)))
+set.seed(1); before <- .Random.seed
+stopifnot(identical(dag_rcar(b$st, length(0:20), list(integer(0), 1L), TRUE), 0L))
+stopifnot(identical(.Random.seed, before))
 
 ## and R agrees on both branches, consuming nothing either
 b <- both(4, list())
@@ -211,7 +228,8 @@ errs <- function(e) inherits(tryCatch(e, error=function(x) x), "error")
 stopifnot(errs(dag_rcar(b$st, 0L, list())))       ## rlen must be >= 1
 stopifnot(errs(dag_rcar(b$st, -1L, list())))
 stopifnot(errs(.Call(idlBNs:::C_dag_rcar, b$st, NA_integer_, list())))
-stopifnot(errs(.Call(idlBNs:::C_dag_rcar, b$st, 5L, "x")))
+stopifnot(errs(.Call(idlBNs:::C_dag_rcar, b$st, 5L, "x", FALSE)))
+stopifnot(errs(.Call(idlBNs:::C_dag_rcar, b$st, 5L, list(), NA)))
 stopifnot(identical(unname(dag_edgeM(b$st)), unname(edgeMatrix(b$dag))))
 dag_check(b$st)
 
@@ -233,8 +251,45 @@ for (p in c(10, 20, 30)) {
   for (seed in 1:5)
     for (ut in list(list(integer(0)), list(integer(0), 2L, 5L),
                     list(integer(0), c(2L, 5L))))
-      invisible(compare_rcar(both(p, arcs), 20L, ut, seed))
+      for (mh in c(FALSE, TRUE))
+        invisible(compare_rcar(both(p, arcs), 20L, ut, seed, mh))
 }
 cat("simulated DAGs at p = 10, 20, 30 agree on stream and state\n")
+
+################################################################################
+## 7. what the MH arm EXISTS for: its equilibrium is uniform on the class,
+## the plain walk's is proportional to each member's covered-arc count.
+##
+## X1 -> X2 -> X3 has a three-member equivalence class whose covered-arc
+## counts are 1, 2, 1: the fork X1 <- X2 -> X3 has both arcs covered, the two
+## chains have one each. So the plain walk's limit is (.25, .5, .25) and MH's
+## is (1/3, 1/3, 1/3) -- far enough apart that a few thousand steps separate
+## them with no tolerance tuning. Run in C, iterating the state in place,
+## because the R walk rebuilds ancestors through RBGL::tsort on every call.
+################################################################################
+
+memkey <- function(st) {
+  em <- .Call(idlBNs:::C_dag_edgeM, st)
+  paste(sort(sprintf("%d>%d", em["from", ], em["to", ])), collapse=" ")
+}
+walk.freq <- function(mh, n, seed) {
+  b <- both(3, list(c(1,2), c(2,3)))
+  set.seed(seed)
+  tab <- table(replicate(n, { dag_rcar(b$st, length(0:20), list(), mh)
+                              memkey(b$st) }))
+  stopifnot(length(tab) == 3L)          ## it never leaves the class
+  sort(as.vector(tab) / n)
+}
+f.plain <- walk.freq(FALSE, 4000, 20260913)
+f.mh    <- walk.freq(TRUE,  4000, 20260913)
+## plain: the fork is visited about twice as often as either chain
+stopifnot(f.plain[3] > 0.44, f.plain[3] < 0.56,
+          all(f.plain[1:2] > 0.19), all(f.plain[1:2] < 0.31))
+## MH: uniform. 4000 draws put 4 binomial sd at ~0.030, so 0.05 is loose
+## enough never to flake and far tighter than the 0.167 bias it must exclude.
+stopifnot(max(abs(f.mh - 1/3)) < 0.05)
+cat(sprintf("equilibrium: plain %s (biased to the fork), MH %s (uniform)\n",
+            paste(sprintf("%.3f", f.plain), collapse="/"),
+            paste(sprintf("%.3f", f.mh), collapse="/")))
 
 cat("all C rcar tests passed\n")

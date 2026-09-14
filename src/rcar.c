@@ -20,6 +20,13 @@
  *     sample(0:r, size = 1)  ==  (int) R_unif_index((double) length(0:r))
  *     resample(x, size = 1)  ==  x[(int) R_unif_index((double) length(x)) + 1]
  *
+ * The runif(1) is reproduced as R's own runif(0, 1) body, a do-while that
+ * rejects 0 and 1, rather than a bare unif_rand(). Under Mersenne-Twister
+ * fixup() already guarantees (0, 1) so the loop turns once, but writing the
+ * loop makes the match hold by construction for any generator. The draw is
+ * taken UNCONDITIONALLY, including when alpha == 1, exactly as R does: making
+ * it conditional would put a data-dependent number of draws in the stream.
+ *
  * R_unif_index() is called rather than reimplemented: under the default
  * sample.kind = "Rejection" the number of unif_rand() calls per draw is data
  * dependent (1 to 3 for a size-1 draw), and R_unif_index() also dispatches
@@ -86,18 +93,32 @@ covered_arcs(const idl_dag *d, const uint64_t *tmask, int nw, int *from, int *to
  *                          union: an arc is I-covered unless some single
  *                          target separates its endpoints, which the union
  *                          cannot express (idl_tmask_separates(), dag.h).
+ * mh_R        LGLSXP       scalar; FALSE ports rcar(), TRUE ports rcar.mh(),
+ *                          which accepts each proposed reversal with
+ *                          probability min(1, n_cur / n_pro), n being the
+ *                          number of I-covered arcs. That is the Hastings
+ *                          ratio for a uniform target under the proposal
+ *                          both functions share -- one I-covered arc of the
+ *                          current DAG, uniformly -- so it makes the walk's
+ *                          equilibrium uniform on the class instead of
+ *                          proportional to each member's I-covered-arc count.
  *
- * Returns the number of reversals actually performed, as R's rr.
+ * Returns the number of steps TAKEN, as R's rr. Under mh that is the number
+ * of proposals, not of accepted reversals: rcar.mh() likewise loops rr times
+ * whatever it accepts.
  */
 SEXP
-C_dag_rcar(SEXP st, SEXP rlen_R, SEXP tgt_R) {
+C_dag_rcar(SEXP st, SEXP rlen_R, SEXP tgt_R, SEXP mh_R) {
     idl_dag *d = idlBNs_dag_from_extptr(st);
     int rlen = asInteger(rlen_R);
+    int mh = asLogical(mh_R);
 
     if (rlen == NA_INTEGER || rlen < 1)
         error("C_dag_rcar: 'rlen' must be a positive integer (length(0:r))");
     if (tgt_R != R_NilValue && TYPEOF(tgt_R) != VECSXP)
         error("C_dag_rcar: 'targets' must be a list of integer vectors");
+    if (mh == NA_LOGICAL)
+        error("C_dag_rcar: 'mh' must be TRUE or FALSE");
 
     int p = d->p;
     void *vmax = vmaxget();
@@ -149,9 +170,25 @@ C_dag_rcar(SEXP st, SEXP rlen_R, SEXP tgt_R) {
             error("C_dag_rcar: no covered arc remains after %d reversal(s)", k);
         }
         int pick = (int) R_unif_index((double) nce); /* resample(which(.), 1) */
+        /* saved before the reversal: covered_arcs() reuses cfrom/cto */
+        int u = cfrom[pick], w = cto[pick];
         /* a covered arc cannot introduce a cycle, which is why the R code
            reverses without an acyclicity test and this does too */
-        idl_dag_reverse_edge(d, cfrom[pick], cto[pick]);
+        idl_dag_reverse_edge(d, u, w);
+
+        if (mh) {
+            /* the proposal is now the current DAG; count its I-covered arcs.
+               This is >= 1 by the same argument as the nce == 0 guard above,
+               so the ratio cannot divide by zero. */
+            int npro = covered_arcs(d, tmask, nw, cfrom, cto);
+            double alpha = (double) nce / (double) npro;
+            if (alpha > 1.0)
+                alpha = 1.0;
+            double u01;                      /* R's runif(0, 1), draw for draw */
+            do { u01 = unif_rand(); } while (u01 <= 0.0 || u01 >= 1.0);
+            if (!(u01 <= alpha))             /* rejected: undo, stay put */
+                idl_dag_reverse_edge(d, w, u);
+        }
     }
 
     PutRNGstate();

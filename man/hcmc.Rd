@@ -13,7 +13,7 @@ hcmc(
   MAXTRIALS = 5,
   verbose = TRUE,
   engine = c("C", "R"),
-  sampler = c("rcar", "exact"),
+  sampler = c("rcar", "rcar-mh", "exact"),
   escape = c("trials", "exhaustive"),
   escape.max = 512
 )
@@ -104,7 +104,28 @@ Clique-Picking algorithm of Wienöbst \emph{et al.} (2023), and ignores \code{r}
 The walk produced by the RCAR algorithm and the exact draw are not
 equivalent: the walk is a random walk on the class, so its equilibrium is
 proportional to the number of (\emph{I}-)covered arcs of each member and is
-not uniform for any value of \code{r}.  The exact draw has no limit on the size
+not uniform for any value of \code{r}.
+
+\code{"rcar-mh"} is the same walk under a Metropolis-Hastings acceptance
+criterion. Both walks propose the same way -- one (\emph{I}-)covered arc
+of the current DAG, uniformly at random -- so the proposal density is
+\eqn{1/n}, with \eqn{n} the number of such arcs; reversing a
+(\emph{I}-)covered arc leaves it (\emph{I}-)covered, so every proposal
+can be undone and \eqn{n \ge 1} on both sides. For a uniform target the
+Hastings ratio is therefore \eqn{n_{cur}/n_{pro}}, and accepting with that
+probability makes the walk's equilibrium uniform on the class rather than
+proportional to the (\emph{I}-)covered-arc counts. This buys calibration
+at the price of mixing, since a rejection is a step that stays put: at
+\eqn{r = 20} it is closer to uniform than \code{"rcar"} on classes of up to eight
+members, where the plain walk has already converged and its residual error
+\emph{is} the bias, and slightly further from uniform on classes above sixteen,
+where neither walk has mixed. It costs one extra (\emph{I}-)covered-arc
+scan and one extra uniform draw per step. Where the class is small enough
+for it to matter, \code{"exact"} is both uniform and cheaper, so \code{"rcar-mh"} is
+mainly of interest when an unbiased walk is wanted without the
+Clique-Picking machinery.
+
+The exact draw has no limit on the size
 of the class, and none on the number of vertices in the DAG. It declines,
 reverting to the walk and counting the draw in \code{sampler.fallbacks}, in two
 cases. First, vertex sets within an undirected chain component are 64-bit
