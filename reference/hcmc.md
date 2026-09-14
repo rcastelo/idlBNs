@@ -17,7 +17,7 @@ hcmc(
   MAXTRIALS = 5,
   verbose = TRUE,
   engine = c("C", "R"),
-  sampler = c("rcar", "exact"),
+  sampler = c("rcar", "rcar-mh", "exact"),
   escape = c("trials", "exhaustive"),
   escape.max = 512
 )
@@ -135,20 +135,40 @@ hcmc(
   produced by the RCAR algorithm and the exact draw are not equivalent:
   the walk is a random walk on the class, so its equilibrium is
   proportional to the number of (*I*-)covered arcs of each member and is
-  not uniform for any value of `r`. The exact draw has no limit on the
-  size of the class, and none on the number of vertices in the DAG. It
-  declines, reverting to the walk and counting the draw in
-  `sampler.fallbacks`, in two cases. First, vertex sets within an
-  undirected chain component are 64-bit masks, so a component of more
-  than 64 vertices is out of reach; components that large need a DAG
-  with almost no immoralities, and the largest seen for random DAGs up
-  to \\p = 500\\ is 16. Second, uniformity needs the per-component
-  counts to be *exact*, because the draw compares a uniform integer
-  against cumulative counts: doubles hold integers exactly only to
-  \\2^{53}\\, and a clique of more than 18 vertices has a factorial past
-  that, so beyond either bound the draw is declined rather than made
-  with rounded weights. Counting is unaffected and still answers for a
-  class of any size.
+  not uniform for any value of `r`.
+
+  `"rcar-mh"` is the same walk under a Metropolis-Hastings acceptance
+  criterion. Both walks propose the same way – one (*I*-)covered arc of
+  the current DAG, uniformly at random – so the proposal density is
+  \\1/n\\, with \\n\\ the number of such arcs; reversing a (*I*-)covered
+  arc leaves it (*I*-)covered, so every proposal can be undone and \\n
+  \ge 1\\ on both sides. For a uniform target the Hastings ratio is
+  therefore \\n\_{cur}/n\_{pro}\\, and accepting with that probability
+  makes the walk's equilibrium uniform on the class rather than
+  proportional to the (*I*-)covered-arc counts. This buys calibration at
+  the price of mixing, since a rejection is a step that stays put: at
+  \\r = 20\\ it is closer to uniform than `"rcar"` on classes of up to
+  eight members, where the plain walk has already converged and its
+  residual error *is* the bias, and slightly further from uniform on
+  classes above sixteen, where neither walk has mixed. It costs one
+  extra (*I*-)covered-arc scan and one extra uniform draw per step.
+  Where the class is small enough for it to matter, `"exact"` is both
+  uniform and cheaper, so `"rcar-mh"` is mainly of interest when an
+  unbiased walk is wanted without the Clique-Picking machinery.
+
+  The exact draw has no limit on the size of the class, and none on the
+  number of vertices in the DAG. It declines, reverting to the walk and
+  counting the draw in `sampler.fallbacks`, in two cases. First, vertex
+  sets within an undirected chain component are 64-bit masks, so a
+  component of more than 64 vertices is out of reach; components that
+  large need a DAG with almost no immoralities, and the largest seen for
+  random DAGs up to \\p = 500\\ is 16. Second, uniformity needs the
+  per-component counts to be *exact*, because the draw compares a
+  uniform integer against cumulative counts: doubles hold integers
+  exactly only to \\2^{53}\\, and a clique of more than 18 vertices has
+  a factorial past that, so beyond either bound the draw is declined
+  rather than made with rounded weights. Counting is unaffected and
+  still answers for a class of any size.
 
 - escape:
 
@@ -255,7 +275,7 @@ tindex <- rep(1:length(nbytgts), nbytgts)
 dhat.hcmc <- hcmc(x)
 #> ℹ Calculating global sufficient statistics
 #> ⠙ Score -87.004214222737 Escapes 0 Trials 0
-#> ✔ Score -83.2933160642061 Escapes 0 Trials 0 [39ms]
+#> ✔ Score -83.2933160642061 Escapes 0 Trials 0 [38ms]
 #> 
 dhat.hcmc
 #> $dag
@@ -313,7 +333,7 @@ shd(e, dag2essgraph(dhat.ihcmc$dag))
 dhat.ihcmc2 <- hcmc(x, targets=I, target.index=tindex, scorefun=iBGe)
 #> ℹ Calculating global sufficient statistics
 #> ⠙ Score -189.956899563879 Escapes 0 Trials 0
-#> ✔ Score -181.640790427507 Escapes 0 Trials 0 [11ms]
+#> ✔ Score -181.640790427507 Escapes 0 Trials 0 [10ms]
 #> 
 shd(e, dag2essgraph(dhat.ihcmc2$dag))
 #> [1] 2
