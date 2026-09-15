@@ -135,7 +135,7 @@ eq <- hcmc(population(Mg, n=10000, ivent.value=2), targets=I,
            sampler="exact", escape="exhaustive")
 #> ℹ Calculating global sufficient statistics
 #> ⠙ Score -21689.6925175966 Escapes 0 Trials 0
-#> ✔ Score -16127.2069646389 Escapes 0 Trials 0 [11ms]
+#> ✔ Score -16127.2069646389 Escapes 0 Trials 0 [10ms]
 #> 
 identical(eq$sco, dhat$sco)
 #> [1] FALSE
