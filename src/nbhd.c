@@ -38,11 +38,25 @@
  *       (.reversible()), and, for ncr, iff the arc is not I-covered.
  *
  * An arc i -> w is covered iff pa(i) == pa(w) \ {i}, and I-covered iff it is
- * covered AND neither endpoint is an intervention target -- so a covered arc
- * touching a target stays in the neighbourhood. Because the DAG keeps an
- * ascending mirror of every parent set, the covered test is a linear merge
- * over two sorted int arrays, O(|pa(i)| + |pa(w)|), with no sorting and no
- * dependence on p.
+ * covered AND no single target separates its endpoints, i.e. every target
+ * contains both of i and w or neither (Hauser and Buehlmann 2012). So a
+ * covered arc that some target tells apart stays in the neighbourhood.
+ *
+ * Note "no target separates them", NOT "neither endpoint is a target". The
+ * second is strictly stronger and would declare too few arcs I-covered,
+ * leaving within-class reversals in the neighbourhood as zero-delta
+ * candidates and overlapping the arcs rcar() already walks -- cedges() is
+ * meant to be the exact complement of this test, not a subset of it. The two
+ * readings coincide when every target is a singleton or empty, which is why
+ * the error is latent under the usual designs; they part as soon as a target
+ * holds two vertices. For targets = list(integer(0), c(1L, 2L)) the arc
+ * 1 -> 2 is separated by no target, so it IS I-covered and reversing it stays
+ * inside the I-equivalence class, yet both endpoints are intervention
+ * targets. See idl_tmask_separates() in dag.h.
+ *
+ * Because the DAG keeps an ascending mirror of every parent set, the covered
+ * test is a linear merge over two sorted int arrays, O(|pa(i)| + |pa(w)|),
+ * with no sorting and no dependence on p.
  */
 
 /*
